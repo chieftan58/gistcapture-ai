@@ -1,0 +1,16 @@
+{
+  "list_name": "Test Pull",
+  "sources": [
+    {
+      "type": "podcast",
+      "name": "The Tim Ferriss Show",
+      "url": "https://feeds.simplecast.com/54nAGcIl"
+    },
+    {
+      "type": "blog",
+      "name": "Mark Manson Blog",
+      "url": "https://markmanson.net/"
+    }
+  ]
+}
+

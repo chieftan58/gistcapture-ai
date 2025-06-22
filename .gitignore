@@ -1,0 +1,64 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Audio files (these can be large)
+audio/
+*.mp3
+*.wav
+*.m4a
+
+# Transcript files (contain copyrighted content)
+transcripts/
+*.txt
+
+# Summary files (you might want to keep these)
+# Comment out the next line if you want to track summaries
+summaries/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*_progress.json
+
+# Log files
+*.log
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
