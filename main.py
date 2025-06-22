@@ -65,6 +65,93 @@ class RenaissanceWeekly:
         """Convert text to filename-safe string"""
         return "".join(c if c.isalnum() or c in " ._-" else "_" for c in text)
     
+    def extract_sponsors(self, description):
+        """Extract sponsor information from episode description"""
+        sponsors = []
+        
+        # Common sponsor patterns in Tim Ferriss show
+        sponsor_patterns = [
+            r'(?:Sponsored by|Brought to you by|This episode is brought to you by)\s+([^\.]+)',
+            r'(?:Thanks to|Thank you to)\s+([^\.]+?)(?:\s+for\s+sponsoring)',
+            r'([A-Z][a-zA-Z\s&]+?)(?:\s+\[.*?\])?(?:\s+at\s+|—\s*)?(?:https?://)?([a-zA-Z0-9\-]+\.[a-zA-Z]{2,})',
+        ]
+        
+        # Common sponsors and their URLs (fallback if URL not in description)
+        known_sponsors = {
+            'Athletic Greens': 'https://athleticgreens.com',
+            'AG1': 'https://drinkag1.com',
+            'BetterHelp': 'https://betterhelp.com',
+            'Helix Sleep': 'https://helixsleep.com',
+            'ExpressVPN': 'https://expressvpn.com',
+            'Wealthfront': 'https://wealthfront.com',
+            'Eight Sleep': 'https://eightsleep.com',
+            'LMNT': 'https://drinklmnt.com',
+            'Shopify': 'https://shopify.com',
+            'MasterClass': 'https://masterclass.com',
+            'InsideTracker': 'https://insidetracker.com',
+            'WHOOP': 'https://whoop.com',
+            'Momentous': 'https://livemomentous.com',
+        }
+        
+        # Clean description
+        clean_desc = description.replace('\n', ' ').replace('\r', ' ')
+        
+        # Look for sponsors section
+        sponsors_section = re.search(r'(?:Sponsors|Brought to you by|Thanks to our sponsors).*?(?=\n\n|\Z)', clean_desc, re.IGNORECASE | re.DOTALL)
+        
+        if sponsors_section:
+            sponsors_text = sponsors_section.group()
+            
+            # Extract URLs and sponsor names
+            url_pattern = r'(?:([A-Z][a-zA-Z\s&]+?)(?:\s+at\s+|\s*—\s*|\s*:\s*))?(?:https?://)?([a-zA-Z0-9\-]+\.[a-zA-Z]{2,}/?[a-zA-Z0-9\-/]*)'
+            matches = re.findall(url_pattern, sponsors_text)
+            
+            for match in matches:
+                name = match[0].strip() if match[0] else ""
+                url = match[1]
+                
+                # Ensure URL has protocol
+                if not url.startswith('http'):
+                    url = f'https://{url}'
+                
+                # Try to get sponsor name from URL if not found
+                if not name:
+                    for sponsor, sponsor_url in known_sponsors.items():
+                        if url.lower() in sponsor_url.lower() or sponsor_url.lower() in url.lower():
+                            name = sponsor
+                            break
+                
+                if name and url:
+                    sponsors.append({'name': name, 'url': url})
+        
+        # Also check for inline sponsor mentions
+        for pattern in sponsor_patterns:
+            matches = re.findall(pattern, clean_desc, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    name = match[0].strip()
+                else:
+                    name = match.strip()
+                
+                # Check if it's a known sponsor
+                for sponsor, url in known_sponsors.items():
+                    if sponsor.lower() in name.lower():
+                        # Check if we already have this sponsor
+                        if not any(s['name'].lower() == sponsor.lower() for s in sponsors):
+                            sponsors.append({'name': sponsor, 'url': url})
+                        break
+        
+        # Remove duplicates
+        seen = set()
+        unique_sponsors = []
+        for sponsor in sponsors:
+            key = sponsor['name'].lower()
+            if key not in seen:
+                seen.add(key)
+                unique_sponsors.append(sponsor)
+        
+        return unique_sponsors[:6]  # Limit to 6 sponsors max
+    
     def fetch_tim_ferriss_episodes(self, days_back=7):
         """Fetch recent Tim Ferriss podcast episodes"""
         FEED_URL = "https://rss.art19.com/tim-ferriss-show"
@@ -561,7 +648,7 @@ class RenaissanceWeekly:
         return self.download_and_process_audio(audio_file_path, title)
     
     def summarize_transcript(self, transcript_file_path, episode_title, episode_info):
-        """Generate comprehensive two-page summary in Renaissance Weekly style"""
+        """Generate executive-focused summary with actionable insights"""
         slug = self.slugify(episode_title)
         hash_val = hashlib.md5(str(transcript_file_path).encode()).hexdigest()[:6]
         summary_filename = SUMMARY_DIR / f"{slug[:50]}_{hash_val}.md"
@@ -584,19 +671,20 @@ class RenaissanceWeekly:
                 print("❌ Empty transcript file")
                 return None
             
-            print(f"📚 Generating comprehensive summary with GPT-4o...")
+            print(f"📚 Generating executive-focused summary with GPT-4o...")
             print(f"   Transcript length: {len(transcript):,} characters")
             
+            # Extract sponsors from description
+            sponsors = self.extract_sponsors(episode_info.get('description', ''))
+            
             # Check transcript size and chunk if needed
-            # Your account has 30k TPM limit, so we need to stay under that
-            # 216k chars ≈ 54k tokens, so let's chunk anything over 100k chars (≈25k tokens)
-            max_chars = 100000  # Stay well under your 30k token limit
+            max_chars = 100000
             
             if len(transcript) > max_chars:
                 print(f"⚠️  Transcript too long ({len(transcript):,} chars), using chunked summarization...")
-                return self._quality_summarize_long_transcript(transcript, episode_title, episode_info, summary_filename)
+                return self._quality_summarize_long_transcript(transcript, episode_title, episode_info, summary_filename, sponsors)
             
-            # Show progress for summarization too
+            # Show progress for summarization
             start_time = time.time()
             stop_event = threading.Event()
             progress_thread = threading.Thread(
@@ -606,50 +694,63 @@ class RenaissanceWeekly:
             progress_thread.start()
             
             try:
-                # Enhanced prompt for Renaissance Weekly style
+                # NEW EXECUTIVE-FOCUSED PROMPT
                 prompt = f"""EPISODE: {episode_title}
 DESCRIPTION: {episode_info.get('description', '')}
 
 TRANSCRIPT:
 {transcript}
 
-You are the lead writer for Renaissance Weekly, a curated cross-disciplinary digest for intellectually ambitious professionals. Your task is to create a comprehensive two-page summary that captures the full substance and nuance of this podcast episode.
+You are creating an executive briefing for Renaissance Weekly readers - busy professionals who want to extract maximum value from this podcast in minimum time.
 
-Note: This is a FULL episode transcript (2-3 hours). Focus on extracting the most compelling and actionable insights while maintaining the narrative arc of the entire conversation.
+Create a comprehensive yet scannable summary (1,000-1,200 words) structured as follows:
 
-This is NOT a brief recap or bullet-point summary. Instead, craft a narrative-driven piece that:
+## Executive Summary
+A 2-3 sentence overview of the most important takeaways from this episode. What's the ONE thing a reader should remember?
 
-1. **Preserves the arc of ideas** as they unfolded in conversation
-2. **Maintains contextual insight and nuance** - don't oversimplify complex concepts
-3. **Captures the intellectual texture** of the discussion, including digressions that prove illuminating
-4. **Highlights connections** to broader themes in technology, science, investing, or culture
-5. **Includes key quotes** that crystallize important insights (properly attributed)
-6. **Identifies actionable frameworks or principles** the guest shares
-7. **Notes any book recommendations, tools, or resources** mentioned
+## Key Insights & Frameworks
+• Extract 5-7 of the most valuable insights, mental models, or frameworks discussed
+• Each bullet should be substantive (2-3 sentences) and actionable
+• Focus on ideas that can be immediately applied or that shift perspective
+• Include specific examples or data points when mentioned
 
-The writing should be:
-- **Substantive**: Roughly 1,200-1,500 words (approximately 2 pages)
-- **Narrative-driven**: Tell the story of the conversation, not just list facts
-- **Intellectually rigorous**: Match the depth of the source material
-- **Editorially polished**: Like The Atlantic or a premier Substack newsletter
-- **Structured for clarity**: Use thoughtful section breaks and headers
+## Notable Quotes
+Pull 3-5 of the most powerful or crystallizing quotes from the conversation. Choose quotes that:
+- Capture a key insight memorably
+- Challenge conventional thinking
+- Provide actionable wisdom
+Format: "Quote here" - Speaker Name (with brief context if needed)
 
-Format with:
-- A compelling opening that frames why this conversation matters
-- Clear section headers that guide the reader through major themes
-- Short paragraphs for readability
-- A conclusion that synthesizes the key takeaways
+## Tactical Takeaways
+• 4-6 specific, actionable items discussed (tools, techniques, habits, strategies)
+• Include any specific recommendations with enough detail to be useful
+• If percentages, timeframes, or metrics were mentioned, include them
 
-Remember: Renaissance Weekly readers are polymathic professionals who toggle between AI research, investment analysis, health optimization, and geopolitics. Write for this sophisticated audience that values both time-efficiency AND intellectual depth."""
+## Resources Mentioned
+• Books: Title by Author (with 1-line description of why it was recommended)
+• Tools/Apps: Name (what it's used for)
+• Concepts to explore further: Brief description
+• People referenced: Name (why they matter)
+
+## The Big Picture
+A brief paragraph (3-4 sentences) connecting this conversation to broader trends in technology, business, health, or society. Why does this conversation matter now?
+
+## Action Items for the Week
+3 specific things a reader could implement this week based on the episode:
+1. [Specific action with clear first step]
+2. [Another actionable item]
+3. [Third concrete action]
+
+Remember: This is for executives and professionals who value their time. Be direct, specific, and practical. Avoid fluff and focus on extracting maximum insight per word."""
 
                 # Try with retry logic for rate limits
                 try:
                     response = openai_client.chat.completions.create(
-                        model="gpt-4o",  # Changed from gpt-4-turbo-preview
+                        model="gpt-4o",
                         messages=[
                             {
                                 "role": "system",
-                                "content": "You are a world-class writer for Renaissance Weekly, crafting comprehensive yet accessible summaries of long-form podcast conversations for intellectually curious professionals. Your summaries preserve nuance while respecting readers' time."
+                                "content": "You are a world-class executive briefing specialist. Your summaries help busy professionals extract maximum value from long-form content. You excel at identifying actionable insights and presenting them in a clear, scannable format."
                             },
                             {
                                 "role": "user",
@@ -682,7 +783,7 @@ Remember: Renaissance Weekly readers are polymathic professionals who toggle bet
                         messages=[
                             {
                                 "role": "system",
-                                "content": "You are a world-class writer for Renaissance Weekly, crafting comprehensive yet accessible summaries of long-form podcast conversations for intellectually curious professionals. Your summaries preserve nuance while respecting readers' time."
+                                "content": "You are a world-class executive briefing specialist. Your summaries help busy professionals extract maximum value from long-form content. You excel at identifying actionable insights and presenting them in a clear, scannable format."
                             },
                             {
                                 "role": "user",
@@ -704,16 +805,8 @@ Remember: Renaissance Weekly readers are polymathic professionals who toggle bet
                 if not summary or len(summary.strip()) < 100:
                     raise Exception("Generated summary is too short or empty")
                 
-                # Add episode metadata and links
-                episode_footer = f"\n\n---\n\n**Episode Details**\n"
-                episode_footer += f"- Published: {episode_info['published']}\n"
-                episode_footer += f"- Original Length: 2+ hours\n"
-                episode_footer += f"- Listen: [Apple Podcasts](https://podcasts.apple.com/us/podcast/the-tim-ferriss-show/id863897795) | "
-                episode_footer += f"[Spotify](https://open.spotify.com/show/5qSUyCrk9KR69lEiXbjwXM) | "
-                episode_footer += f"[YouTube](https://www.youtube.com/c/timferriss)"
-                if episode_info.get('link'):
-                    episode_footer += f" | [Episode Page]({episode_info['link']})"
-                episode_footer += "\n"
+                # Add enhanced episode metadata
+                episode_footer = self._create_episode_footer(episode_info, sponsors)
                 
                 summary += episode_footer
                 
@@ -733,22 +826,52 @@ Remember: Renaissance Weekly readers are polymathic professionals who toggle bet
             print(f"Full error: {traceback.format_exc()}")
             return None
     
-    def _quality_summarize_long_transcript(self, transcript, episode_title, episode_info, summary_filename):
+    def _create_episode_footer(self, episode_info, sponsors):
+        """Create attractive episode details footer"""
+        footer = "\n\n---\n\n"
+        
+        # Episode metadata in a cleaner format
+        footer += "### 📍 Episode Details\n\n"
+        
+        # Published date with icon
+        footer += f"**📅 Published:** {episode_info['published']}\n\n"
+        
+        # Duration with icon
+        footer += f"**⏱️ Duration:** 2-3 hours\n\n"
+        
+        # Listen on platforms with better formatting
+        footer += "**🎧 Listen on:**\n"
+        footer += "- [Apple Podcasts](https://podcasts.apple.com/us/podcast/the-tim-ferriss-show/id863897795)\n"
+        footer += "- [Spotify](https://open.spotify.com/show/5qSUyCrk9KR69lEiXbjwXM)\n"
+        footer += "- [YouTube](https://www.youtube.com/c/timferriss)\n"
+        if episode_info.get('link'):
+            footer += f"- [Episode Page]({episode_info['link']})\n"
+        
+        # Sponsors section if available
+        if sponsors:
+            footer += "\n**💼 Episode Sponsors:**\n"
+            for sponsor in sponsors:
+                footer += f"- [{sponsor['name']}]({sponsor['url']})\n"
+        
+        footer += "\n"
+        
+        return footer
+    
+    def _quality_summarize_long_transcript(self, transcript, episode_title, episode_info, summary_filename, sponsors):
         """
-        Premium quality summarization for very long transcripts (3+ hours).
-        Uses a three-pass approach to maintain narrative coherence.
+        Executive-focused summarization for very long transcripts (3+ hours).
+        Uses a three-pass approach to extract actionable insights.
         """
         print("🎯 Engaging premium summarization protocol for extended episode...")
         
         # PASS 1: Intelligent Segmentation
-        # Split at natural conversation breaks, not arbitrary character counts
         segments = self._create_conversation_segments(transcript)
         print(f"📊 Identified {len(segments)} natural conversation segments")
         
-        # PASS 2: Deep Analysis of Each Segment
-        segment_analyses = []
+        # PASS 2: Extract Key Insights from Each Segment
+        segment_insights = []
         for i, segment in enumerate(segments):
-            print(f"\n🔍 Deep analysis of segment {i+1}/{len(segments)}...")
+            print(f"\n🔍 Extracting insights from segment {i+1}/{len(segments)}...")
             
             start_time = time.time()
             stop_event = threading.Event()
@@ -759,85 +882,110 @@ Remember: Renaissance Weekly readers are polymathic professionals who toggle bet
             progress_thread.start()
             
             try:
-                analysis_prompt = f"""Analyze this segment of the podcast conversation in detail.
+                analysis_prompt = f"""Analyze this segment of the podcast conversation for actionable insights.
 
 SEGMENT {i+1} OF {len(segments)}:
 {segment}
 
-Provide a comprehensive analysis that captures:
-1. The main topics and ideas discussed
-2. Key insights, frameworks, or principles shared
-3. Notable quotes (with context)
-4. How this segment connects to broader themes
-5. Any tools, books, or resources mentioned
-6. The narrative flow and transitions
+Extract the following from this segment:
+1. KEY INSIGHTS: What are the 2-3 most valuable insights or frameworks discussed?
+2. ACTIONABLE ITEMS: Any specific tools, techniques, or strategies mentioned?
+3. POWERFUL QUOTES: 1-2 memorable quotes that crystallize key ideas
+4. RESOURCES: Books, tools, or people mentioned
+5. DATA POINTS: Any specific metrics, percentages, or timeframes mentioned
 
-This analysis will be used to create a cohesive summary, so preserve all nuance and intellectual texture."""
+Focus on what would be most valuable for a busy executive. Be specific and practical."""
 
                 response = openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are analyzing a segment of a long-form intellectual podcast for Renaissance Weekly. Capture all substantive content while noting narrative connections."
+                            "content": "You are extracting actionable insights from a podcast segment for busy executives. Focus on practical value and specific takeaways."
                         },
                         {
                             "role": "user",
                             "content": analysis_prompt
                         }
                     ],
-                    max_tokens=2500,
+                    max_tokens=2000,
                     temperature=0.3
                 )
                 
-                segment_analyses.append({
+                segment_insights.append({
                     'segment_number': i + 1,
-                    'analysis': response.choices[0].message.content,
-                    'approximate_time': f"{(i * 30)}-{((i + 1) * 30)} minutes"  # Rough estimate
+                    'insights': response.choices[0].message.content,
+                    'approximate_time': f"{(i * 30)}-{((i + 1) * 30)} minutes"
                 })
                 
             finally:
                 stop_event.set()
                 progress_thread.join()
         
-        # PASS 3: Synthesis into Cohesive Narrative
-        print("\n🎨 Synthesizing into Renaissance Weekly narrative...")
+        # PASS 3: Synthesis into Executive Brief
+        print("\n🎨 Synthesizing into Renaissance Weekly executive brief...")
         
-        analyses_text = "\n\n---\n\n".join([
-            f"SEGMENT {a['segment_number']} (approx. {a['approximate_time']}):\n{a['analysis']}"
-            for a in segment_analyses
+        insights_text = "\n\n---\n\n".join([
+            f"SEGMENT {s['segment_number']} (approx. {s['approximate_time']}):\n{s['insights']}"
+            for s in segment_insights
         ])
         
         synthesis_prompt = f"""EPISODE: {episode_title}
 DESCRIPTION: {episode_info.get('description', '')}
 
-You have been provided with detailed analyses of all segments from this extended podcast episode. Your task is to synthesize these into a single, cohesive Renaissance Weekly summary that maintains the highest editorial standards.
+You have been provided with extracted insights from all segments of this extended podcast episode. Synthesize these into a single executive briefing.
 
-SEGMENT ANALYSES:
-{analyses_text}
+SEGMENT INSIGHTS:
+{insights_text}
 
-Create a comprehensive summary (1,200-1,500 words) that:
+Create a comprehensive executive summary (1,000-1,200 words) with this EXACT structure:
 
-1. **Tells the complete story** - Weave the segments into a unified narrative that captures the full arc of the conversation
-2. **Preserves intellectual depth** - Don't lose nuance in the synthesis; this audience values sophistication
-3. **Maintains conversational flow** - Show how ideas built upon each other throughout the discussion
-4. **Highlights cross-cutting themes** - Identify patterns and connections across different segments
-5. **Includes the best quotes** - Select the most crystallizing moments from across the entire conversation
-6. **Provides actionable synthesis** - What are the key takeaways for a polymathic professional?
+## Executive Summary
+A 2-3 sentence overview capturing the absolute most important takeaways. What's the ONE thing to remember?
 
-Structure with:
-- A compelling opening that captures why this particular conversation matters now
-- Elegant transitions between major themes (not just chronological recounting)
-- Strategic use of subheadings to guide the reader
-- A conclusion that doesn't just summarize but synthesizes into actionable wisdom
+## Key Insights & Frameworks
+• Synthesize the 5-7 most valuable insights across ALL segments
+• Each bullet should be substantive (2-3 sentences) and actionable
+• Combine related insights from different segments
+• Focus on ideas with immediate application value
+• Include specific examples or data points
 
-Write with the editorial sophistication of The Atlantic meets the intellectual rigor of a top-tier Substack."""
+## Notable Quotes
+Select the 3-5 BEST quotes from across the entire conversation that:
+- Capture essential insights memorably
+- Challenge conventional thinking
+- Provide actionable wisdom
+Format: "Quote" - Speaker (context if needed)
+
+## Tactical Takeaways
+• 4-6 specific, actionable items from across the episode
+• Include tools, techniques, habits, or strategies
+• Merge similar recommendations from different segments
+• Include any metrics or timeframes mentioned
+
+## Resources Mentioned
+Compile ALL resources from across segments:
+• Books: Title by Author (why recommended)
+• Tools/Apps: Name (purpose)
+• Concepts: Brief description
+• People: Name (relevance)
+
+## The Big Picture
+A paragraph connecting this conversation to broader trends. Why does this matter for Renaissance Weekly readers?
+
+## Action Items for the Week
+3 specific things to implement this week:
+1. [Specific action with clear first step]
+2. [Another actionable item]
+3. [Third concrete action]
+
+Remember: This is for time-constrained executives. Every word should deliver value. Be specific, practical, and actionable."""
         
         start_time = time.time()
         stop_event = threading.Event()
         progress_thread = threading.Thread(
             target=self.show_progress,
-            args=(stop_event, start_time, "Crafting final Renaissance Weekly piece", 30)
+            args=(stop_event, start_time, "Crafting executive brief", 30)
         )
         progress_thread.start()
         
@@ -847,7 +995,7 @@ Write with the editorial sophistication of The Atlantic meets the intellectual r
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are the lead writer for Renaissance Weekly. Your readers are CEOs, investors, researchers, and builders who expect intellectual sophistication matched with practical insight. Every piece must be worth their limited time."
+                        "content": "You are creating executive briefings for Renaissance Weekly. Your readers are CEOs, investors, and professionals who need maximum insight in minimum time. Every section should be scannable and actionable."
                     },
                     {
                         "role": "user",
@@ -860,28 +1008,15 @@ Write with the editorial sophistication of The Atlantic meets the intellectual r
             
             final_summary = response.choices[0].message.content
             
-            # Quality check - ensure we got a substantial summary
-            if len(final_summary) < 3000:  # Roughly 600 words
-                print("⚠️  Summary seems short, requesting expansion...")
-                # Could add a follow-up request here if needed
-            
-            # Add episode metadata
-            episode_footer = f"\n\n---\n\n**Episode Details**\n"
-            episode_footer += f"- Published: {episode_info['published']}\n"
-            episode_footer += f"- Original Length: 3+ hours\n"
-            episode_footer += f"- Listen: [Apple Podcasts](https://podcasts.apple.com/us/podcast/the-tim-ferriss-show/id863897795) | "
-            episode_footer += f"[Spotify](https://open.spotify.com/show/5qSUyCrk9KR69lEiXbjwXM) | "
-            episode_footer += f"[YouTube](https://www.youtube.com/c/timferriss)"
-            if episode_info.get('link'):
-                episode_footer += f" | [Episode Page]({episode_info['link']})"
-            episode_footer += "\n"
+            # Add enhanced episode metadata
+            episode_footer = self._create_episode_footer(episode_info, sponsors)
             
             final_summary += episode_footer
             
             with open(summary_filename, "w", encoding="utf-8") as f:
                 f.write(final_summary)
             
-            print(f"✅ Premium summary crafted: {len(final_summary)} characters")
+            print(f"✅ Executive brief crafted: {len(final_summary)} characters")
             return final_summary
             
         finally:
