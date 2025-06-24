@@ -40,9 +40,9 @@ podcasts:
     apple_id: "842818711"
     rss_feed: "https://feeds.simplecast.com/JGE3yC0V"
     
-  - name: "Lunar Society"
-    apple_id: "1598388196"
-    search_term: "Lunar Society Dwarkesh Patel"
+  - name: "Dwarkesh Podcast"
+    apple_id: "1516093381"
+    search_term: "Dwarkesh Podcast"
     
   - name: "Cognitive Revolution"
     apple_id: "1669813431"
