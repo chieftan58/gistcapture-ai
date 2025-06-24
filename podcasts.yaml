@@ -5,7 +5,7 @@
 
 podcasts:
   - name: "Market Huddle"
-    apple_id: "1552799888"
+    apple_id: "1444520320"
     apple_url: "https://podcasts.apple.com/us/podcast/the-market-huddle/id1552799888"
     
   - name: "Macro Voices"
@@ -13,7 +13,7 @@ podcasts:
     rss_feed: "https://feeds.feedburner.com/MacroVoices"
     
   - name: "Forward Guidance"
-    apple_id: "1562820083"
+    apple_id: "1592743188"
     
   - name: "Odd Lots"
     apple_id: "1056200096"
@@ -70,7 +70,7 @@ podcasts:
     rss_feed: "https://rss.art19.com/tim-ferriss-show"
     
   - name: "The Drive"
-    apple_id: "1227863024"
+    apple_id: "1400828889"
     search_term: "The Drive Peter Attia"
     
   - name: "Huberman Lab"
