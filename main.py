@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-# Add renaissance_weekly to Python path
+# Ensure the package can be imported when run directly
 sys.path.insert(0, str(Path(__file__).parent))
 
 from renaissance_weekly.app import RenaissanceWeekly
