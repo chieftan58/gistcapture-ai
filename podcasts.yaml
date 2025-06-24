@@ -4,79 +4,79 @@
 # Recommended: apple_id AND (apple_url OR rss_feed OR search_term)
 
 podcasts:
-  - name: "Market Huddle"
-    apple_id: "1444520320"
-    apple_url: "https://podcasts.apple.com/us/podcast/the-market-huddle/id1552799888"
+  - name: "A16Z"
+    apple_id: "842818711"
+    rss_feed: "https://feeds.simplecast.com/JGE3yC0V"
     
-  - name: "Macro Voices"
-    apple_id: "1079172742"
-    rss_feed: "https://feeds.feedburner.com/MacroVoices"
+  - name: "All-In"
+    apple_id: "1502871393"
+    search_term: "All-In Podcast Chamath Jason Sacks Friedberg"
     
-  - name: "Forward Guidance"
-    apple_id: "1592743188"
-    
-  - name: "Odd Lots"
-    apple_id: "1056200096"
-    apple_url: "https://podcasts.apple.com/us/podcast/odd-lots/id1056200096"
+  - name: "American Optimist"
+    apple_id: "1573141757"
+    apple_url: "https://podcasts.apple.com/us/podcast/joe-lonsdale-american-optimist/id1573141757"
     
   - name: "BG2 Pod"
     apple_id: "1727278168"  # CORRECTED
     apple_url: "https://podcasts.apple.com/us/podcast/bg2pod-with-brad-gerstner-and-bill-gurley/id1727278168"
     search_term: "BG2Pod Bill Gurley Brad Gerstner"  # Fallback search
     
-  - name: "We Study Billionaires"
-    apple_id: "928933489"
-    search_term: "We Study Billionaires The Investors Podcast"
-    
-  - name: "American Optimist"
-    apple_id: "1573141757"
-    apple_url: "https://podcasts.apple.com/us/podcast/joe-lonsdale-american-optimist/id1573141757"
-    
-  - name: "All-In"
-    apple_id: "1502871393"
-    search_term: "All-In Podcast Chamath Jason Sacks Friedberg"
-    
-  - name: "A16Z"
-    apple_id: "842818711"
-    rss_feed: "https://feeds.simplecast.com/JGE3yC0V"
+  - name: "Cognitive Revolution"
+    apple_id: "1669813431"
+    search_term: "Cognitive Revolution Nathan Labenz AI"
     
   - name: "Dwarkesh Podcast"
     apple_id: "1516093381"
     search_term: "Dwarkesh Podcast"
     
-  - name: "Cognitive Revolution"
-    apple_id: "1669813431"
-    search_term: "Cognitive Revolution Nathan Labenz AI"
+  - name: "Forward Guidance"
+    apple_id: "1592743188"
+    
+  - name: "Founders"
+    apple_id: "1227971746"
+    search_term: "Founders Podcast David Senra"
+    
+  - name: "Huberman Lab"
+    apple_id: "1545953110"
+    rss_feed: "https://feeds.megaphone.fm/hubermanlab"
+    
+  - name: "Knowledge Project"
+    apple_id: "990149481"
+    search_term: "Knowledge Project Shane Parrish Farnam Street"
+    
+  - name: "Macro Voices"
+    apple_id: "1079172742"
+    rss_feed: "https://feeds.feedburner.com/MacroVoices"
+    
+  - name: "Market Huddle"
+    apple_id: "1444520320"
+    apple_url: "https://podcasts.apple.com/us/podcast/the-market-huddle/id1552799888"
+    
+  - name: "Modern Wisdom"
+    apple_id: "1347973549"
+    rss_feed: "https://modernwisdom.libsyn.com/rss"
     
   - name: "No Priors"
     apple_id: "1668002688"
     apple_url: "https://podcasts.apple.com/us/podcast/no-priors-artificial-intelligence-technology-startups/id1668002688"
     search_term: "No Priors Elad Gil Sarah Guo"
     
-  - name: "Modern Wisdom"
-    apple_id: "1347973549"
-    rss_feed: "https://modernwisdom.libsyn.com/rss"
+  - name: "Odd Lots"
+    apple_id: "1056200096"
+    apple_url: "https://podcasts.apple.com/us/podcast/odd-lots/id1056200096"
     
-  - name: "Knowledge Project"
-    apple_id: "990149481"
-    search_term: "Knowledge Project Shane Parrish Farnam Street"
-    
-  - name: "Founders"
-    apple_id: "1227971746"
-    search_term: "Founders Podcast David Senra"
-    
-  - name: "Tim Ferriss"
-    apple_id: "863897795"
-    rss_feed: "https://rss.art19.com/tim-ferriss-show"
+  - name: "The Doctor's Farmacy"
+    apple_id: "1382804627"
+    search_term: "Doctor's Farmacy Mark Hyman"
     
   - name: "The Drive"
     apple_id: "1400828889"
     search_term: "The Drive Peter Attia"
     
-  - name: "Huberman Lab"
-    apple_id: "1545953110"
-    rss_feed: "https://feeds.megaphone.fm/hubermanlab"
+  - name: "Tim Ferriss"
+    apple_id: "863897795"
+    rss_feed: "https://rss.art19.com/tim-ferriss-show"
     
-  - name: "The Doctor's Farmacy"
-    apple_id: "1382804627"
-    search_term: "Doctor's Farmacy Mark Hyman"
+  - name: "We Study Billionaires"
+    apple_id: "928933489"
+    search_term: "We Study Billionaires The Investors Podcast"
