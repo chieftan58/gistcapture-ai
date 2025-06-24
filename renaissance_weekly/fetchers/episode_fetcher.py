@@ -47,39 +47,49 @@ class ReliableEpisodeFetcher:
         methods_tried = []
         
         # Method 1: Try configured RSS feeds
-        if "rss_feeds" in podcast_config:
+        if "rss_feeds" in podcast_config and podcast_config["rss_feeds"]:
             methods_tried.append("RSS feeds")
             episodes = await self._try_all_rss_sources(podcast_name, podcast_config, days_back)
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
         # Method 2: Try Apple Podcasts (always try this)
-        if "apple_id" in podcast_config:
+        if "apple_id" in podcast_config and podcast_config["apple_id"]:
             methods_tried.append("Apple Podcasts")
             episodes = await self._comprehensive_apple_search(podcast_name, podcast_config["apple_id"], days_back)
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
-        # Method 3: Search for podcast across multiple platforms
+        # Method 3: Use search_term for better discovery
+        search_term = podcast_config.get("search_term", podcast_name)
+        if search_term and len(all_episodes) == 0:  # Only if we haven't found episodes yet
+            methods_tried.append("Enhanced search")
+            logger.info(f"  🔍 Using search term: {search_term}")
+            # Search Apple with the search term
+            episodes = await self._search_apple_by_term(search_term, days_back)
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
+        
+        # Method 4: Search for podcast across multiple platforms
         methods_tried.append("Multi-platform search")
         episodes = await self._multi_platform_search(podcast_name, days_back)
         for ep in episodes:
             all_episodes[self._episode_key(ep)] = ep
         
-        # Method 4: Try PodcastIndex
+        # Method 5: Try PodcastIndex
         methods_tried.append("PodcastIndex")
         episodes = await self._try_podcast_index(podcast_name, days_back)
         for ep in episodes:
             all_episodes[self._episode_key(ep)] = ep
         
-        # Method 5: Try web scraping
-        if "website" in podcast_config:
+        # Method 6: Try web scraping (only if website is provided)
+        if podcast_config.get("website"):
             methods_tried.append("Web scraping")
             episodes = await self._try_web_scraping(podcast_name, podcast_config["website"], days_back)
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
-        # Method 6: Google search for RSS feeds
+        # Method 7: Google search for RSS feeds
         methods_tried.append("Google RSS search")
         episodes = await self._google_rss_search(podcast_name, days_back)
         for ep in episodes:
@@ -96,7 +106,7 @@ class ReliableEpisodeFetcher:
             
             # Last resort: Manual intervention suggestion
             logger.warning(f"💡 Manual intervention needed for {podcast_name}")
-            logger.warning(f"   Consider adding more RSS feed URLs or checking the podcast website")
+            logger.warning(f"   Consider checking the Apple ID or adding more identifiers to podcasts.yaml")
         
         return final_episodes
     
@@ -179,24 +189,42 @@ class ReliableEpisodeFetcher:
         return []
     
     def _parse_rss_feed(self, content: bytes, podcast_name: str, days_back: int) -> List[Episode]:
-        """Parse RSS feed content into episodes"""
+        """Parse RSS feed content into episodes with more robust parsing"""
         try:
             feed = feedparser.parse(content)
             
             if not feed.entries:
+                logger.warning("    No entries in feed")
                 return []
             
             episodes = []
             cutoff = datetime.now() - timedelta(days=days_back)
             
-            for entry in feed.entries[:50]:  # Check more entries
+            logger.debug(f"    Feed has {len(feed.entries)} entries, checking last {days_back} days")
+            
+            for i, entry in enumerate(feed.entries[:50]):  # Check more entries
                 try:
+                    # Log first few entries for debugging
+                    if i < 3:
+                        logger.debug(f"    Entry {i}: {entry.get('title', 'No title')[:50]}")
+                    
                     pub_date = self._parse_date(entry)
-                    if not pub_date or pub_date < cutoff:
+                    if not pub_date:
+                        if i < 3:
+                            logger.debug(f"      No valid date found")
+                        continue
+                    
+                    if i < 3:
+                        logger.debug(f"      Published: {pub_date.strftime('%Y-%m-%d')}")
+                    
+                    if pub_date < cutoff:
+                        if i == 0:  # Log why we're stopping
+                            logger.debug(f"    Stopping - episode from {pub_date.strftime('%Y-%m-%d')} is before cutoff {cutoff.strftime('%Y-%m-%d')}")
                         continue
                     
                     audio_url = self._extract_audio_url(entry)
                     if not audio_url:
+                        logger.debug(f"      No audio URL for: {entry.get('title', 'Unknown')[:50]}")
                         continue
                     
                     episode = Episode(
@@ -211,11 +239,13 @@ class ReliableEpisodeFetcher:
                         guid=entry.get('guid', entry.get('id', ''))
                     )
                     episodes.append(episode)
+                    logger.debug(f"    ✓ Added episode: {episode.title[:50]} ({episode.published.strftime('%Y-%m-%d')})")
                     
                 except Exception as e:
-                    logger.debug(f"    Error parsing entry: {e}")
+                    logger.debug(f"    Error parsing entry {i}: {e}")
                     continue
             
+            logger.info(f"    Found {len(episodes)} episodes from this feed")
             return episodes
             
         except Exception as e:
@@ -289,6 +319,11 @@ class ReliableEpisodeFetcher:
                             if feed_url:
                                 logger.info(f"    Found matching podcast with feed: {feed_url}")
                                 episodes.extend(await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back))
+                                
+                                # Cache the feed
+                                if podcast_name not in self.discovered_feeds_cache:
+                                    self.discovered_feeds_cache[podcast_name] = []
+                                self.discovered_feeds_cache[podcast_name].append(feed_url)
                                 break
             except Exception as e:
                 logger.error(f"    Apple search error: {e}")
@@ -459,6 +494,40 @@ class ReliableEpisodeFetcher:
         
         return episodes
     
+    async def _search_apple_by_term(self, search_term: str, days_back: int) -> List[Episode]:
+        """Search Apple Podcasts using a search term"""
+        try:
+            logger.info(f"    Searching Apple with term: {search_term}")
+            search_url = "https://itunes.apple.com/search"
+            params = {
+                "term": search_term,
+                "media": "podcast",
+                "entity": "podcast",
+                "limit": 5
+            }
+            
+            response = self.session.get(search_url, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Try the first matching podcast
+                for result in data.get("results", []):
+                    feed_url = result.get("feedUrl")
+                    if feed_url:
+                        logger.info(f"    Found podcast: {result.get('trackName')} with feed: {feed_url}")
+                        episodes = await self._try_rss_with_fallbacks(
+                            result.get('trackName', search_term), 
+                            feed_url, 
+                            days_back
+                        )
+                        if episodes:
+                            return episodes
+                            
+        except Exception as e:
+            logger.debug(f"Search by term error: {e}")
+        
+        return []
+    
     async def _get_apple_feed_url(self, apple_id: str) -> Optional[str]:
         """Get RSS feed URL from Apple Podcasts ID"""
         try:
@@ -522,6 +591,9 @@ class ReliableEpisodeFetcher:
     
     async def _try_web_scraping(self, podcast_name: str, website: str, days_back: int) -> List[Episode]:
         """Enhanced web scraping with multiple strategies"""
+        if not website:
+            return []
+            
         # Try multiple URL patterns
         url_patterns = [
             website,
