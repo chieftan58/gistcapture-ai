@@ -63,3 +63,5 @@ wheels/
 .installed.cfg
 *.eggpodcast_data.db
 *.db
+*.db
+*.db-journal
