@@ -1,11 +1,12 @@
-"""Episode selection UI"""
+"""Episode selection UI with Apple-quality design"""
 
 import json
 import webbrowser
 import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from typing import List
+from typing import List, Set
 from html import escape
+from datetime import datetime
 
 from ..models import Episode
 from ..config import PODCAST_CONFIGS
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class EpisodeSelector:
-    """Handle episode selection UI"""
+    """Handle episode selection UI with Apple-quality design"""
     
     def run_selection_server(self, episodes: List[Episode]) -> List[Episode]:
         """Run a temporary web server for episode selection"""
@@ -93,19 +94,20 @@ class EpisodeSelector:
         return selected_episodes
     
     def create_selection_html(self, episodes: List[Episode]) -> str:
-        """Create an HTML page for episode selection with full descriptions"""
+        """Create an Apple-quality HTML page for episode selection"""
         import re
-        from datetime import datetime
         
         # Create podcast description lookup
         podcast_descriptions = {}
+        configured_podcasts = set()
         for config in PODCAST_CONFIGS:
             podcast_descriptions[config["name"]] = config.get("description", "")
-        
-        html = self._get_html_header()
+            configured_podcasts.add(config["name"])
         
         # Group episodes by podcast
         by_podcast = {}
+        podcasts_with_episodes = set()
+        
         for i, ep in enumerate(episodes):
             try:
                 if isinstance(ep, Episode):
@@ -124,6 +126,8 @@ class EpisodeSelector:
                     duration = ep.get('duration', 'Unknown')
                     has_transcript = ep.get('transcript_url') is not None
                     description = ep.get('description', '')
+                
+                podcasts_with_episodes.add(podcast)
                 
                 if podcast not in by_podcast:
                     by_podcast[podcast] = []
@@ -147,7 +151,7 @@ class EpisodeSelector:
                         if display_desc and display_desc[-1] not in '.!?':
                             display_desc += '.'
                 else:
-                    display_desc = "No description available for this episode. Click to select for processing."
+                    display_desc = "No description available for this episode."
                 
                 # Format duration for display
                 if isinstance(duration, str) and duration.isdigit():
@@ -155,9 +159,9 @@ class EpisodeSelector:
                     hours = seconds // 3600
                     minutes = (seconds % 3600) // 60
                     if hours > 0:
-                        duration_display = f"{hours} hour{'s' if hours > 1 else ''}, {minutes} minute{'s' if minutes != 1 else ''}"
+                        duration_display = f"{hours}h {minutes}m"
                     else:
-                        duration_display = f"{minutes} minute{'s' if minutes != 1 else ''}"
+                        duration_display = f"{minutes}m"
                 else:
                     duration_display = duration
                 
@@ -173,247 +177,619 @@ class EpisodeSelector:
                 logger.error(f"Error processing episode {i}: {e}")
                 continue
         
-        # Create HTML for each podcast group
-        for podcast, podcast_episodes in by_podcast.items():
+        # Find podcasts with zero episodes
+        zero_episode_podcasts = sorted(configured_podcasts - podcasts_with_episodes)
+        
+        # Sort podcasts alphabetically
+        sorted_podcasts = sorted(by_podcast.keys())
+        
+        # Build HTML
+        html = self._get_html_header(len(episodes), len(zero_episode_podcasts))
+        
+        # Add zero episodes section if there are any
+        if zero_episode_podcasts:
+            html += self._create_zero_episodes_section(zero_episode_podcasts)
+        
+        # Create HTML for each podcast group (alphabetically)
+        for podcast in sorted_podcasts:
+            podcast_episodes = by_podcast[podcast]
             podcast_desc = podcast_descriptions.get(podcast, "")
             
-            html += f'<div class="podcast-group">\n'
-            html += f'<div class="podcast-header">\n'
-            html += f'<div class="podcast-title">{escape(podcast)}</div>\n'
-            if podcast_desc:
-                html += f'<div class="podcast-description">— {escape(podcast_desc)}</div>\n'
-            html += f'</div>\n'
+            html += f'''
+<div class="podcast-section" data-podcast="{escape(podcast)}">
+    <div class="podcast-header">
+        <div class="podcast-info">
+            <h3 class="podcast-title">{escape(podcast)}</h3>
+            {f'<p class="podcast-description">{escape(podcast_desc)}</p>' if podcast_desc else ''}
+        </div>
+        <div class="episode-count">{len(podcast_episodes)} episode{'s' if len(podcast_episodes) != 1 else ''}</div>
+    </div>
+    <div class="episodes-container">
+'''
             
             for ep_data in podcast_episodes:
-                transcript_badge = '<span class="transcript-badge">TRANSCRIPT</span>' if ep_data['has_transcript'] else ''
+                transcript_badge = '<span class="badge badge-transcript">Transcript</span>' if ep_data['has_transcript'] else ''
                 
-                html += f'''<div class="episode" id="episode-{ep_data['index']}" onclick="toggleEpisode({ep_data['index']})">
-    <div class="episode-header">
-        <input type="checkbox" id="cb-{ep_data['index']}" value="{ep_data['index']}" onclick="event.stopPropagation();" onchange="updateSelection()">
-        <div class="episode-content">
-            <div class="episode-title">{escape(ep_data['title'])}{transcript_badge}</div>
-            <div class="episode-meta">📅 {escape(str(ep_data['published']))} | ⏱️ {escape(str(ep_data['duration']))}</div>
-            <div class="episode-description">{escape(ep_data['description'])}</div>
+                html += f'''
+        <div class="episode" id="episode-{ep_data['index']}" onclick="toggleEpisode({ep_data['index']})">
+            <div class="episode-checkbox">
+                <input type="checkbox" id="cb-{ep_data['index']}" value="{ep_data['index']}" 
+                       onclick="event.stopPropagation();" onchange="updateSelection()">
+            </div>
+            <div class="episode-content">
+                <div class="episode-header-row">
+                    <h4 class="episode-title">{escape(ep_data['title'])}</h4>
+                    {transcript_badge}
+                </div>
+                <div class="episode-meta">
+                    <span class="meta-item">📅 {escape(str(ep_data['published']))}</span>
+                    <span class="meta-separator">•</span>
+                    <span class="meta-item">⏱ {escape(str(ep_data['duration']))}</span>
+                </div>
+                <p class="episode-description">{escape(ep_data['description'])}</p>
+            </div>
         </div>
-    </div>
-</div>\n'''
+'''
             
-            html += '</div>\n'
+            html += '''
+    </div>
+</div>
+'''
         
         html += self._get_html_footer()
         
         return html
     
-    def _get_html_header(self) -> str:
-        """Get HTML header with styles and scripts"""
-        return """<!DOCTYPE html>
+    def _create_zero_episodes_section(self, zero_podcasts: List[str]) -> str:
+        """Create the zero episodes warning section"""
+        return f'''
+<div class="zero-episodes-section">
+    <div class="zero-header">
+        <svg class="warning-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <h2>Podcasts with No Recent Episodes</h2>
+        <span class="zero-count">{len(zero_podcasts)} podcast{'s' if len(zero_podcasts) != 1 else ''}</span>
+    </div>
+    <p class="zero-description">The following podcasts have no episodes in the selected time period. Check if they're still active or adjust your date range.</p>
+    <div class="zero-grid">
+        {''.join(f'<div class="zero-item">{escape(podcast)}</div>' for podcast in zero_podcasts)}
+    </div>
+</div>
+'''
+    
+    def _get_html_header(self, total_episodes: int, zero_count: int) -> str:
+        """Get HTML header with Apple-quality styles"""
+        return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Renaissance Weekly - Episode Selection</title>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        :root {{
+            --primary: #007AFF;
+            --primary-hover: #0051D5;
+            --secondary: #5856D6;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --background: #F2F2F7;
+            --surface: #FFFFFF;
+            --surface-secondary: #F9F9F9;
+            --text-primary: #000000;
+            --text-secondary: #3C3C43;
+            --text-tertiary: #C7C7CC;
+            --border: #E5E5EA;
+            --border-selected: #007AFF;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+            --transition: all 0.2s ease;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }}
+        
+        .app-header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 20px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .app-header::before {{
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 20s ease-in-out infinite;
+        }}
+        
+        @keyframes pulse {{
+            0%, 100% {{ transform: scale(1); opacity: 0.3; }}
+            50% {{ transform: scale(1.1); opacity: 0.5; }}
+        }}
+        
+        .app-header h1 {{
+            font-size: 48px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+        }}
+        
+        .app-header p {{
+            font-size: 20px;
+            opacity: 0.95;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }}
+        
+        .stats-container {{
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+            position: relative;
+            z-index: 1;
+        }}
+        
+        .stat-card {{
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 15px 30px;
+            border-radius: 16px;
+            text-align: center;
+        }}
+        
+        .stat-value {{
+            font-size: 32px;
+            font-weight: 700;
+            display: block;
+        }}
+        
+        .stat-label {{
+            font-size: 14px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        
+        .container {{
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        h1 { 
-            color: #333; 
-            margin-bottom: 10px;
-            font-size: 36px;
-        }
-        .subtitle { 
-            color: #666; 
-            margin-bottom: 30px; 
-            font-size: 18px; 
-        }
-        .podcast-group {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .podcast-header {
-            display: flex;
-            align-items: baseline;
-            gap: 15px;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 10px;
-        }
-        .podcast-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        .podcast-description {
-            font-size: 14px;
-            color: #666;
-            font-style: italic;
-        }
-        .episode {
-            padding: 15px;
-            margin-bottom: 10px;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        .episode:hover { 
-            background-color: #f8f9fa; 
-            border-color: #4a90e2; 
-        }
-        .episode.selected { 
-            background-color: #e3f2fd; 
-            border-color: #2196f3; 
-        }
-        .episode-header { 
-            display: flex; 
-            align-items: flex-start; 
-            gap: 15px; 
-        }
-        input[type="checkbox"] { 
-            width: 20px; 
-            height: 20px; 
-            margin-top: 2px; 
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .episode-content { 
-            flex: 1;
-            min-width: 0; /* Allow text to wrap */
-        }
-        .episode-title { 
-            font-weight: 500; 
-            color: #333; 
-            margin-bottom: 5px; 
-            font-size: 16px;
-            word-wrap: break-word;
-        }
-        .episode-meta { 
-            font-size: 14px; 
-            color: #666; 
-            margin-bottom: 8px; 
-        }
-        .episode-description { 
-            font-size: 14px; 
-            color: #555; 
-            line-height: 1.6;
-            word-wrap: break-word;
-        }
-        .transcript-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            background: #4CAF50;
-            color: white;
-            font-size: 12px;
-            border-radius: 4px;
-            margin-left: 10px;
-            font-weight: normal;
-        }
-        .controls {
+        }}
+        
+        .controls {{
             position: sticky;
             top: 20px;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+            background: var(--surface);
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            margin: -40px 0 40px;
             z-index: 100;
-        }
-        .button {
-            padding: 12px 24px;
-            margin: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid var(--border);
+        }}
+        
+        .control-group {{
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }}
+        
+        .button {{
+            padding: 10px 20px;
             border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 500;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .button:disabled {
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            outline: none;
+        }}
+        
+        .button:active {{
+            transform: scale(0.98);
+        }}
+        
+        .button:focus-visible {{
+            box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.3);
+        }}
+        
+        .button-primary {{
+            background: var(--primary);
+            color: white;
+        }}
+        
+        .button-primary:hover:not(:disabled) {{
+            background: var(--primary-hover);
+            box-shadow: var(--shadow-md);
+        }}
+        
+        .button-secondary {{
+            background: var(--surface-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }}
+        
+        .button-secondary:hover:not(:disabled) {{
+            background: var(--background);
+            border-color: var(--text-tertiary);
+        }}
+        
+        .button:disabled {{
             opacity: 0.5;
             cursor: not-allowed;
-        }
-        .button-primary { 
-            background-color: #4a90e2; 
-            color: white; 
-        }
-        .button-primary:hover:not(:disabled) { 
-            background-color: #357abd; 
-        }
-        .button-secondary { 
-            background-color: #6c757d; 
-            color: white; 
-        }
-        .button-secondary:hover:not(:disabled) { 
-            background-color: #545b62; 
-        }
-        .selection-count { 
-            font-size: 16px; 
-            color: #666; 
-            margin-left: 20px; 
-        }
-        .loading {
+        }}
+        
+        .selection-info {{
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }}
+        
+        .selection-count {{
+            color: var(--primary);
+            font-weight: 700;
+        }}
+        
+        .zero-episodes-section {{
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 40px;
+            border: 1px solid var(--warning);
+            box-shadow: var(--shadow-sm);
+        }}
+        
+        .zero-header {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }}
+        
+        .warning-icon {{
+            color: var(--warning);
+            flex-shrink: 0;
+        }}
+        
+        .zero-header h2 {{
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+        }}
+        
+        .zero-count {{
+            background: var(--warning);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        
+        .zero-description {{
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }}
+        
+        .zero-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }}
+        
+        .zero-item {{
+            background: var(--surface-secondary);
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }}
+        
+        .podcast-section {{
+            background: var(--surface);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }}
+        
+        .podcast-section:hover {{
+            box-shadow: var(--shadow-md);
+        }}
+        
+        .podcast-header {{
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface-secondary);
+        }}
+        
+        .podcast-info {{
+            flex: 1;
+        }}
+        
+        .podcast-title {{
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }}
+        
+        .podcast-description {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }}
+        
+        .episode-count {{
+            background: var(--primary);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+        
+        .episodes-container {{
+            padding: 8px;
+        }}
+        
+        .episode {{
+            padding: 16px;
+            margin: 8px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: var(--transition);
+            cursor: pointer;
+            display: flex;
+            gap: 16px;
+            background: var(--surface);
+        }}
+        
+        .episode:hover {{
+            background: var(--surface-secondary);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }}
+        
+        .episode.selected {{
+            background: #E3F2FD;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }}
+        
+        .episode-checkbox {{
+            padding-top: 2px;
+        }}
+        
+        .episode-checkbox input[type="checkbox"] {{
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }}
+        
+        .episode-content {{
+            flex: 1;
+            min-width: 0;
+        }}
+        
+        .episode-header-row {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }}
+        
+        .episode-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.4;
+            flex: 1;
+        }}
+        
+        .badge {{
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }}
+        
+        .badge-transcript {{
+            background: var(--success);
+            color: white;
+        }}
+        
+        .episode-meta {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .meta-separator {{
+            color: var(--text-tertiary);
+        }}
+        
+        .episode-description {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }}
+        
+        .loading {{
             display: none;
             text-align: center;
-            padding: 40px;
+            padding: 60px;
             font-size: 18px;
-            color: #666;
-        }
-        .error-message {
-            color: #d32f2f;
-            padding: 10px;
-            margin: 10px 0;
-            background: #ffebee;
-            border-radius: 4px;
+            color: var(--text-secondary);
+        }}
+        
+        .loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }}
+        
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+        
+        .error-message {{
+            color: var(--danger);
+            padding: 16px;
+            margin: 20px 0;
+            background: #FFF3F3;
+            border: 1px solid #FFD6D6;
+            border-radius: 12px;
             display: none;
-        }
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            h1 { font-size: 28px; }
-            .controls { position: static; }
-            .button { 
-                display: block; 
-                width: 100%; 
-                margin: 5px 0; 
-            }
-            .podcast-header {
+            font-weight: 500;
+        }}
+        
+        @media (max-width: 768px) {{
+            .app-header h1 {{
+                font-size: 36px;
+            }}
+            
+            .app-header p {{
+                font-size: 18px;
+            }}
+            
+            .stats-container {{
                 flex-direction: column;
-                gap: 5px;
-            }
-        }
+                gap: 10px;
+            }}
+            
+            .controls {{
+                flex-direction: column;
+                position: static;
+                margin: 20px 0;
+            }}
+            
+            .control-group {{
+                width: 100%;
+                justify-content: center;
+            }}
+            
+            .button {{
+                flex: 1;
+            }}
+            
+            .zero-grid {{
+                grid-template-columns: 1fr;
+            }}
+            
+            .podcast-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }}
+        }}
     </style>
 </head>
 <body>
-    <h1>🎙️ Renaissance Weekly</h1>
-    <p class="subtitle">Select episodes to process for this week's digest</p>
-    
-    <div class="controls">
-        <button class="button button-primary" onclick="processSelected()">Process Selected Episodes</button>
-        <button class="button button-secondary" onclick="selectAll()">Select All</button>
-        <button class="button button-secondary" onclick="selectNone()">Clear All</button>
-        <span class="selection-count">0 episodes selected</span>
+    <div class="app-header">
+        <h1>🎙 Renaissance Weekly</h1>
+        <p>Curate your weekly podcast intelligence digest</p>
+        <div class="stats-container">
+            <div class="stat-card">
+                <span class="stat-value">{total_episodes}</span>
+                <span class="stat-label">Episodes Found</span>
+            </div>
+            {f'''<div class="stat-card">
+                <span class="stat-value">{zero_count}</span>
+                <span class="stat-label">Empty Podcasts</span>
+            </div>''' if zero_count > 0 else ''}
+        </div>
     </div>
     
-    <div class="error-message" id="error-message"></div>
-    
-    <div class="loading" id="loading">
-        Processing your selection... This window will close automatically.
-    </div>
-    
-    <div id="episodes">
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <button class="button button-primary" onclick="processSelected()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 8 7 11 12 5"></polyline>
+                    </svg>
+                    Process Selected
+                </button>
+                <button class="button button-secondary" onclick="selectAll()">Select All</button>
+                <button class="button button-secondary" onclick="selectNone()">Clear</button>
+            </div>
+            <div class="selection-info">
+                <span class="selection-count">0</span> episodes selected
+            </div>
+        </div>
+        
+        <div class="error-message" id="error-message"></div>
+        
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            Processing your selection... This window will close automatically.
+        </div>
+        
+        <div id="content">
 """
     
     def _get_html_footer(self) -> str:
         """Get HTML footer with scripts"""
         return """
+        </div>
     </div>
     
     <script>
@@ -435,7 +811,16 @@ class EpisodeSelector:
                     episode.classList.remove('selected');
                 }
             });
-            document.querySelector('.selection-count').textContent = count + ' episode' + (count !== 1 ? 's' : '') + ' selected';
+            
+            document.querySelector('.selection-count').textContent = count;
+            
+            // Update button state
+            const processBtn = document.querySelector('.button-primary');
+            if (count === 0) {
+                processBtn.disabled = true;
+            } else {
+                processBtn.disabled = false;
+            }
         }
         
         function selectAll() {
@@ -472,8 +857,7 @@ class EpisodeSelector:
             document.querySelectorAll('.button').forEach(btn => btn.disabled = true);
             
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('episodes').style.display = 'none';
-            document.querySelector('.controls').style.display = 'none';
+            document.getElementById('content').style.display = 'none';
             
             fetch('/select', {
                 method: 'POST',
@@ -488,16 +872,27 @@ class EpisodeSelector:
             })
             .catch(error => {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('episodes').style.display = 'block';
-                document.querySelector('.controls').style.display = 'block';
+                document.getElementById('content').style.display = 'block';
                 document.querySelectorAll('.button').forEach(btn => btn.disabled = false);
                 showError('Failed to process selection. Please try again.');
+                updateSelection();
             });
         }
         
         // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {
             updateSelection();
+            
+            // Add smooth scroll behavior
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
         });
     </script>
 </body>
