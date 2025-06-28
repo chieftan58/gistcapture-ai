@@ -94,4 +94,8 @@ if __name__ == "__main__":
     if os.name == 'nt':  # Windows
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("\n⚠️  Interrupted by user")
+        sys.exit(0)

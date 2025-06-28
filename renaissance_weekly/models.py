@@ -4,16 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-import hashlib
 
 
 class TranscriptSource(Enum):
-    """Sources for podcast transcripts"""
-    OFFICIAL = "official"          # From podcast website
-    API = "api"                    # From transcript API
-    COMMUNITY = "community"        # From community sources
-    GENERATED = "generated"        # We transcribed it
-    CACHED = "cached"             # From our cache
+    """Source of transcript"""
+    RSS_FEED = "rss_feed"
+    SCRAPED = "scraped"
+    GENERATED = "generated"
+    API = "api"
+    CACHED = "cached"
 
 
 @dataclass
@@ -24,15 +23,33 @@ class Episode:
     published: datetime
     audio_url: Optional[str] = None
     transcript_url: Optional[str] = None
-    transcript_source: Optional[TranscriptSource] = None
-    description: str = ""
-    link: str = ""
+    description: Optional[str] = None
+    link: Optional[str] = None
     duration: str = "Unknown"
-    guid: str = ""  # Unique identifier
+    guid: Optional[str] = None
     
     def __post_init__(self):
-        if not self.guid:
-            # Create unique ID from podcast + title + date
-            self.guid = hashlib.md5(
-                f"{self.podcast}:{self.title}:{self.published}".encode()
-            ).hexdigest()
+        """Ensure datetime objects are timezone-naive"""
+        if self.published and self.published.tzinfo:
+            self.published = self.published.replace(tzinfo=None)
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary"""
+        return {
+            'podcast': self.podcast,
+            'title': self.title,
+            'published': self.published.isoformat() if self.published else None,
+            'audio_url': self.audio_url,
+            'transcript_url': self.transcript_url,
+            'description': self.description,
+            'link': self.link,
+            'duration': self.duration,
+            'guid': self.guid
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Episode':
+        """Create from dictionary"""
+        if isinstance(data.get('published'), str):
+            data['published'] = datetime.fromisoformat(data['published'])
+        return cls(**data)

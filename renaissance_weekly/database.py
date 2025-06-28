@@ -1,106 +1,363 @@
-"""Database operations for Renaissance Weekly"""
+"""Database module for Renaissance Weekly"""
 
 import sqlite3
 import json
-from pathlib import Path
-from typing import Optional, List, Dict
 from datetime import datetime
+from pathlib import Path
+from typing import Optional, List, Dict, Tuple
 
 from .models import Episode, TranscriptSource
 from .config import DB_PATH
+from .utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class PodcastDatabase:
-    """SQLite database for tracking podcasts and episodes"""
+    """Handle all database operations for podcast episodes and transcripts"""
     
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
-        self._init_db()
+        self._init_database()
     
-    def _init_db(self):
-        """Initialize database schema"""
-        conn = sqlite3.connect(self.db_path)
+    def _init_database(self):
+        """Initialize database tables with migration support"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if episodes table exists
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='episodes'
+                """)
+                table_exists = cursor.fetchone() is not None
+                
+                if table_exists:
+                    # Check if we need to migrate the schema
+                    cursor.execute("PRAGMA table_info(episodes)")
+                    columns = {row[1] for row in cursor.fetchall()}
+                    
+                    required_columns = {
+                        'podcast', 'title', 'published', 'audio_url', 
+                        'transcript_url', 'description', 'link', 'duration', 
+                        'guid', 'transcript', 'transcript_source', 'summary'
+                    }
+                    
+                    if not required_columns.issubset(columns):
+                        logger.warning("Database schema outdated, migrating...")
+                        self._migrate_database(conn, columns)
+                else:
+                    # Create new table
+                    self._create_episodes_table(conn)
+                
+                # Create or update indexes
+                self._create_indexes(conn)
+                
+                conn.commit()
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database initialization error: {e}")
+            # If all else fails, backup and recreate
+            self._backup_and_recreate()
+    
+    def _create_episodes_table(self, conn: sqlite3.Connection):
+        """Create the episodes table"""
         cursor = conn.cursor()
-        
-        # Podcast feeds table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS podcast_feeds (
-                podcast_name TEXT PRIMARY KEY,
-                working_feeds TEXT,  -- JSON array of working feed URLs
-                transcript_sources TEXT,  -- JSON object of transcript sources
-                last_checked TIMESTAMP,
-                last_success TIMESTAMP
-            )
-        """)
-        
-        # Episodes table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS episodes (
-                guid TEXT PRIMARY KEY,
-                podcast_name TEXT,
-                title TEXT,
-                published TIMESTAMP,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                podcast TEXT NOT NULL,
+                title TEXT NOT NULL,
+                published DATETIME NOT NULL,
                 audio_url TEXT,
                 transcript_url TEXT,
+                description TEXT,
+                link TEXT,
+                duration TEXT,
+                guid TEXT,
+                transcript TEXT,
                 transcript_source TEXT,
-                transcript_text TEXT,
                 summary TEXT,
-                processed BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (podcast_name) REFERENCES podcast_feeds(podcast_name)
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(podcast, title, published)
             )
         """)
+    
+    def _create_indexes(self, conn: sqlite3.Connection):
+        """Create database indexes"""
+        cursor = conn.cursor()
         
-        # Feed health monitoring
+        # Drop existing indexes if they exist (to avoid conflicts)
+        cursor.execute("DROP INDEX IF EXISTS idx_episodes_podcast_published")
+        cursor.execute("DROP INDEX IF EXISTS idx_episodes_guid")
+        
+        # Create new indexes
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS feed_health (
-                url TEXT PRIMARY KEY,
-                podcast_name TEXT,
-                status TEXT,  -- 'working', 'failing', 'dead'
-                last_success TIMESTAMP,
-                last_failure TIMESTAMP,
-                failure_count INTEGER DEFAULT 0,
-                error_message TEXT
-            )
+            CREATE INDEX idx_episodes_podcast_published 
+            ON episodes(podcast, published DESC)
         """)
         
-        conn.commit()
-        conn.close()
-    
-    def get_cached_transcript(self, episode: Episode) -> Optional[str]:
-        """Get cached transcript if available"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT transcript_text FROM episodes WHERE guid = ?",
-            (episode.guid,)
-        )
-        result = cursor.fetchone()
-        conn.close()
-        
-        return result[0] if result and result[0] else None
-    
-    def save_episode(self, episode: Episode, transcript: Optional[str] = None):
-        """Save episode to database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
         cursor.execute("""
-            INSERT OR REPLACE INTO episodes 
-            (guid, podcast_name, title, published, audio_url, transcript_url, 
-             transcript_source, transcript_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            episode.guid,
-            episode.podcast,
-            episode.title,
-            episode.published,
-            episode.audio_url,
-            episode.transcript_url,
-            episode.transcript_source.value if episode.transcript_source else None,
-            transcript
-        ))
+            CREATE INDEX idx_episodes_guid 
+            ON episodes(guid)
+        """)
+    
+    def _migrate_database(self, conn: sqlite3.Connection, existing_columns: set):
+        """Migrate database to new schema"""
+        cursor = conn.cursor()
         
-        conn.commit()
-        conn.close()
+        try:
+            # Create a temporary table with the new schema
+            cursor.execute("""
+                CREATE TABLE episodes_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    podcast TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    published DATETIME NOT NULL,
+                    audio_url TEXT,
+                    transcript_url TEXT,
+                    description TEXT,
+                    link TEXT,
+                    duration TEXT,
+                    guid TEXT,
+                    transcript TEXT,
+                    transcript_source TEXT,
+                    summary TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(podcast, title, published)
+                )
+            """)
+            
+            # Copy data from old table to new table
+            # Only copy columns that exist in both tables
+            common_columns = existing_columns.intersection({
+                'id', 'podcast', 'title', 'published', 'audio_url', 
+                'transcript_url', 'description', 'link', 'duration', 
+                'guid', 'transcript', 'transcript_source', 'summary',
+                'created_at', 'updated_at'
+            })
+            
+            if common_columns:
+                columns_str = ', '.join(common_columns)
+                cursor.execute(f"""
+                    INSERT INTO episodes_new ({columns_str})
+                    SELECT {columns_str} FROM episodes
+                """)
+            
+            # Drop old table and rename new table
+            cursor.execute("DROP TABLE episodes")
+            cursor.execute("ALTER TABLE episodes_new RENAME TO episodes")
+            
+            logger.info("✅ Database migration completed successfully")
+            
+        except sqlite3.Error as e:
+            logger.error(f"Migration failed: {e}")
+            # Rollback by dropping the temporary table if it exists
+            cursor.execute("DROP TABLE IF EXISTS episodes_new")
+            raise
+    
+    def _backup_and_recreate(self):
+        """Backup existing database and create a new one"""
+        if self.db_path.exists():
+            # Create backup
+            backup_path = self.db_path.with_suffix('.backup')
+            logger.warning(f"Backing up existing database to {backup_path}")
+            
+            import shutil
+            shutil.move(str(self.db_path), str(backup_path))
+        
+        # Create fresh database
+        with sqlite3.connect(self.db_path) as conn:
+            self._create_episodes_table(conn)
+            self._create_indexes(conn)
+            conn.commit()
+        
+        logger.info("✅ Created fresh database")
+    
+    def save_episode(self, episode: Episode, transcript: Optional[str] = None, 
+                     transcript_source: Optional[TranscriptSource] = None,
+                     summary: Optional[str] = None) -> int:
+        """Save or update an episode in the database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Convert episode to dict for storage
+                episode_data = {
+                    'podcast': episode.podcast,
+                    'title': episode.title,
+                    'published': episode.published.isoformat(),
+                    'audio_url': episode.audio_url,
+                    'transcript_url': episode.transcript_url,
+                    'description': episode.description,
+                    'link': episode.link,
+                    'duration': episode.duration,
+                    'guid': episode.guid,
+                    'transcript': transcript,
+                    'transcript_source': transcript_source.value if transcript_source else None,
+                    'summary': summary,
+                    'updated_at': datetime.now().isoformat()
+                }
+                
+                # Try to update existing record first
+                cursor.execute("""
+                    UPDATE episodes 
+                    SET audio_url = ?, transcript_url = ?, description = ?, 
+                        link = ?, duration = ?, guid = ?, transcript = ?, 
+                        transcript_source = ?, summary = ?, updated_at = ?
+                    WHERE podcast = ? AND title = ? AND published = ?
+                """, (
+                    episode_data['audio_url'], episode_data['transcript_url'],
+                    episode_data['description'], episode_data['link'],
+                    episode_data['duration'], episode_data['guid'],
+                    episode_data['transcript'], episode_data['transcript_source'],
+                    episode_data['summary'], episode_data['updated_at'],
+                    episode_data['podcast'], episode_data['title'], episode_data['published']
+                ))
+                
+                if cursor.rowcount == 0:
+                    # Insert new record
+                    cursor.execute("""
+                        INSERT INTO episodes (
+                            podcast, title, published, audio_url, transcript_url,
+                            description, link, duration, guid, transcript,
+                            transcript_source, summary
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        episode_data['podcast'], episode_data['title'], episode_data['published'],
+                        episode_data['audio_url'], episode_data['transcript_url'],
+                        episode_data['description'], episode_data['link'],
+                        episode_data['duration'], episode_data['guid'],
+                        episode_data['transcript'], episode_data['transcript_source'],
+                        episode_data['summary']
+                    ))
+                
+                conn.commit()
+                return cursor.lastrowid
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error saving episode: {e}")
+            return -1
+    
+    def get_transcript(self, episode: Episode) -> Tuple[Optional[str], Optional[TranscriptSource]]:
+        """Get cached transcript for an episode"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Try to find by guid first (most reliable)
+                if episode.guid:
+                    cursor.execute("""
+                        SELECT transcript, transcript_source 
+                        FROM episodes 
+                        WHERE guid = ? AND transcript IS NOT NULL
+                    """, (episode.guid,))
+                    result = cursor.fetchone()
+                    if result:
+                        transcript, source_str = result
+                        source = TranscriptSource(source_str) if source_str else None
+                        return transcript, source
+                
+                # Fall back to matching by podcast, title, and date
+                cursor.execute("""
+                    SELECT transcript, transcript_source 
+                    FROM episodes 
+                    WHERE podcast = ? AND title = ? AND date(published) = date(?)
+                    AND transcript IS NOT NULL
+                """, (episode.podcast, episode.title, episode.published.isoformat()))
+                
+                result = cursor.fetchone()
+                if result:
+                    transcript, source_str = result
+                    source = TranscriptSource(source_str) if source_str else None
+                    return transcript, source
+                
+                return None, None
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting transcript: {e}")
+            return None, None
+    
+    def get_episode(self, podcast: str, title: str, published: datetime) -> Optional[Dict]:
+        """Get a specific episode from the database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE podcast = ? AND title = ? AND date(published) = date(?)
+                """, (podcast, title, published.isoformat()))
+                
+                result = cursor.fetchone()
+                if result:
+                    columns = [desc[0] for desc in cursor.description]
+                    return dict(zip(columns, result))
+                
+                return None
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting episode: {e}")
+            return None
+    
+    def get_recent_episodes(self, days_back: int = 7) -> List[Dict]:
+        """Get recent episodes from the database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE published >= datetime('now', '-' || ? || ' days')
+                    ORDER BY published DESC
+                """, (days_back,))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting recent episodes: {e}")
+            return []
+    
+    def get_episodes_without_transcripts(self, days_back: int = 7) -> List[Dict]:
+        """Get episodes that don't have transcripts yet"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE published >= datetime('now', '-' || ? || ' days')
+                    AND (transcript IS NULL OR transcript = '')
+                    ORDER BY published DESC
+                """, (days_back,))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting episodes without transcripts: {e}")
+            return []
+    
+    def clear_old_episodes(self, days_to_keep: int = 30):
+        """Clear episodes older than specified days"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    DELETE FROM episodes 
+                    WHERE published < datetime('now', '-' || ? || ' days')
+                """, (days_to_keep,))
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                
+                if deleted_count > 0:
+                    logger.info(f"Cleared {deleted_count} old episodes from database")
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Database error clearing old episodes: {e}")
