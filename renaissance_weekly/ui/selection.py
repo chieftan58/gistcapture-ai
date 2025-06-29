@@ -1,4 +1,4 @@
-"""Two-stage episode selection UI with minimalist design"""
+"""Two-stage episode selection UI with minimalist design - FIXED"""
 
 import json
 import webbrowser
@@ -7,8 +7,9 @@ import uuid
 import socket
 import time
 import queue
+import asyncio
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from typing import List, Dict, Tuple, Callable
+from typing import List, Dict, Tuple, Callable, Optional
 from html import escape
 from datetime import datetime
 from collections import defaultdict
@@ -27,6 +28,8 @@ class EpisodeSelector:
         self.loading_status = {}
         self.episode_cache = {}
         self.server_port = None
+        self._selection_result = None
+        self._selection_event = threading.Event()
     
     def run_podcast_selection(self, days_back: int = 7) -> Tuple[List[str], Dict]:
         """Stage 1: Select which podcasts to fetch episodes for"""
@@ -36,49 +39,14 @@ class EpisodeSelector:
             'transcription_mode': 'test' if TESTING_MODE else 'full',
             'max_transcription_minutes': 10 if TESTING_MODE else float('inf')
         }
-        server_running = True
         session_id = str(uuid.uuid4())
-        parent_instance = self
+        selection_complete = threading.Event()
         
-        class Handler(SimpleHTTPRequestHandler):
-            def do_GET(self):
-                if self.path == '/':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
-                    self.end_headers()
-                    html = parent_instance._create_podcast_selection_html(days_back, session_id)
-                    self.wfile.write(html.encode())
-                else:
-                    self.send_error(404)
-            
-            def do_POST(self):
-                if self.path == '/select':
-                    content_length = int(self.headers['Content-Length'])
-                    post_data = self.rfile.read(content_length)
-                    data = json.loads(post_data.decode('utf-8'))
-                    
-                    configuration['lookback_days'] = data.get('lookback_days', 7)
-                    configuration['transcription_mode'] = data.get('transcription_mode', 'test')
-                    configuration['max_transcription_minutes'] = 10 if data.get('transcription_mode') == 'test' else float('inf')
-                    
-                    selected_podcasts.extend(data.get('selected_podcasts', []))
-                    
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'session_id': session_id,
-                        'redirect_port': parent_instance.server_port or 8888
-                    }).encode())
-                    
-                    nonlocal server_running
-                    server_running = False
-            
-            def log_message(self, format, *args):
-                pass
-        
-        self.server_port = self._find_available_port()
-        server = HTTPServer(('localhost', self.server_port), Handler)
+        # Use a more robust server implementation
+        server = self._create_server(
+            lambda: self._create_podcast_selection_html(days_back, session_id),
+            lambda data: self._handle_podcast_selection(data, selected_podcasts, configuration, selection_complete)
+        )
         
         url = f'http://localhost:{self.server_port}'
         logger.info(f"🌐 Opening podcast selection at {url}")
@@ -90,30 +58,153 @@ class EpisodeSelector:
         
         logger.info("⏳ Stage 1: Waiting for podcast selection...")
         
-        try:
-            while server_running:
-                server.handle_request()
-        except KeyboardInterrupt:
-            logger.warning("Selection cancelled")
-            selected_podcasts = []
-        finally:
-            server.server_close()
+        # Run server until selection is made
+        while not selection_complete.is_set():
+            server.handle_request()
+        
+        # Allow time for response to be sent
+        time.sleep(0.5)
+        server.server_close()
         
         configuration['session_id'] = session_id
         return selected_podcasts, configuration
     
     def show_loading_screen_and_fetch(self, selected_podcasts: List[str], configuration: Dict, 
                                      fetch_episodes_callback: Callable) -> List[Episode]:
-        """Show loading screen while fetching episodes"""
+        """Show loading screen while fetching episodes - FIXED"""
         session_id = configuration.get('session_id')
         self.loading_status[session_id] = {'status': 'loading', 'progress': 0, 'total': len(selected_podcasts)}
         
-        port = self.server_port if self.server_port else self._find_available_port()
+        # Reset selection state
+        self._selection_result = None
+        self._selection_event.clear()
+        
+        # Create server for loading/selection screen
+        port = self._find_available_port()
+        self.server_port = port
+        server = self._create_loading_server(session_id, selected_podcasts, configuration)
+        
+        # Start server in background
+        server_thread = threading.Thread(target=self._run_loading_server, args=(server,))
+        server_thread.daemon = True
+        server_thread.start()
+        
+        # Open the loading screen in browser
+        url = f'http://localhost:{port}/'
+        logger.info(f"📡 Opening loading screen at {url}")
+        
+        try:
+            webbrowser.open(url)
+        except:
+            logger.warning(f"Please open: {url}")
+        
+        # Progress callback for episode fetching
+        def progress_callback(podcast_name, index, total):
+            self.loading_status[session_id] = {
+                'status': 'loading',
+                'progress': index,
+                'total': total,
+                'current_podcast': podcast_name
+            }
+        
+        # Fetch episodes in separate thread
+        fetch_thread = threading.Thread(
+            target=self._fetch_episodes_thread,
+            args=(selected_podcasts, configuration, fetch_episodes_callback, progress_callback, session_id)
+        )
+        fetch_thread.daemon = True
+        fetch_thread.start()
+        
+        # Wait for fetching to complete
+        fetch_thread.join(timeout=300)  # 5 minute timeout
+        
+        if fetch_thread.is_alive():
+            logger.error("Episode fetching timed out")
+            self._shutdown_server(server)
+            return []
+        
+        # Check if fetching failed
+        if self.loading_status[session_id].get('status') == 'error':
+            logger.error("Episode fetching failed")
+            self._shutdown_server(server)
+            return []
+        
+        logger.info("✅ Episodes ready, waiting for user selection...")
+        
+        # Wait for selection with timeout
+        if self._selection_event.wait(timeout=300):  # 5 minute timeout
+            selected_episodes = self._selection_result or []
+            logger.info(f"✅ Got {len(selected_episodes)} selected episodes")
+        else:
+            logger.warning("Selection timeout - no episodes selected")
+            selected_episodes = []
+        
+        # Cleanup
+        self._shutdown_server(server)
+        self._cleanup_session(session_id)
+        
+        return selected_episodes
+    
+    def _fetch_episodes_thread(self, selected_podcasts, configuration, fetch_callback, progress_callback, session_id):
+        """Thread function for fetching episodes"""
+        try:
+            logger.info("📡 Fetching episodes in background thread...")
+            episodes = fetch_callback(selected_podcasts, configuration['lookback_days'], progress_callback)
+            
+            # Update cache and status
+            self.episode_cache[session_id] = episodes
+            self.loading_status[session_id] = {'status': 'ready', 'episode_count': len(episodes)}
+            logger.info(f"✅ Fetched {len(episodes)} episodes total")
+        except Exception as e:
+            logger.error(f"Error fetching episodes: {e}", exc_info=True)
+            self.loading_status[session_id] = {'status': 'error', 'error': str(e)}
+    
+    def _create_server(self, html_generator, selection_handler) -> HTTPServer:
+        """Create HTTP server with given handlers"""
         parent_instance = self
         
-        # Use a queue for thread-safe communication
-        result_queue = queue.Queue()
-        server_stop_event = threading.Event()
+        class Handler(SimpleHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == '/':
+                    self._send_html(html_generator())
+                else:
+                    self.send_error(404)
+            
+            def do_POST(self):
+                if self.path == '/select':
+                    try:
+                        content_length = int(self.headers['Content-Length'])
+                        post_data = self.rfile.read(content_length)
+                        data = json.loads(post_data.decode('utf-8'))
+                        
+                        selection_handler(data)
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'status': 'success'}).encode())
+                        
+                    except Exception as e:
+                        logger.error(f"Error handling selection: {e}")
+                        self.send_error(500)
+            
+            def _send_html(self, content):
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(content.encode())
+            
+            def log_message(self, format, *args):
+                pass  # Suppress logs
+        
+        self.server_port = self._find_available_port()
+        server = HTTPServer(('localhost', self.server_port), Handler)
+        server.timeout = 0.5
+        return server
+    
+    def _create_loading_server(self, session_id: str, selected_podcasts: List[str], configuration: Dict) -> HTTPServer:
+        """Create server for loading/selection screen"""
+        parent_instance = self
         
         class Handler(SimpleHTTPRequestHandler):
             def do_GET(self):
@@ -128,6 +219,8 @@ class EpisodeSelector:
                         ))
                     else:
                         self.send_error(404)
+                elif self.path == '/complete':
+                    self._send_html(parent_instance._create_complete_html())
                 else:
                     self.send_error(404)
             
@@ -138,40 +231,127 @@ class EpisodeSelector:
                         post_data = self.rfile.read(content_length)
                         data = json.loads(post_data.decode('utf-8'))
                         
-                        logger.info(f"📥 Received selection: {len(data.get('selected_episodes', []))} episodes")
+                        logger.info(f"📥 Received selection POST request")
                         
                         # Process selected episodes
                         selected_indices = data.get('selected_episodes', [])
                         selected_episodes = []
-                        for idx in selected_indices:
-                            if idx < len(parent_instance.episode_cache[session_id]):
-                                selected_episodes.append(parent_instance.episode_cache[session_id][idx])
                         
-                        logger.info(f"✅ Processed {len(selected_episodes)} episodes")
+                        if session_id in parent_instance.episode_cache:
+                            all_episodes = parent_instance.episode_cache[session_id]
+                            logger.info(f"📋 Processing selection: {len(selected_indices)} indices from {len(all_episodes)} episodes")
+                            
+                            for idx in selected_indices:
+                                if 0 <= idx < len(all_episodes):
+                                    selected_episodes.append(all_episodes[idx])
+                                    logger.debug(f"  Selected episode {idx}: {all_episodes[idx].title if hasattr(all_episodes[idx], 'title') else 'Unknown'}")
+                        else:
+                            logger.error(f"❌ No episode cache found for session {session_id}")
                         
-                        # Send success response with redirect
+                        logger.info(f"✅ User selected {len(selected_episodes)} episodes")
+                        
+                        # Store result and signal completion
+                        parent_instance._selection_result = selected_episodes
+                        parent_instance._selection_event.set()
+                        
+                        # Send success response
                         self.send_response(200)
                         self.send_header('Content-type', 'application/json')
                         self.end_headers()
-                        self.wfile.write(json.dumps({
+                        response_data = {
                             'status': 'success',
-                            'redirect': '/complete'
-                        }).encode())
-                        
-                        # Put result in queue and signal completion
-                        result_queue.put(selected_episodes)
-                        server_stop_event.set()
+                            'selected_count': len(selected_episodes),
+                            'message': 'Processing your selection...'
+                        }
+                        self.wfile.write(json.dumps(response_data).encode())
+                        logger.info(f"✅ Sent success response to client")
                         
                     except Exception as e:
-                        logger.error(f"Error processing selection: {e}")
+                        logger.error(f"Error processing selection: {e}", exc_info=True)
                         self.send_response(500)
                         self.send_header('Content-type', 'application/json')
                         self.end_headers()
                         self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
-                
-                elif self.path == '/complete':
-                    # Handle the completion redirect
-                    complete_html = """<!DOCTYPE html>
+                else:
+                    self.send_error(404)
+            
+            def _send_html(self, content):
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(content.encode() if isinstance(content, str) else content)
+            
+            def _send_json(self, data):
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(data).encode())
+            
+            def log_message(self, format, *args):
+                if 'select' in format or 'status' in format:
+                    logger.debug(f"Server: {format % args}")
+        
+        port = self.server_port if self.server_port else self._find_available_port()
+        server = HTTPServer(('localhost', port), Handler)
+        server.timeout = 0.5
+        self.server_port = port
+        return server
+    
+    def _run_server_until_selection(self, server: HTTPServer):
+        """Run server until selection is made"""
+        while getattr(server.RequestHandlerClass, 'server_running', True):
+            server.handle_request()
+        server.server_close()
+    
+    def _run_loading_server(self, server: HTTPServer):
+        """Run loading/selection server"""
+        while not self._selection_event.is_set():
+            server.handle_request()
+        
+        # Handle a few more requests for cleanup
+        for _ in range(5):
+            server.handle_request()
+            time.sleep(0.1)
+    
+    def _shutdown_server(self, server: HTTPServer):
+        """Safely shutdown server"""
+        try:
+            server.shutdown()
+            server.server_close()
+        except:
+            pass
+    
+    def _cleanup_session(self, session_id: str):
+        """Clean up session data"""
+        if session_id in self.loading_status:
+            del self.loading_status[session_id]
+        if session_id in self.episode_cache:
+            del self.episode_cache[session_id]
+    
+    def _handle_podcast_selection(self, data: dict, selected_podcasts: list, configuration: dict, selection_complete: threading.Event = None):
+        """Handle podcast selection data"""
+        configuration['lookback_days'] = data.get('lookback_days', 7)
+        configuration['transcription_mode'] = data.get('transcription_mode', 'test')
+        configuration['max_transcription_minutes'] = 10 if data.get('transcription_mode') == 'test' else float('inf')
+        selected_podcasts.extend(data.get('selected_podcasts', []))
+        if selection_complete:
+            selection_complete.set()
+    
+    def _find_available_port(self, start_port: int = 8888) -> int:
+        """Find an available port"""
+        for port in range(start_port, start_port + 100):
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.bind(('', port))
+                s.close()
+                return port
+            except:
+                continue
+        return start_port
+    
+    def _create_complete_html(self) -> str:
+        """Create completion page HTML"""
+        return """<!DOCTYPE html>
 <html><head><title>Complete</title></head>
 <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
 <div style="text-align: center;">
@@ -181,198 +361,6 @@ class EpisodeSelector:
 <script>setTimeout(() => window.close(), 2000);</script>
 </div>
 </body></html>"""
-                    self._send_html(complete_html)
-            
-            def _send_html(self, content):
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                if isinstance(content, str):
-                    content = content.encode()
-                self.wfile.write(content)
-            
-            def _send_json(self, data):
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode())
-            
-            def log_message(self, format, *args):
-                if 'select' in format or 'complete' in format:
-                    logger.debug(f"Server: {format % args}")
-        
-        # Set up server
-        server = HTTPServer(('localhost', port), Handler)
-        server.timeout = 0.5  # Allow checking for completion
-        
-        # Start server in background thread
-        def run_server():
-            logger.debug(f"Starting server on port {port}")
-            while not server_stop_event.is_set():
-                server.handle_request()
-            logger.debug("Server stopping - selection completed")
-        
-        server_thread = threading.Thread(target=run_server)
-        server_thread.daemon = True
-        server_thread.start()
-        
-        logger.info(f"📡 Loading screen ready at http://localhost:{port}")
-        
-        # Progress callback for episode fetching
-        def progress_callback(podcast_name, index, total):
-            self.loading_status[session_id] = {
-                'status': 'loading',
-                'progress': index,
-                'total': total,
-                'current_podcast': podcast_name
-            }
-        
-        # Fetch episodes in separate thread
-        def fetch_episodes():
-            try:
-                logger.info("📡 Fetching episodes...")
-                episodes = fetch_episodes_callback(selected_podcasts, configuration['lookback_days'], progress_callback)
-                
-                # Update cache and status
-                self.episode_cache[session_id] = episodes
-                self.loading_status[session_id] = {'status': 'ready', 'episode_count': len(episodes)}
-                logger.info(f"✅ Fetched {len(episodes)} episodes total")
-            except Exception as e:
-                logger.error(f"Error fetching episodes: {e}", exc_info=True)
-                self.loading_status[session_id] = {'status': 'error', 'error': str(e)}
-                server_stop_event.set()  # Stop on error
-        
-        fetch_thread = threading.Thread(target=fetch_episodes)
-        fetch_thread.daemon = True
-        fetch_thread.start()
-        
-        # Wait for fetching to complete
-        fetch_thread.join()
-        
-        if self.loading_status[session_id].get('status') == 'error':
-            logger.error("Episode fetching failed")
-            server_stop_event.set()
-            server_thread.join(timeout=2)
-            server.shutdown()
-            return []
-        
-        logger.info("✅ Episodes ready, waiting for user to proceed...")
-        
-        # Wait for selection with timeout
-        try:
-            selected_episodes = result_queue.get(timeout=300)  # 5 minute timeout
-            logger.info(f"✅ Got {len(selected_episodes)} episodes from queue")
-        except queue.Empty:
-            logger.warning("Selection timeout - no episodes selected")
-            selected_episodes = []
-        
-        # Ensure server stops
-        server_stop_event.set()
-        
-        # Give the server thread time to finish
-        server_thread.join(timeout=5)
-        
-        # Force shutdown if needed
-        try:
-            server.shutdown()
-            server.server_close()
-        except:
-            pass
-        
-        # Cleanup
-        if session_id in self.loading_status:
-            del self.loading_status[session_id]
-        if session_id in self.episode_cache:
-            del self.episode_cache[session_id]
-        
-        logger.info(f"✅ Returning {len(selected_episodes)} selected episodes")
-        return selected_episodes
-    
-    def run_selection_server(self, episodes: List[Episode]) -> List[Episode]:
-        """Legacy single-stage selection for backward compatibility"""
-        # Convert to two-stage approach
-        all_podcasts = list(set(ep.podcast for ep in episodes))
-        
-        # Simulate first stage - select all podcasts
-        configuration = {
-            'lookback_days': 7,
-            'transcription_mode': 'test' if TESTING_MODE else 'full',
-            'session_id': str(uuid.uuid4())
-        }
-        
-        # Skip directly to episode selection
-        self.episode_cache[configuration['session_id']] = episodes
-        
-        selected_episodes = []
-        server_running = True
-        parent_instance = self
-        
-        class Handler(SimpleHTTPRequestHandler):
-            def do_GET(self):
-                if self.path == '/':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
-                    self.end_headers()
-                    html = parent_instance._create_episode_selection_html(
-                        episodes, all_podcasts, configuration
-                    )
-                    self.wfile.write(html.encode())
-                else:
-                    self.send_error(404)
-            
-            def do_POST(self):
-                if self.path == '/select':
-                    content_length = int(self.headers['Content-Length'])
-                    post_data = self.rfile.read(content_length)
-                    data = json.loads(post_data.decode('utf-8'))
-                    
-                    for idx in data.get('selected_episodes', []):
-                        selected_episodes.append(episodes[idx])
-                    
-                    self.send_response(200)
-                    self.end_headers()
-                    
-                    nonlocal server_running
-                    server_running = False
-            
-            def log_message(self, format, *args):
-                pass
-        
-        port = self._find_available_port()
-        server = HTTPServer(('localhost', port), Handler)
-        
-        url = f'http://localhost:{port}'
-        logger.info(f"🌐 Opening episode selection at {url}")
-        
-        try:
-            webbrowser.open(url)
-        except:
-            logger.warning(f"Please open: {url}")
-        
-        logger.info("⏳ Waiting for episode selection...")
-        
-        try:
-            while server_running:
-                server.handle_request()
-        except KeyboardInterrupt:
-            logger.warning("Selection cancelled")
-            selected_episodes = []
-        finally:
-            server.server_close()
-        
-        return selected_episodes
-    
-    def _find_available_port(self, start_port: int = 8888) -> int:
-        """Find an available port"""
-        for port in range(start_port, start_port + 10):
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.bind(('', port))
-                s.close()
-                return port
-            except:
-                continue
-        return start_port
     
     def _get_css(self) -> str:
         """Get minimalist CSS styles"""
@@ -1115,11 +1103,18 @@ class EpisodeSelector:
             }})
             .then(response => response.json())
             .then(data => {{
-                window.location.reload();
+                if (data.status === 'success') {{
+                    // Keep showing loading screen - Python will handle the transition
+                    document.getElementById('loadingScreen').querySelector('.loading-status').textContent = 'Selection saved. Starting episode fetch...';
+                    
+                    // The Python server will close and the next stage will begin
+                    // No need to reload or redirect from here
+                }}
             }})
             .catch(error => {{
                 document.getElementById('loadingScreen').classList.add('hidden');
                 console.error('Error:', error);
+                alert('Error submitting selection. Please try again.');
             }});
         }}
     </script>
@@ -1213,7 +1208,7 @@ class EpisodeSelector:
                         
                         setTimeout(() => {{
                             window.location.href = '/episodes/' + sessionId;
-                        }}, 2000);
+                        }}, 1500);
                     }} else if (data.status === 'error') {{
                         clearInterval(checkInterval);
                         
@@ -1427,22 +1422,19 @@ class EpisodeSelector:
             .then(response => {{
                 console.log('Response status:', response.status);
                 if (!response.ok) {{
-                    return response.text().then(text => {{
-                        throw new Error(`Server error: ${{response.status}} - ${{text}}`);
-                    }});
+                    throw new Error(`Server error: ${{response.status}}`);
                 }}
                 return response.json();
             }})
             .then(data => {{
-                console.log('Response data:', data);
+                console.log('Response:', data);
                 if (data.status === 'success') {{
-                    console.log('Selection successful');
-                    // Handle redirect if provided
-                    if (data.redirect) {{
-                        window.location.href = data.redirect;
-                    }}
-                }} else {{
-                    throw new Error(data.message || 'Unknown error');
+                    // Update loading screen with success message
+                    document.querySelector('.loading-title').textContent = 'Processing Episodes';
+                    document.querySelector('.loading-status').textContent = `Starting processing of ${{data.selected_count}} episodes...`;
+                    
+                    // Keep showing the loading screen - the server will close when ready
+                    console.log('Selection successful, waiting for server to process...');
                 }}
             }})
             .catch(error => {{
@@ -1455,53 +1447,52 @@ class EpisodeSelector:
 </body>
 </html>"""
     
-    def _fallback_text_selection(self, episodes: List[Episode]) -> List[Episode]:
-        """Text-based fallback selection method"""
-        print("\n" + "="*80)
-        print("📻 RECENT PODCAST EPISODES (Text Selection)")
-        print("="*80)
+    def run_selection_server(self, episodes: List[Episode]) -> List[Episode]:
+        """Legacy single-stage selection for backward compatibility"""
+        # Convert to two-stage approach
+        all_podcasts = list(set(ep.podcast for ep in episodes))
         
-        episode_map = {}
-        for i, ep in enumerate(episodes):
-            if isinstance(ep, Episode):
-                print(f"\n[{i+1}] {ep.podcast}: {ep.title}")
-                print(f"    📅 {ep.published.strftime('%Y-%m-%d')} | ⏱️  {ep.duration}")
-                if ep.transcript_url:
-                    print(f"    ✅ Transcript available")
-            else:
-                print(f"\n[{i+1}] {ep['podcast']}: {ep['title']}")
-                print(f"    📅 {ep['published']} | ⏱️  {ep['duration']}")
-            episode_map[i+1] = ep
+        # Simulate first stage - select all podcasts
+        configuration = {
+            'lookback_days': 7,
+            'transcription_mode': 'test' if TESTING_MODE else 'full',
+            'session_id': str(uuid.uuid4())
+        }
         
-        print("\n" + "="*80)
-        print("Enter episode numbers separated by commas (e.g., 1,3,5)")
-        print("Or type 'all' for all episodes, 'none' to exit")
+        # Skip directly to episode selection
+        self.episode_cache[configuration['session_id']] = episodes
         
-        while True:
-            selection = input("\n🎯 Your selection: ").strip().lower()
-            
-            if selection == 'none':
-                return []
-            
-            if selection == 'all':
-                return episodes
-            
-            try:
-                if not selection:
-                    print("❌ Please enter episode numbers or 'all'/'none'")
-                    continue
-                
-                selected_indices = [int(x.strip()) for x in selection.split(',') if x.strip()]
-                
-                invalid = [i for i in selected_indices if i not in episode_map]
-                if invalid:
-                    print(f"❌ Invalid episode numbers: {invalid}")
-                    continue
-                
-                selected_episodes = [episode_map[i] for i in selected_indices]
-                
-                print(f"\n✅ Selected {len(selected_episodes)} episode(s)")
-                return selected_episodes
-                
-            except ValueError:
-                print("❌ Invalid input. Please enter numbers separated by commas.")
+        # Reset selection state
+        self._selection_result = None
+        self._selection_event.clear()
+        
+        # Create server
+        server = self._create_loading_server(configuration['session_id'], all_podcasts, configuration)
+        
+        # Open browser directly to episodes page
+        url = f'http://localhost:{self.server_port}/episodes/{configuration["session_id"]}'
+        logger.info(f"🌐 Opening episode selection at {url}")
+        
+        try:
+            webbrowser.open(url)
+        except:
+            logger.warning(f"Please open: {url}")
+        
+        logger.info("⏳ Waiting for episode selection...")
+        
+        # Run server until selection
+        server_thread = threading.Thread(target=self._run_loading_server, args=(server,))
+        server_thread.daemon = True
+        server_thread.start()
+        
+        # Wait for selection
+        if self._selection_event.wait(timeout=300):
+            selected_episodes = self._selection_result or []
+        else:
+            selected_episodes = []
+        
+        # Cleanup
+        self._shutdown_server(server)
+        self._cleanup_session(configuration['session_id'])
+        
+        return selected_episodes
