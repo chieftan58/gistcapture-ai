@@ -87,7 +87,7 @@ class Summarizer:
             logger.info(f"🤖 Generating summary with {self.model}...")
             
             # Call OpenAI API with rate limiting and circuit breaker
-            response = await self._call_openai_api(prompt)
+            response = await self._call_openai_api(prompt, transcript)
             
             if not response:
                 logger.error("❌ Failed to generate summary")
@@ -95,8 +95,7 @@ class Summarizer:
             
             summary = response
             
-            # Add metadata footer
-            summary += self._create_metadata_section(episode, source)
+            # Don't add metadata footer since the new prompt format is self-contained
             
             # Cache the summary
             try:
@@ -122,16 +121,59 @@ class Summarizer:
         if len(transcript) > max_transcript_chars:
             truncated_transcript += "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH]"
         
-        # Replace placeholders in template
+        # Replace all placeholders in template
         prompt = self.summary_prompt_template
         prompt = prompt.replace("{episode_title}", episode.title)
         prompt = prompt.replace("{podcast_name}", episode.podcast)
         prompt = prompt.replace("{source}", source.value)
         prompt = prompt.replace("{transcript}", truncated_transcript)
         
+        # Extract guest name from title if possible (common patterns)
+        guest_name = self._extract_guest_name(episode.title, episode.description)
+        prompt = prompt.replace("{guest_name}", guest_name)
+        
+        # Format publish date
+        publish_date = episode.published.strftime('%B %d, %Y')
+        prompt = prompt.replace("{publish_date}", publish_date)
+        
         return prompt
     
-    async def _call_openai_api(self, prompt: str) -> Optional[str]:
+    def _extract_guest_name(self, title: str, description: Optional[str]) -> str:
+        """Try to extract guest name from episode title or description"""
+        import re
+        
+        # Common patterns in podcast titles
+        patterns = [
+            r'with\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',  # "with Jane Doe |"
+            r'featuring\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',  # "featuring John Smith"
+            r'ft\.\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',  # "ft. Jane Doe"
+            r'guest[:\s]+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',  # "Guest: John Smith"
+            r'[\|\-]\s*([A-Z][a-zA-Z\s]+?)\s*[\|\-]',  # "| Jane Doe |"
+            r'^([A-Z][a-zA-Z\s]+?):\s',  # "John Smith: Topic"
+        ]
+        
+        # Try title first
+        for pattern in patterns:
+            match = re.search(pattern, title, re.IGNORECASE)
+            if match:
+                guest = match.group(1).strip()
+                # Basic validation - should be 2-4 words, not too long
+                if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
+                    return guest
+        
+        # Try description if available
+        if description:
+            for pattern in patterns:
+                match = re.search(pattern, description[:200], re.IGNORECASE)  # Check first 200 chars
+                if match:
+                    guest = match.group(1).strip()
+                    if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
+                        return guest
+        
+        # Default if no guest found
+        return "[Guest Name]"
+    
+    async def _call_openai_api(self, prompt: str, transcript: str) -> Optional[str]:
         """Call OpenAI API with enhanced retry logic and rate limiting"""
         import asyncio
         import uuid
@@ -148,6 +190,9 @@ class Summarizer:
         usage = openai_rate_limiter.get_current_usage()
         logger.info(f"[{correlation_id}] OpenAI rate limit usage: {usage['current_requests']}/{usage['max_requests']} ({usage['utilization']:.1f}%)")
         
+        # Create the full user message with transcript
+        user_message = prompt
+        
         # Define the API call function for retry and circuit breaker
         async def api_call():
             # Run in executor to avoid blocking
@@ -158,8 +203,8 @@ class Summarizer:
                     return openai_client.chat.completions.create(
                         model=self.model,
                         messages=[
-                            {"role": "system", "content": self.system_prompt},
-                            {"role": "user", "content": prompt}
+                            {"role": "system", "content": self.system_prompt if self.system_prompt else "You are a helpful assistant."},
+                            {"role": "user", "content": user_message}
                         ],
                         max_tokens=self.max_tokens,
                         temperature=self.temperature
@@ -245,65 +290,29 @@ class Summarizer:
     
     def _get_default_summary_prompt(self) -> str:
         """Default summary prompt template as fallback"""
-        return """EPISODE: {episode_title}
-PODCAST: {podcast_name}
-TRANSCRIPT SOURCE: {source}
+        return """EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
 
-TRANSCRIPT:
-{transcript}
+AUDIENCE
+Busy, curious professionals.
 
-You are creating an executive briefing for Renaissance Weekly readers - busy professionals, founders, investors, and thought leaders who value their time above all else. This is not a generic summary; it's a strategic distillation that respects both the depth of the conversation and the reader's need for actionable intelligence.
+GOAL
+Produce a one-page brief (≤550 words) that a smart reader can scan in 2–3 minutes and walk away with new insight or action.
 
-Your task: Transform this podcast into a compelling narrative that captures not just what was said, but why it matters for someone building the future.
+STYLE
+Conversational, idea-dense, Tim-Ferriss-meets-The-Economist.
+Use bullets or short paragraphs; prefer vivid examples over summary clichés.
 
-STRUCTURE YOUR SUMMARY AS FOLLOWS:
+OUTPUT
+1. 🔑 **Quick Take** – 3–4 sentences: hook + why it matters.
+2. **Core Sections (2–4)** – Invent headers that fit the content (e.g., "Mind-Body Hacks", "Macro Signals"). Each header followed by 3-7 tight bullets (≤2 sentences each).
+3. 🛠️ **Apply It** – 3–4 actionable bullets OR, if no obvious actions, a short "So What?" paragraph.
+4. Optional: **Quote** (≤20 words) + **Links** (≤4).
 
-## Executive Summary & Guest Profile
-Start with a 3-4 sentence executive summary that captures the absolute essence of this conversation. What is the ONE transformative insight that changes how we think about the topic?
+RULES
+- No filler like "In this episode…".  
+- Active voice, no buzzwords.  
+- Hard stop: 550 words.  
+- Omit any section that has no substance.
 
-Then provide a rich 2-3 paragraph profile of the guest that goes beyond credentials. Who is this person really? What unique vantage point do they bring? What makes their perspective invaluable? Include their most impressive achievements, their contrarian positions, and why Renaissance Weekly readers should care about their worldview.
-
-## The Core Argument
-In 2-3 flowing paragraphs, articulate the central thesis of this conversation. This is not a list of topics discussed, but a narrative explanation of the big idea that emerges. What worldview is being advanced? What conventional wisdom is being challenged? Write this as you would explain it to a brilliant friend over coffee.
-
-## Key Insights That Matter
-Present 5-7 insights, but make each one substantial (3-4 sentences). These should be:
-- Counterintuitive or perspective-shifting
-- Backed by specific examples or data from the conversation
-- Written with vivid language that makes abstract concepts concrete
-- Focused on insights that change how we act, not just how we think
-
-Format each with a bold header that captures the essence, like:
-**The 10,000 hour rule is dead - here's what actually drives mastery**
-Then explain the insight with specificity and nuance.
-
-## The Moment of Revelation
-Identify and describe 1-2 pivotal moments in the conversation where a genuinely surprising insight emerged. Set the scene - what question prompted it? How did the guest's demeanor change? Quote the key exchange and explain why this moment matters. This brings the reader into the room.
-
-## Practical Frameworks & Mental Models
-Extract 3-4 concrete frameworks or mental models discussed. For each:
-- Name it memorably
-- Explain how it works in 2-3 sentences
-- Provide a specific example of application
-- Connect it to broader principles
-
-## What You Can Do This Week
-5-6 specific actions, but make them sophisticated and contextualized:
-- Not just "try meditation" but "implement the 4-7-8 breathing protocol before high-stakes meetings"
-- Include the why and expected outcome
-- Range from 5-minute experiments to longer-term implementations
-- Focus on high-leverage activities that compound
-
-## The Deeper Game Being Played
-A short, reflective paragraph that zooms out to the meta-level. What's really at stake in this conversation? How does it connect to larger trends in technology, society, or human performance? This is where you earn the reader's trust as a curator of ideas.
-
-## Resources & Rabbit Holes
-Organize resources intelligently:
-**Essential Reading**: 2-3 books with one-sentence explanations of their core value
-**Tools for Implementation**: Specific apps/services with use cases
-**Further Exploration**: Related thinkers, concepts, or episodes to explore
-**The Guest's Work**: Where to follow up directly
-
-Remember: Your readers chose Renaissance Weekly because they refuse to choose between breadth and depth. Give them both. Write with the precision of The Economist, the insight of The New Yorker, and the practical value of the best business writing. Every sentence should either inform, inspire, or instruct.
-
-Avoid corporate jargon, buzzwords, and filler. Use vivid, precise language. If you wouldn't say it to a brilliant friend, don't write it here."""
+READY? Create the brief."""

@@ -23,16 +23,23 @@ class EmailDigest:
         try:
             logger.info("📧 Preparing Renaissance Weekly digest...")
             
+            # Summaries should already be sorted by app.py
+            # But ensure they maintain the order: alphabetical by podcast, then date descending
+            sorted_summaries = sorted(summaries, key=lambda s: (
+                s['episode'].podcast.lower(),
+                -s['episode'].published.timestamp()
+            ))
+            
             # Extract episodes from summaries
-            episodes = [s["episode"] for s in summaries]
-            summary_texts = [s["summary"] for s in summaries]
+            episodes = [s["episode"] for s in sorted_summaries]
+            summary_texts = [s["summary"] for s in sorted_summaries]
             
             # Create email content
             html_content = self.create_substack_style_email(summary_texts, episodes)
             plain_content = self._create_plain_text_version(summary_texts)
             
             # Create subject with correct count
-            subject = f"Renaissance Weekly: {len(summaries)} Essential Conversation{'s' if len(summaries) != 1 else ''}"
+            subject = f"Renaissance Weekly: {len(sorted_summaries)} Essential Conversation{'s' if len(sorted_summaries) != 1 else ''}"
             
             # Create message
             message = Mail(
@@ -60,73 +67,92 @@ class EmailDigest:
     def create_substack_style_email(self, summaries: List[str], episodes: List[Episode]) -> str:
         """Create clean HTML email with Gmail-compatible table of contents and better structure"""
         
+        # Group episodes by podcast for better organization
+        episodes_by_podcast = {}
+        for i, (summary, episode) in enumerate(zip(summaries, episodes[:len(summaries)])):
+            if episode.podcast not in episodes_by_podcast:
+                episodes_by_podcast[episode.podcast] = []
+            episodes_by_podcast[episode.podcast].append((i, episode, summary))
+        
+        # Sort podcasts alphabetically
+        sorted_podcasts = sorted(episodes_by_podcast.keys(), key=lambda x: x.lower())
+        
         # Create table of contents with Gmail-compatible links
         toc_html = ""
-        for i, episode in enumerate(episodes[:len(summaries)]):
-            # Create a safe anchor name
-            anchor_name = f"episode{i}"
-            
-            toc_html += f'''
-                <tr>
-                    <td style="padding: 8px 0;">
-                        <a href="#{anchor_name}" style="color: #0066CC; text-decoration: none; font-size: 16px;">
-                            <strong>{escape(episode.podcast)}</strong>: {escape(episode.title)}
-                        </a>
-                        <div style="font-size: 14px; color: #666; margin-top: 4px;">
-                            Release Date: {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
-                        </div>
-                    </td>
-                </tr>'''
+        for podcast_name in sorted_podcasts:
+            podcast_episodes = episodes_by_podcast[podcast_name]
+            for i, episode, _ in podcast_episodes:
+                # Create a safe anchor name
+                anchor_name = f"episode{i}"
+                
+                toc_html += f'''
+                    <tr>
+                        <td style="padding: 8px 0;">
+                            <a href="#{anchor_name}" style="color: #0066CC; text-decoration: none; font-size: 16px;">
+                                <strong>{escape(episode.podcast)}</strong>: {escape(episode.title)}
+                            </a>
+                            <div style="font-size: 14px; color: #666; margin-top: 4px;">
+                                Release Date: {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
+                            </div>
+                        </td>
+                    </tr>'''
         
         # Create episodes HTML with Gmail-compatible anchors
         episodes_html = ""
-        for i, (summary, episode) in enumerate(zip(summaries, episodes[:len(summaries)])):
-            # Create anchor using both id and name for maximum compatibility
-            anchor_name = f"episode{i}"
+        episode_counter = 0
+        
+        for podcast_idx, podcast_name in enumerate(sorted_podcasts):
+            podcast_episodes = episodes_by_podcast[podcast_name]
             
-            if i > 0:
-                # Visual separator between episodes
-                episodes_html += '''
+            for ep_idx, (i, episode, summary) in enumerate(podcast_episodes):
+                if episode_counter > 0:
+                    # Visual separator between episodes
+                    episodes_html += '''
+                        <tr>
+                            <td style="padding: 60px 0;">
+                                <hr style="border: none; border-top: 2px solid #E0E0E0; margin: 0;">
+                            </td>
+                        </tr>'''
+                
+                # Create anchor using both id and name for maximum compatibility
+                anchor_name = f"episode{i}"
+                
+                # Add anchor and episode content
+                episodes_html += f'''
                     <tr>
-                        <td style="padding: 60px 0;">
-                            <hr style="border: none; border-top: 2px solid #E0E0E0; margin: 0;">
+                        <td style="padding: 0;">
+                            <!-- Gmail-compatible anchor -->
+                            <a name="{anchor_name}" id="{anchor_name}" style="display: block; position: relative; top: -60px; visibility: hidden;"></a>
+                            
+                            <!-- Episode header -->
+                            <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+                                <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; font-weight: normal;">
+                                    {escape(episode.podcast)}
+                                </h2>
+                                <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
+                                    {escape(episode.title)}
+                                </h3>
+                                <p style="margin: 0; font-size: 14px; color: #666;">
+                                    Release Date: {episode.published.strftime('%B %d, %Y')} • Duration: {format_duration(episode.duration)}
+                                </p>
+                            </div>'''
+                
+                # Convert markdown to HTML
+                html_content = self._convert_markdown_to_html(summary)
+                
+                # Wrap content
+                episodes_html += f'''
+                            <!-- Episode content -->
+                            <div style="background: #ffffff; padding: 0 0 40px 0;">
+                                {html_content}
+                                <div style="margin-top: 40px; text-align: right;">
+                                    <a href="#toc" style="color: #666666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
+                                </div>
+                            </div>
                         </td>
                     </tr>'''
-            
-            # Add anchor and episode content
-            episodes_html += f'''
-                <tr>
-                    <td style="padding: 0;">
-                        <!-- Gmail-compatible anchor -->
-                        <a name="{anchor_name}" id="{anchor_name}" style="display: block; position: relative; top: -60px; visibility: hidden;"></a>
-                        
-                        <!-- Episode header -->
-                        <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-                            <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; font-weight: normal;">
-                                {escape(episode.podcast)}
-                            </h2>
-                            <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
-                                {escape(episode.title)}
-                            </h3>
-                            <p style="margin: 0; font-size: 14px; color: #666;">
-                                Release Date: {episode.published.strftime('%B %d, %Y')} • Duration: {format_duration(episode.duration)}
-                            </p>
-                        </div>'''
-            
-            # Convert markdown to HTML
-            html_content = self._convert_markdown_to_html(summary)
-            
-            # Wrap content
-            episodes_html += f'''
-                        <!-- Episode content -->
-                        <div style="background: #ffffff; padding: 0 0 40px 0;">
-                            {html_content}
-                            <div style="margin-top: 40px; text-align: right;">
-                                <a href="#toc" style="color: #666666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
-                            </div>
-                        </div>
-                    </td>
-                </tr>'''
+                
+                episode_counter += 1
         
         # Create full HTML with DOCTYPE for better Gmail rendering
         return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -196,6 +222,7 @@ class EmailDigest:
                     <!-- Table of Contents Anchor -->
                     <tr>
                         <td>
+                            <a name="toc" id="toc" style
                             <a name="toc" id="toc" style="display: block; position: relative; top: -60px; visibility: hidden;"></a>
                         </td>
                     </tr>

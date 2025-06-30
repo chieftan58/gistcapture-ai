@@ -346,8 +346,28 @@ class EpisodeSelector:
                 continue
         return start_port
     
+    def _js_escape(self, text: str) -> str:
+        """Escape text for safe use in JavaScript strings"""
+        return (text.replace('\\', '\\\\')
+                    .replace("'", "\\'")
+                    .replace('"', '\\"')
+                    .replace('\n', '\\n')
+                    .replace('\r', '\\r'))
+    
     def _generate_html(self) -> str:
         """Generate single-page HTML that handles all states"""
+        # Pre-process podcast data with proper escaping
+        sorted_podcasts = sorted(PODCAST_CONFIGS, key=lambda x: x['name'].lower())
+        podcast_data = []
+        for p in sorted_podcasts:
+            podcast_data.append({
+                'name': p['name'],
+                'name_escaped': self._js_escape(p['name']),
+                'description': p.get('description', ''),
+                'has_apple': bool(p.get('apple_id')),
+                'has_rss': bool(p.get('rss_feeds'))
+            })
+        
         return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -375,12 +395,7 @@ class EpisodeSelector:
         
         // Render functions for each state
         function renderPodcastSelection() {{
-            const podcasts = {json.dumps([{
-                'name': p['name'],
-                'description': p.get('description', ''),
-                'has_apple': bool(p.get('apple_id')),
-                'has_rss': bool(p.get('rss_feeds'))
-            } for p in PODCAST_CONFIGS])};
+            const podcasts = {json.dumps(podcast_data)};
             
             return `
                 <div class="header">
@@ -444,7 +459,7 @@ class EpisodeSelector:
                     
                     <div class="content-grid">
                         ${{podcasts.map(p => `
-                            <div class="card ${{APP_STATE.selectedPodcasts.has(p.name) ? 'selected' : ''}}" onclick="togglePodcast('${{p.name}}')">
+                            <div class="card ${{APP_STATE.selectedPodcasts.has(p.name) ? 'selected' : ''}}" onclick="togglePodcast('${{p.name_escaped}}')">
                                 <div class="card-checkbox"></div>
                                 <div class="card-title">${{p.name}}</div>
                                 <div class="card-description">${{p.description || 'Podcast: ' + p.name}}</div>
@@ -470,7 +485,8 @@ class EpisodeSelector:
         }}
         
         function renderLoading() {{
-            const podcasts = Array.from(APP_STATE.selectedPodcasts);
+            // Sort podcasts alphabetically
+            const podcasts = Array.from(APP_STATE.selectedPodcasts).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
             return `
                 <div class="header">
                     <div class="logo">RW</div>
@@ -545,6 +561,14 @@ class EpisodeSelector:
                 episodesByPodcast[ep.podcast].push({{...ep, index: idx}});
             }});
             
+            // Sort episodes within each podcast by date descending
+            Object.keys(episodesByPodcast).forEach(podcast => {{
+                episodesByPodcast[podcast].sort((a, b) => new Date(b.published) - new Date(a.published));
+            }});
+            
+            // Sort podcast names alphabetically
+            const sortedPodcasts = Object.keys(episodesByPodcast).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            
             return `
                 <div class="header">
                     <div class="logo">RW</div>
@@ -586,19 +610,19 @@ class EpisodeSelector:
                     
                     ${{APP_STATE.configuration.transcription_mode === 'test' ? `
                         <div class="notice">
-                            Test mode: Transcriptions limited to 10 minutes
+                            Test mode: Transcriptions limited to 20 minutes
                         </div>
                     ` : ''}}
                     
                     <div id="content">
-                        ${{Object.entries(episodesByPodcast).map(([podcast, episodes]) => `
+                        ${{sortedPodcasts.map(podcast => `
                             <div class="episode-section">
                                 <div class="episode-header">
                                     <h3 class="episode-podcast-name">${{podcast}}</h3>
-                                    <div class="episode-count">${{episodes.length}} episode${{episodes.length !== 1 ? 's' : ''}}</div>
+                                    <div class="episode-count">${{episodesByPodcast[podcast].length}} episode${{episodesByPodcast[podcast].length !== 1 ? 's' : ''}}</div>
                                 </div>
                                 <div class="episodes-list">
-                                    ${{episodes.map(ep => `
+                                    ${{episodesByPodcast[podcast].map(ep => `
                                         <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.index) ? 'selected' : ''}}" id="episode-${{ep.index}}" onclick="toggleEpisode(${{ep.index}})">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">

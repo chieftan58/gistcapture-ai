@@ -218,6 +218,9 @@ class RenaissanceWeekly:
             
             await pipeline_progress.complete_item(True)
             
+            # Sort selected episodes to maintain order
+            selected_episodes = self._sort_episodes_for_processing(selected_episodes)
+            
             # Log selected episodes
             logger.info(f"[{self.correlation_id}] 📋 Episodes to process:")
             for i, ep in enumerate(selected_episodes[:5]):
@@ -258,6 +261,9 @@ class RenaissanceWeekly:
                 await pipeline_progress.start_item("Email Delivery")
                 logger.info(f"\n[{self.correlation_id}] 📧 STAGE 3: Email Delivery")
                 
+                # Sort summaries to match the episode order
+                summaries = self._sort_summaries_for_email(summaries)
+                
                 if self.email_digest.send_digest(summaries):
                     logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly digest sent successfully!")
                     await pipeline_progress.complete_item(True)
@@ -292,6 +298,20 @@ class RenaissanceWeekly:
             # Ensure cleanup happens
             await self.cleanup()
     
+    def _sort_episodes_for_processing(self, episodes: List[Episode]) -> List[Episode]:
+        """Sort episodes: by podcast name (alphabetically), then by date (newest first)"""
+        return sorted(episodes, key=lambda ep: (
+            ep.podcast.lower(),  # Primary: podcast name alphabetically
+            -ep.published.timestamp()  # Secondary: date descending (newest first)
+        ))
+    
+    def _sort_summaries_for_email(self, summaries: List[Dict]) -> List[Dict]:
+        """Sort summaries to maintain the same order as episodes"""
+        return sorted(summaries, key=lambda s: (
+            s['episode'].podcast.lower(),  # Primary: podcast name alphabetically
+            -s['episode'].published.timestamp()  # Secondary: date descending
+        ))
+    
     async def _fetch_selected_episodes(self, podcast_names: List[str], days_back: int, 
                                       progress_callback: Callable) -> List[Episode]:
         """Fetch episodes for selected podcasts with progress updates"""
@@ -303,8 +323,11 @@ class RenaissanceWeekly:
         # Progress tracker for fetching
         fetch_progress = ProgressTracker(len(podcast_names), self.correlation_id)
         
-        for i, podcast_name in enumerate(podcast_names):
-            progress_callback(podcast_name, i, len(podcast_names))
+        # Sort podcast names alphabetically for consistent order
+        sorted_podcast_names = sorted(podcast_names, key=lambda x: x.lower())
+        
+        for i, podcast_name in enumerate(sorted_podcast_names):
+            progress_callback(podcast_name, i, len(sorted_podcast_names))
             
             # Find the podcast config
             podcast_config = next(
@@ -387,7 +410,7 @@ class RenaissanceWeekly:
             # Execute all tasks
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # Process results
+            # Process results maintaining order
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     episode = selected_episodes[i]
@@ -582,7 +605,7 @@ class RenaissanceWeekly:
         if not podcast_config:
             logger.error(f"[{self.correlation_id}] ❌ Podcast '{podcast_name}' not found in configuration")
             logger.info(f"\n[{self.correlation_id}] 📋 Available podcasts:")
-            for config in PODCAST_CONFIGS:
+            for config in sorted(PODCAST_CONFIGS, key=lambda x: x['name'].lower()):
                 logger.info(f"[{self.correlation_id}]   - {config['name']}")
             return
         
@@ -600,7 +623,10 @@ class RenaissanceWeekly:
         # Progress tracker for verification
         verify_progress = ProgressTracker(len(PODCAST_CONFIGS), self.correlation_id)
         
-        for podcast_config in PODCAST_CONFIGS:
+        # Sort podcasts alphabetically
+        sorted_configs = sorted(PODCAST_CONFIGS, key=lambda x: x['name'].lower())
+        
+        for podcast_config in sorted_configs:
             podcast_name = podcast_config["name"]
             
             try:
