@@ -10,30 +10,39 @@ podcasts:
     
   - name: "All-In"
     apple_id: "1502871393"
+    rss_feed: "https://feeds.megaphone.fm/all-in-with-chamath-jason-sacks-friedberg"
     search_term: "All-In Podcast Chamath Jason Sacks Friedberg"
     
   - name: "American Optimist"
     apple_id: "1573141757"
     apple_url: "https://podcasts.apple.com/us/podcast/joe-lonsdale-american-optimist/id1573141757"
+    rss_feed: "https://api.substack.com/feed/podcast/1231981.rss"
+    website: "https://americanoptimist.substack.com"
     
   - name: "BG2 Pod"
-    apple_id: "1727278168"  # CORRECTED
+    apple_id: "1727278168"
     apple_url: "https://podcasts.apple.com/us/podcast/bg2pod-with-brad-gerstner-and-bill-gurley/id1727278168"
-    search_term: "BG2Pod Bill Gurley Brad Gerstner"  # Fallback search
+    rss_feed: "https://feeds.transistor.fm/bg2pod"
+    search_term: "BG2Pod Bill Gurley Brad Gerstner"
     
   - name: "Cognitive Revolution"
     apple_id: "1669813431"
+    rss_feed: "https://feeds.megaphone.fm/RINTP3108857801"
     search_term: "Cognitive Revolution Nathan Labenz AI"
     
   - name: "Dwarkesh Podcast"
     apple_id: "1516093381"
+    rss_feed: "https://api.substack.com/feed/podcast/69345.rss"
+    website: "https://dwarkeshpatel.substack.com"
     search_term: "Dwarkesh Podcast"
     
   - name: "Forward Guidance"
     apple_id: "1592743188"
+    rss_feed: "https://feeds.megaphone.fm/forwardguidance"
     
   - name: "Founders"
     apple_id: "1227971746"
+    rss_feed: "https://feeds.megaphone.fm/TIP6616235906"
     search_term: "Founders Podcast David Senra"
     
   - name: "Huberman Lab"
@@ -42,35 +51,47 @@ podcasts:
     
   - name: "Knowledge Project"
     apple_id: "990149481"
+    rss_feed: "https://feeds.megaphone.fm/FSMI7575968096"
     search_term: "Knowledge Project Shane Parrish Farnam Street"
     
   - name: "Macro Voices"
     apple_id: "1079172742"
-    rss_feed: "https://feeds.feedburner.com/MacroVoices"
+    rss_feed: "https://feed.podbean.com/macrovoices/feed.xml"
+    rss_feeds:
+      - "https://feed.podbean.com/macrovoices/feed.xml"
+      - "https://feeds.feedburner.com/MacroVoices"
     
   - name: "Market Huddle"
-    apple_id: "1444520320"
+    apple_id: "1552799888"
     apple_url: "https://podcasts.apple.com/us/podcast/the-market-huddle/id1552799888"
+    rss_feed: "https://feeds.transistor.fm/the-market-huddle"
     
   - name: "Modern Wisdom"
     apple_id: "1347973549"
-    rss_feed: "https://modernwisdom.libsyn.com/rss"
+    rss_feed: "https://feeds.megaphone.fm/SIXMSB5088139739"
+    rss_feeds:
+      - "https://feeds.megaphone.fm/SIXMSB5088139739"
+      - "https://modernwisdom.libsyn.com/rss"
     
   - name: "No Priors"
     apple_id: "1668002688"
+    rss_feed: "https://feeds.megaphone.fm/nopriors"
     apple_url: "https://podcasts.apple.com/us/podcast/no-priors-artificial-intelligence-technology-startups/id1668002688"
     search_term: "No Priors Elad Gil Sarah Guo"
     
   - name: "Odd Lots"
     apple_id: "1056200096"
     apple_url: "https://podcasts.apple.com/us/podcast/odd-lots/id1056200096"
+    rss_feed: "https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/8a94442e-5a74-4fa2-8b8d-ae27003a8d6b/982f5071-765c-403d-969d-ae27003a8d83/podcast.rss"
     
   - name: "The Doctor's Farmacy"
     apple_id: "1382804627"
+    rss_feed: "https://feeds.megaphone.fm/thedoctorsfarmacy"
     search_term: "Doctor's Farmacy Mark Hyman"
     
   - name: "The Drive"
     apple_id: "1400828889"
+    rss_feed: "https://peterattiadrive.libsyn.com/rss"
     search_term: "The Drive Peter Attia"
     
   - name: "Tim Ferriss"
@@ -79,4 +100,5 @@ podcasts:
     
   - name: "We Study Billionaires"
     apple_id: "928933489"
+    rss_feed: "https://feeds.megaphone.fm/PPLLC8974708240"
     search_term: "We Study Billionaires The Investors Podcast"

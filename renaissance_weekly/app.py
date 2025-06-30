@@ -32,8 +32,8 @@ class RenaissanceWeekly:
         try:
             validate_env_vars()
             self.db = PodcastDatabase()
-            self.transcript_finder = TranscriptFinder(self.db)
             self.episode_fetcher = ReliableEpisodeFetcher(self.db)
+            self.transcript_finder = TranscriptFinder(self.db)
             self.transcriber = AudioTranscriber()
             self.summarizer = Summarizer()
             self.selector = EpisodeSelector()
@@ -122,6 +122,9 @@ class RenaissanceWeekly:
             logger.info("\n⚠️ Operation cancelled by user")
         except Exception as e:
             logger.error(f"\n❌ Unexpected error in main run: {e}", exc_info=True)
+        finally:
+            # Ensure cleanup happens
+            await self.cleanup()
     
     async def _fetch_selected_episodes(self, podcast_names: List[str], days_back: int, 
                                       progress_callback: Callable) -> List[Episode]:
@@ -441,8 +444,12 @@ class RenaissanceWeekly:
         logger.info("="*80)
     
     async def cleanup(self):
-        """Clean up resources"""
+        """Clean up resources properly"""
         try:
+            # Clean up episode fetcher session
+            if hasattr(self.episode_fetcher, 'cleanup'):
+                await self.episode_fetcher.cleanup()
+            
             # Clean up transcript finder session
             if hasattr(self.transcript_finder, 'cleanup'):
                 await self.transcript_finder.cleanup()

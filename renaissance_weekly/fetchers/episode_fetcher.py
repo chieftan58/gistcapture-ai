@@ -29,13 +29,33 @@ class ReliableEpisodeFetcher:
     def __init__(self, db: PodcastDatabase):
         self.db = db
         self.podcast_index = PodcastIndexClient()
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
+        self.session = None  # Will be initialized when needed
+        self._session_initialized = False
         
         # Cache for feed URLs discovered through various methods
         self.discovered_feeds_cache = {}
+    
+    def _get_session(self) -> requests.Session:
+        """Get or create session with proper headers"""
+        if not self._session_initialized:
+            self.session = requests.Session()
+            self.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            })
+            self._session_initialized = True
+        return self.session
+    
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.session:
+            self.session.close()
+            self._session_initialized = False
     
     async def fetch_episodes(self, podcast_config: Dict, days_back: int = 7) -> List[Episode]:
         """Bulletproof episode fetching - ensures we find ALL episodes"""
@@ -165,10 +185,12 @@ class ReliableEpisodeFetcher:
             'Renaissance Weekly Bot/1.0'
         ]
         
+        session = self._get_session()
+        
         for ua in user_agents:
             try:
                 headers = {'User-Agent': ua}
-                response = self.session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
+                response = session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
                 
                 if response.status_code == 200:
                     return self._parse_rss_feed(response.content, podcast_name, days_back)
@@ -202,7 +224,8 @@ class ReliableEpisodeFetcher:
             
             logger.debug(f"    Feed has {len(feed.entries)} entries, checking last {days_back} days")
             
-            for i, entry in enumerate(feed.entries[:50]):  # Check more entries
+            # Check more entries in case dates are out of order
+            for i, entry in enumerate(feed.entries[:100]):  # Increased from 50
                 try:
                     # Log first few entries for debugging
                     if i < 3:
@@ -217,9 +240,8 @@ class ReliableEpisodeFetcher:
                     if i < 3:
                         logger.debug(f"      Published: {pub_date.strftime('%Y-%m-%d')}")
                     
+                    # Don't stop on old episodes - some feeds aren't chronological
                     if pub_date < cutoff:
-                        if i == 0:  # Log why we're stopping
-                            logger.debug(f"    Stopping - episode from {pub_date.strftime('%Y-%m-%d')} is before cutoff {cutoff.strftime('%Y-%m-%d')}")
                         continue
                     
                     audio_url = self._extract_audio_url(entry)
@@ -255,6 +277,7 @@ class ReliableEpisodeFetcher:
     async def _comprehensive_apple_search(self, podcast_name: str, apple_id: str, days_back: int) -> List[Episode]:
         """Comprehensive Apple Podcasts search with multiple strategies"""
         episodes = []
+        session = self._get_session()
         
         logger.info(f"  🍎 Searching Apple Podcasts (ID: {apple_id})")
         
@@ -262,7 +285,7 @@ class ReliableEpisodeFetcher:
         try:
             lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
             logger.debug(f"    Trying Apple lookup: {lookup_url}")
-            response = self.session.get(lookup_url, timeout=10)
+            response = session.get(lookup_url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
@@ -304,7 +327,7 @@ class ReliableEpisodeFetcher:
                     "limit": 10
                 }
                 
-                response = self.session.get(search_url, params=params, timeout=10)
+                response = session.get(search_url, params=params, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
                     logger.debug(f"    Search found {data.get('resultCount', 0)} podcasts")
@@ -334,7 +357,7 @@ class ReliableEpisodeFetcher:
                 # Try the lookup with different parameters
                 alt_lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcastEpisode&limit=50"
                 logger.info("    Trying alternative Apple lookup for episodes...")
-                response = self.session.get(alt_lookup_url, timeout=10)
+                response = session.get(alt_lookup_url, timeout=10)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -406,6 +429,8 @@ class ReliableEpisodeFetcher:
     async def _search_google_podcasts(self, podcast_name: str, days_back: int) -> List[Episode]:
         """Search Google for podcast RSS feeds"""
         try:
+            session = self._get_session()
+            
             # Google search for RSS feeds
             query = f'"{podcast_name}" podcast RSS feed filetype:xml OR filetype:rss'
             search_url = f"https://www.google.com/search?q={quote(query)}"
@@ -414,7 +439,7 @@ class ReliableEpisodeFetcher:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
             
-            response = self.session.get(search_url, headers=headers, timeout=10)
+            response = session.get(search_url, headers=headers, timeout=10)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
@@ -455,6 +480,7 @@ class ReliableEpisodeFetcher:
     async def _google_rss_search(self, podcast_name: str, days_back: int) -> List[Episode]:
         """Use Google to find RSS feeds for the podcast"""
         episodes = []
+        session = self._get_session()
         
         # Various search queries to try
         queries = [
@@ -475,7 +501,7 @@ class ReliableEpisodeFetcher:
                     'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
                 }
                 
-                response = self.session.get(search_url, headers=headers, timeout=10)
+                response = session.get(search_url, headers=headers, timeout=10)
                 if response.status_code == 200:
                     # Extract potential RSS URLs from search results
                     urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+\.(?:rss|xml)', response.text)
@@ -497,6 +523,7 @@ class ReliableEpisodeFetcher:
     async def _search_apple_by_term(self, search_term: str, days_back: int) -> List[Episode]:
         """Search Apple Podcasts using a search term"""
         try:
+            session = self._get_session()
             logger.info(f"    Searching Apple with term: {search_term}")
             search_url = "https://itunes.apple.com/search"
             params = {
@@ -506,7 +533,7 @@ class ReliableEpisodeFetcher:
                 "limit": 5
             }
             
-            response = self.session.get(search_url, params=params, timeout=10)
+            response = session.get(search_url, params=params, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 
@@ -531,8 +558,9 @@ class ReliableEpisodeFetcher:
     async def _get_apple_feed_url(self, apple_id: str) -> Optional[str]:
         """Get RSS feed URL from Apple Podcasts ID"""
         try:
+            session = self._get_session()
             lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
-            response = self.session.get(lookup_url, timeout=10)
+            response = session.get(lookup_url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
@@ -593,7 +621,9 @@ class ReliableEpisodeFetcher:
         """Enhanced web scraping with multiple strategies"""
         if not website:
             return []
-            
+        
+        session = self._get_session()
+        
         # Try multiple URL patterns
         url_patterns = [
             website,
@@ -606,7 +636,7 @@ class ReliableEpisodeFetcher:
         
         for url in url_patterns:
             try:
-                response = self.session.get(url, timeout=15)
+                response = session.get(url, timeout=15)
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.content, 'html.parser')
                     
@@ -637,6 +667,8 @@ class ReliableEpisodeFetcher:
     async def _scrape_substack(self, podcast_name: str, website: str, days_back: int) -> List[Episode]:
         """Enhanced Substack scraping"""
         try:
+            session = self._get_session()
+            
             # Try multiple Substack URL patterns
             urls_to_try = [
                 f"{website.rstrip('/')}/archive?sort=new&search=podcast",
@@ -650,7 +682,7 @@ class ReliableEpisodeFetcher:
             
             for url in urls_to_try:
                 try:
-                    response = self.session.get(url, timeout=15)
+                    response = session.get(url, timeout=15)
                     if response.status_code != 200:
                         continue
                     
@@ -681,7 +713,7 @@ class ReliableEpisodeFetcher:
                             pub_date = self._parse_flexible_date(date_elem.get_text(strip=True))
                             if pub_date and pub_date >= cutoff:
                                 # Get the full post to find audio URL
-                                post_response = self.session.get(link, timeout=10)
+                                post_response = session.get(link, timeout=10)
                                 if post_response.status_code == 200:
                                     post_soup = BeautifulSoup(post_response.content, 'html.parser')
                                     
@@ -726,7 +758,8 @@ class ReliableEpisodeFetcher:
                         return episodes
             
             # Fallback to generic scraping
-            response = self.session.get(website, timeout=15)
+            session = self._get_session()
+            response = session.get(website, timeout=15)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
                 

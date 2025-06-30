@@ -58,16 +58,19 @@ class EmailDigest:
             return False
     
     def create_substack_style_email(self, summaries: List[str], episodes: List[Episode]) -> str:
-        """Create clean HTML email with table of contents and better structure"""
+        """Create clean HTML email with Gmail-compatible table of contents and better structure"""
         
-        # Create table of contents
+        # Create table of contents with Gmail-compatible links
         toc_html = ""
         for i, episode in enumerate(episodes[:len(summaries)]):
+            # Create a safe anchor name
+            anchor_name = f"episode{i}"
+            
             toc_html += f'''
                 <tr>
                     <td style="padding: 8px 0;">
-                        <a href="#episode-{i}" style="color: #0066CC; text-decoration: none; font-size: 16px;">
-                            <strong>{episode.podcast}</strong>: {episode.title}
+                        <a href="#{anchor_name}" style="color: #0066CC; text-decoration: none; font-size: 16px;">
+                            <strong>{escape(episode.podcast)}</strong>: {escape(episode.title)}
                         </a>
                         <div style="font-size: 14px; color: #666; margin-top: 4px;">
                             Release Date: {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
@@ -75,50 +78,61 @@ class EmailDigest:
                     </td>
                 </tr>'''
         
-        # Create episodes HTML with better separation
+        # Create episodes HTML with Gmail-compatible anchors
         episodes_html = ""
         for i, (summary, episode) in enumerate(zip(summaries, episodes[:len(summaries)])):
-            # Add anchor for navigation
-            episodes_html += f'<tr id="episode-{i}"><td style="padding: 0;">'
+            # Create anchor using both id and name for maximum compatibility
+            anchor_name = f"episode{i}"
             
             if i > 0:
                 # Visual separator between episodes
                 episodes_html += '''
-                    <div style="padding: 60px 0;">
-                        <hr style="border: none; border-top: 2px solid #E0E0E0; margin: 0;">
-                    </div>'''
+                    <tr>
+                        <td style="padding: 60px 0;">
+                            <hr style="border: none; border-top: 2px solid #E0E0E0; margin: 0;">
+                        </td>
+                    </tr>'''
             
-            # Add title header for this podcast episode
+            # Add anchor and episode content
             episodes_html += f'''
-                <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-                    <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; font-weight: normal;">
-                        {episode.podcast}
-                    </h2>
-                    <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
-                        {episode.title}
-                    </h3>
-                    <p style="margin: 0; font-size: 14px; color: #666;">
-                        Release Date: {episode.published.strftime('%B %d, %Y')} • Duration: {format_duration(episode.duration)}
-                    </p>
-                </div>'''
+                <tr>
+                    <td style="padding: 0;">
+                        <!-- Gmail-compatible anchor -->
+                        <a name="{anchor_name}" id="{anchor_name}" style="display: block; position: relative; top: -60px; visibility: hidden;"></a>
+                        
+                        <!-- Episode header -->
+                        <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+                            <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; font-weight: normal;">
+                                {escape(episode.podcast)}
+                            </h2>
+                            <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
+                                {escape(episode.title)}
+                            </h3>
+                            <p style="margin: 0; font-size: 14px; color: #666;">
+                                Release Date: {episode.published.strftime('%B %d, %Y')} • Duration: {format_duration(episode.duration)}
+                            </p>
+                        </div>'''
             
             # Convert markdown to HTML
             html_content = self._convert_markdown_to_html(summary)
             
-            # Wrap content in a container
+            # Wrap content
             episodes_html += f'''
-                <div style="background: #ffffff; padding: 0 0 40px 0;">
-                    {html_content}
-                    <div style="margin-top: 40px; text-align: right;">
-                        <a href="#toc" style="color: #666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
-                    </div>
-                </div>
-            </td></tr>'''
+                        <!-- Episode content -->
+                        <div style="background: #ffffff; padding: 0 0 40px 0;">
+                            {html_content}
+                            <div style="margin-top: 40px; text-align: right;">
+                                <a href="#toc" style="color: #666666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
+                            </div>
+                        </div>
+                    </td>
+                </tr>'''
         
-        return f"""<!DOCTYPE html>
-<html lang="en">
+        # Create full HTML with DOCTYPE for better Gmail rendering
+        return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Renaissance Weekly</title>
@@ -128,9 +142,33 @@ class EmailDigest:
         .outlook-font {{font-family: Arial, sans-serif !important;}}
     </style>
     <![endif]-->
+    <style type="text/css">
+        /* Reset styles */
+        body, table, td, a {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
+        table, td {{ mso-table-lspace: 0pt; mso-table-rspace: 0pt; }}
+        img {{ -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }}
+        
+        /* Remove default link styles in Gmail */
+        a[x-apple-data-detectors] {{
+            color: inherit !important;
+            text-decoration: none !important;
+            font-size: inherit !important;
+            font-family: inherit !important;
+            font-weight: inherit !important;
+            line-height: inherit !important;
+        }}
+        
+        /* Gmail-specific anchor fix */
+        a[name] {{
+            display: block;
+            position: relative;
+            top: -60px;
+            visibility: hidden;
+        }}
+    </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: Georgia, serif; font-size: 18px; line-height: 1.6; color: #333; background-color: #FFF; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #FFF;">
+<body style="margin: 0; padding: 0; font-family: Georgia, serif; font-size: 18px; line-height: 1.6; color: #333; background-color: #FFFFFF; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #FFFFFF;">
         <tr>
             <td align="center" style="padding: 40px 20px;">
                 <!--[if mso]>
@@ -142,24 +180,31 @@ class EmailDigest:
                     <!-- Header -->
                     <tr>
                         <td style="padding: 0 0 40px 0; text-align: center;">
-                            <h1 style="margin: 0 0 10px 0; font-family: Georgia, serif; font-size: 48px; font-weight: normal; letter-spacing: -1px; color: #000; mso-line-height-rule: exactly; line-height: 1.1;">Renaissance Weekly</h1>
-                            <p style="margin: 0 0 20px 0; font-size: 18px; color: #666; font-style: italic; font-family: Georgia, serif;">The smartest podcasts, distilled.</p>
-                            <p style="margin: 0; font-size: 14px; color: #999; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif;">{datetime.now().strftime('%B %d, %Y')}</p>
+                            <h1 style="margin: 0 0 10px 0; font-family: Georgia, serif; font-size: 48px; font-weight: normal; letter-spacing: -1px; color: #000000; mso-line-height-rule: exactly; line-height: 1.1;">Renaissance Weekly</h1>
+                            <p style="margin: 0 0 20px 0; font-size: 18px; color: #666666; font-style: italic; font-family: Georgia, serif;">The smartest podcasts, distilled.</p>
+                            <p style="margin: 0; font-size: 14px; color: #999999; text-transform: uppercase; letter-spacing: 1px; font-family: Arial, sans-serif;">{datetime.now().strftime('%B %d, %Y')}</p>
                         </td>
                     </tr>
                     
                     <!-- Introduction -->
                     <tr>
                         <td style="padding: 0 0 50px 0;">
-                            <p style="margin: 0; font-size: 20px; line-height: 1.7; color: #333; font-weight: 300; font-family: Georgia, serif;">In a world of infinite content, attention is the scarcest resource. This week's edition brings you the essential insights from conversations that matter.</p>
+                            <p style="margin: 0; font-size: 20px; line-height: 1.7; color: #333333; font-weight: 300; font-family: Georgia, serif;">In a world of infinite content, attention is the scarcest resource. This week's edition brings you the essential insights from conversations that matter.</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Table of Contents Anchor -->
+                    <tr>
+                        <td>
+                            <a name="toc" id="toc" style="display: block; position: relative; top: -60px; visibility: hidden;"></a>
                         </td>
                     </tr>
                     
                     <!-- Table of Contents -->
-                    <tr id="toc">
+                    <tr>
                         <td style="padding: 0 0 50px 0;">
                             <div style="background: #f8f8f8; padding: 30px; border-radius: 8px;">
-                                <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #000; font-family: Georgia, serif; font-weight: normal;">This Week's Essential Conversations</h2>
+                                <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #000000; font-family: Georgia, serif; font-weight: normal;">This Week's Essential Conversations</h2>
                                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                     {toc_html}
                                 </table>
@@ -173,10 +218,10 @@ class EmailDigest:
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 60px 0 40px 0; text-align: center; border-top: 1px solid #E0E0E0;">
-                            <p style="margin: 0 0 15px 0; font-size: 24px; font-family: Georgia, serif; color: #000;">Renaissance Weekly</p>
-                            <p style="margin: 0 0 20px 0; font-size: 16px; color: #666; font-style: italic; font-family: Georgia, serif;">"For those who remain curious."</p>
-                            <p style="margin: 0; font-size: 14px; color: #999;">
-                                <a href="https://gistcapture.ai" style="color: #666; text-decoration: none;">gistcapture.ai</a>
+                            <p style="margin: 0 0 15px 0; font-size: 24px; font-family: Georgia, serif; color: #000000;">Renaissance Weekly</p>
+                            <p style="margin: 0 0 20px 0; font-size: 16px; color: #666666; font-style: italic; font-family: Georgia, serif;">"For those who remain curious."</p>
+                            <p style="margin: 0; font-size: 14px; color: #999999;">
+                                <a href="https://gistcapture.ai" style="color: #666666; text-decoration: none;">gistcapture.ai</a>
                             </p>
                         </td>
                     </tr>
@@ -193,7 +238,7 @@ class EmailDigest:
 </html>"""
     
     def _convert_markdown_to_html(self, markdown: str) -> str:
-        """Convert markdown to HTML with proper handling"""
+        """Convert markdown to HTML with proper handling and escaping"""
         lines = markdown.split('\n')
         html_lines = []
         in_code_block = False
@@ -232,13 +277,13 @@ class EmailDigest:
                     text = self._process_inline_formatting(text)
                     
                     if level == 1:
-                        html_lines.append(f'<h1 style="margin: 40px 0 30px 0; font-size: 32px; color: #000; font-family: Georgia, serif; font-weight: normal;">{text}</h1>')
+                        html_lines.append(f'<h1 style="margin: 40px 0 30px 0; font-size: 32px; color: #000000; font-family: Georgia, serif; font-weight: normal;">{text}</h1>')
                     elif level == 2:
-                        html_lines.append(f'<h2 style="margin: 35px 0 20px 0; font-size: 26px; color: #000; font-family: Georgia, serif; font-weight: normal;">{text}</h2>')
+                        html_lines.append(f'<h2 style="margin: 35px 0 20px 0; font-size: 26px; color: #000000; font-family: Georgia, serif; font-weight: normal;">{text}</h2>')
                     elif level == 3:
-                        html_lines.append(f'<h3 style="margin: 30px 0 15px 0; font-size: 22px; color: #333; font-weight: 600;">{text}</h3>')
+                        html_lines.append(f'<h3 style="margin: 30px 0 15px 0; font-size: 22px; color: #333333; font-weight: 600;">{text}</h3>')
                     else:
-                        html_lines.append(f'<h{level} style="margin: 25px 0 15px 0; font-size: 18px; color: #333; font-weight: 600;">{text}</h{level}>')
+                        html_lines.append(f'<h{level} style="margin: 25px 0 15px 0; font-size: 18px; color: #333333; font-weight: 600;">{text}</h{level}>')
                     continue
                 
                 # Handle lists
@@ -267,7 +312,7 @@ class EmailDigest:
                     
                     quote_text = line.strip()[1:].strip()
                     quote_text = self._process_inline_formatting(quote_text)
-                    html_lines.append(f'<blockquote style="margin: 0 0 20px 0; padding-left: 20px; border-left: 4px solid #e0e0e0; color: #666; font-style: italic;">{quote_text}</blockquote>')
+                    html_lines.append(f'<blockquote style="margin: 0 0 20px 0; padding-left: 20px; border-left: 4px solid #e0e0e0; color: #666666; font-style: italic;">{quote_text}</blockquote>')
                     continue
                 
                 # Handle horizontal rules
@@ -278,8 +323,8 @@ class EmailDigest:
                     html_lines.append('<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">')
                     continue
                 
-                # Regular paragraph line
-                processed_line = self._process_inline_formatting(line.strip())
+                # Regular paragraph line - escape HTML first
+                processed_line = self._process_inline_formatting(escape(line.strip()))
                 current_paragraph.append(processed_line)
             
             else:
@@ -304,8 +349,7 @@ class EmailDigest:
     
     def _process_inline_formatting(self, text: str) -> str:
         """Process inline markdown formatting (bold, italic, links, code)"""
-        # Escape HTML first
-        text = escape(text)
+        # Note: text is already HTML-escaped at this point
         
         # Code spans (must be processed before other formatting)
         text = re.sub(r'`([^`]+)`', r'<code style="background: #f5f5f5; padding: 2px 4px; border-radius: 3px; font-size: 0.9em;">\1</code>', text)
@@ -316,16 +360,20 @@ class EmailDigest:
         # Italic
         text = re.sub(r'\*([^\*]+)\*', r'<em>\1</em>', text)
         
-        # Links - with proper URL validation
+        # Links - with proper URL validation and escaping
         def replace_link(match):
             link_text = match.group(1)
             url = match.group(2)
-            # Basic URL validation
+            
+            # Ensure URL is safe
             if url.startswith(('http://', 'https://', 'mailto:', '/')):
-                return f'<a href="{url}" style="color: #0066CC; text-decoration: none;">{link_text}</a>'
+                # Escape quotes in URL
+                safe_url = url.replace('"', '&quot;')
+                return f'<a href="{safe_url}" style="color: #0066CC; text-decoration: none;">{link_text}</a>'
             else:
-                # Assume relative URL
-                return f'<a href="{url}" style="color: #0066CC; text-decoration: none;">{link_text}</a>'
+                # Assume relative URL, escape it
+                safe_url = url.replace('"', '&quot;')
+                return f'<a href="{safe_url}" style="color: #0066CC; text-decoration: none;">{link_text}</a>'
         
         text = re.sub(r'\[([^\]]+)\]\(([^\)]+)\)', replace_link, text)
         
