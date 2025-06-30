@@ -110,16 +110,21 @@ class RenaissanceWeekly:
             
             logger.info(f"✅ {len(valid_episodes)} episodes passed validation")
             
+            # Small delay to ensure clean server shutdown
+            await asyncio.sleep(1.5)
+            
             # Log first few episodes for debugging
             logger.info("📋 Episodes to process:")
             for i, ep in enumerate(valid_episodes[:3]):
                 logger.info(f"  {i+1}. {ep.podcast}: {ep.title}")
+                logger.info(f"     Audio URL: {ep.audio_url[:80] if ep.audio_url else 'None'}...")
             if len(valid_episodes) > 3:
                 logger.info(f"  ... and {len(valid_episodes) - 3} more")
             
             # Stage 3: Process episodes
             logger.info("\n🎯 STAGE 3: Processing Episodes")
             logger.info(f"🚀 Starting to process {len(valid_episodes)} episodes...")
+            logger.info("⏰ This may take several minutes depending on episode length...")
             
             try:
                 summaries = await self._process_episodes(valid_episodes)
@@ -243,6 +248,11 @@ class RenaissanceWeekly:
         logger.info(f"🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
         logger.info(f"⚙️  Max concurrent tasks: 3")
         
+        # Ensure we have episodes to process
+        if not selected_episodes:
+            logger.error("❌ No episodes provided to process")
+            return []
+        
         async def process_with_semaphore(episode: Episode, semaphore: asyncio.Semaphore, index: int):
             """Process single episode with semaphore for concurrency control"""
             async with semaphore:
@@ -266,30 +276,39 @@ class RenaissanceWeekly:
         semaphore = asyncio.Semaphore(3)
         
         # Create all tasks
+        logger.info("📋 Creating processing tasks...")
         tasks = [
             process_with_semaphore(ep, semaphore, i)
             for i, ep in enumerate(selected_episodes)
         ]
         
         # Execute tasks and gather results
+        logger.info("⚡ Executing tasks concurrently...")
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Process results
+        logger.info("📊 Processing results...")
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Episode {i+1} processing failed with exception: {result}")
             elif isinstance(result, dict) and result:
                 summaries.append(result)
+            elif result is None:
+                logger.debug(f"Episode {i+1} returned None")
         
+        logger.info(f"✅ Processing complete: {len(summaries)}/{len(selected_episodes)} episodes succeeded")
         return summaries
     
     async def process_episode(self, episode: Episode) -> Optional[str]:
         """Process a single episode with comprehensive logging"""
         logger.info(f"\n{'='*60}")
-        logger.info(f"🎧 Processing: {episode.title}")
-        logger.info(f"📅 Published: {episode.published.strftime('%Y-%m-%d')}")
-        logger.info(f"🎙️  Podcast: {episode.podcast}")
-        logger.info(f"⏱️  Duration: {episode.duration}")
+        logger.info(f"🎧 PROCESSING EPISODE:")
+        logger.info(f"   Title: {episode.title}")
+        logger.info(f"   Podcast: {episode.podcast}")
+        logger.info(f"   Published: {episode.published.strftime('%Y-%m-%d')}")
+        logger.info(f"   Duration: {episode.duration}")
+        logger.info(f"   Audio URL: {'Yes' if episode.audio_url else 'No'}")
+        logger.info(f"   Transcript URL: {'Yes' if episode.transcript_url else 'No'}")
         logger.info(f"{'='*60}")
         
         try:
@@ -312,11 +331,13 @@ class RenaissanceWeekly:
                 if transcript_text:
                     transcript_source = TranscriptSource.GENERATED
                     logger.info("✅ Audio transcribed successfully")
+                    logger.info(f"📏 Transcript length: {len(transcript_text)} characters")
                 else:
                     logger.error("❌ Failed to transcribe audio")
                     return None
             else:
                 logger.info(f"✅ Found existing transcript (source: {transcript_source.value})")
+                logger.info(f"📏 Transcript length: {len(transcript_text)} characters")
             
             # Save transcript to database
             try:
@@ -331,6 +352,7 @@ class RenaissanceWeekly:
             
             if summary:
                 logger.info("✅ Summary generated successfully!")
+                logger.info(f"📏 Summary length: {len(summary)} characters")
                 # Save summary to database
                 try:
                     self.db.save_episode(episode, transcript_text, transcript_source, summary)

@@ -132,17 +132,30 @@ class EpisodeSelector:
         logger.info("✅ Episodes ready, waiting for user selection...")
         
         # Wait for selection with timeout
-        if self._selection_event.wait(timeout=300):  # 5 minute timeout
+        logger.info(f"⏳ Waiting for selection event (timeout: 300s)...")
+        selection_made = self._selection_event.wait(timeout=300)  # 5 minute timeout
+        
+        if selection_made:
             selected_episodes = self._selection_result or []
-            logger.info(f"✅ Got {len(selected_episodes)} selected episodes")
+            logger.info(f"✅ Selection event received! Got {len(selected_episodes)} selected episodes")
+            
+            # Log episode details for debugging
+            for i, ep in enumerate(selected_episodes[:3]):
+                if hasattr(ep, 'title'):
+                    logger.debug(f"  Episode {i+1}: {ep.title}")
+                else:
+                    logger.debug(f"  Episode {i+1}: {type(ep)}")
         else:
-            logger.warning("Selection timeout - no episodes selected")
+            logger.warning("⏰ Selection timeout - no episodes selected within 5 minutes")
             selected_episodes = []
         
         # Cleanup
+        logger.info("🧹 Starting cleanup...")
+        time.sleep(1)  # Give time for final responses
         self._shutdown_server(server)
         self._cleanup_session(session_id)
         
+        logger.info(f"✅ Returning {len(selected_episodes)} episodes to main process")
         return selected_episodes
     
     def _fetch_episodes_thread(self, selected_podcasts, configuration, fetch_callback, progress_callback, session_id):
@@ -220,6 +233,7 @@ class EpisodeSelector:
                     else:
                         self.send_error(404)
                 elif self.path == '/complete':
+                    # Just in case any requests come here
                     self._send_html(parent_instance._create_complete_html())
                 else:
                     self.send_error(404)
@@ -304,14 +318,30 @@ class EpisodeSelector:
         server.server_close()
     
     def _run_loading_server(self, server: HTTPServer):
-        """Run loading/selection server"""
-        while not self._selection_event.is_set():
-            server.handle_request()
+        """Run loading/selection server with proper timeout handling"""
+        logger.debug("Loading server thread started")
+        start_time = time.time()
+        timeout = 600  # 10 minutes total timeout
         
-        # Handle a few more requests for cleanup
-        for _ in range(5):
+        while not self._selection_event.is_set():
+            # Check for timeout
+            if time.time() - start_time > timeout:
+                logger.warning("Loading server timeout")
+                break
+                
+            # Handle one request with timeout
+            server.handle_request()
+            
+            # Small sleep to prevent CPU spinning
+            time.sleep(0.01)
+        
+        # Handle a few more requests after selection for cleanup
+        logger.debug("Selection made, handling cleanup requests...")
+        for _ in range(10):
             server.handle_request()
             time.sleep(0.1)
+            
+        logger.debug("Loading server thread ending")
     
     def _shutdown_server(self, server: HTTPServer):
         """Safely shutdown server"""
