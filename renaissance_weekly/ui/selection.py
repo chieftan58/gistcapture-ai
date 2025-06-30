@@ -1,4 +1,4 @@
-"""Two-stage episode selection UI with minimalist design - FIXED"""
+"""Single-page episode selection UI with seamless transitions"""
 
 import json
 import webbrowser
@@ -6,8 +6,6 @@ import threading
 import uuid
 import socket
 import time
-import queue
-import asyncio
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import List, Dict, Tuple, Callable, Optional
 from html import escape
@@ -22,278 +20,153 @@ logger = get_logger(__name__)
 
 
 class EpisodeSelector:
-    """Handle two-stage selection: podcasts first, then episodes with loading screen"""
+    """Single-page selection UI with seamless state transitions"""
     
     def __init__(self):
+        self.state = "podcast_selection"
+        self.selected_podcasts = []
+        self.configuration = {}
+        self.episode_cache = []
         self.loading_status = {}
-        self.episode_cache = {}
-        self.server_port = None
-        self._selection_result = None
-        self._selection_event = threading.Event()
+        self.session_id = str(uuid.uuid4())
+        self._selection_complete = threading.Event()
+        self._selected_episode_indices = []
+        self._server = None
+        self._server_thread = None
+        self._fetch_callback = None
     
-    def run_podcast_selection(self, days_back: int = 7) -> Tuple[List[str], Dict]:
-        """Stage 1: Select which podcasts to fetch episodes for"""
-        selected_podcasts = []
-        configuration = {
+    def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
+        """Run the complete selection process in a single page"""
+        self._fetch_callback = fetch_callback
+        self.configuration = {
             'lookback_days': days_back,
             'transcription_mode': 'test' if TESTING_MODE else 'full',
-            'max_transcription_minutes': 10 if TESTING_MODE else float('inf')
+            'session_id': self.session_id
         }
-        session_id = str(uuid.uuid4())
-        selection_complete = threading.Event()
         
-        # Use a more robust server implementation
-        server = self._create_server(
-            lambda: self._create_podcast_selection_html(days_back, session_id),
-            lambda data: self._handle_podcast_selection(data, selected_podcasts, configuration, selection_complete)
-        )
+        # Reset state
+        self.state = "podcast_selection"
+        self.selected_podcasts = []
+        self.episode_cache = []
+        self._selection_complete.clear()
         
-        url = f'http://localhost:{self.server_port}'
-        logger.info(f"🌐 Opening podcast selection at {url}")
-        
-        try:
-            webbrowser.open(url)
-        except:
-            logger.warning(f"Please open: {url}")
-        
-        logger.info("⏳ Stage 1: Waiting for podcast selection...")
-        
-        # Run server until selection is made
-        while not selection_complete.is_set():
-            server.handle_request()
-        
-        # Allow time for response to be sent
-        time.sleep(0.5)
-        server.server_close()
-        
-        configuration['session_id'] = session_id
-        return selected_podcasts, configuration
-    
-    def show_loading_screen_and_fetch(self, selected_podcasts: List[str], configuration: Dict, 
-                                     fetch_episodes_callback: Callable) -> List[Episode]:
-        """Show loading screen while fetching episodes - FIXED"""
-        session_id = configuration.get('session_id')
-        self.loading_status[session_id] = {'status': 'loading', 'progress': 0, 'total': len(selected_podcasts)}
-        
-        # Reset selection state
-        self._selection_result = None
-        self._selection_event.clear()
-        
-        # Create server for loading/selection screen
+        # Create and start server
         port = self._find_available_port()
-        self.server_port = port
-        server = self._create_loading_server(session_id, selected_podcasts, configuration)
+        self._server = self._create_unified_server(port)
+        self._server_thread = threading.Thread(target=self._run_server, daemon=True)
+        self._server_thread.start()
         
-        # Start server in background
-        server_thread = threading.Thread(target=self._run_loading_server, args=(server,))
-        server_thread.daemon = True
-        server_thread.start()
-        
-        # Open the loading screen in browser
+        # Open browser once
         url = f'http://localhost:{port}/'
-        logger.info(f"📡 Opening loading screen at {url}")
-        
+        logger.info(f"🌐 Opening selection UI at {url}")
         try:
             webbrowser.open(url)
         except:
             logger.warning(f"Please open: {url}")
         
-        # Progress callback for episode fetching
-        def progress_callback(podcast_name, index, total):
-            self.loading_status[session_id] = {
-                'status': 'loading',
-                'progress': index,
-                'total': total,
-                'current_podcast': podcast_name
-            }
-        
-        # Fetch episodes in separate thread
-        fetch_thread = threading.Thread(
-            target=self._fetch_episodes_thread,
-            args=(selected_podcasts, configuration, fetch_episodes_callback, progress_callback, session_id)
-        )
-        fetch_thread.daemon = True
-        fetch_thread.start()
-        
-        # Wait for fetching to complete
-        fetch_thread.join(timeout=300)  # 5 minute timeout
-        
-        if fetch_thread.is_alive():
-            logger.error("Episode fetching timed out")
-            self._shutdown_server(server)
-            return []
-        
-        # Check if fetching failed
-        if self.loading_status[session_id].get('status') == 'error':
-            logger.error("Episode fetching failed")
-            self._shutdown_server(server)
-            return []
-        
-        logger.info("✅ Episodes ready, waiting for user selection...")
-        
-        # Wait for selection with timeout
-        logger.info(f"⏳ Waiting for selection event (timeout: 300s)...")
-        selection_made = self._selection_event.wait(timeout=300)  # 5 minute timeout
-        
-        if selection_made:
-            selected_episodes = self._selection_result or []
-            logger.info(f"✅ Selection event received! Got {len(selected_episodes)} selected episodes")
-            
-            # Log episode details for debugging
-            for i, ep in enumerate(selected_episodes[:3]):
-                if hasattr(ep, 'title'):
-                    logger.debug(f"  Episode {i+1}: {ep.title}")
-                else:
-                    logger.debug(f"  Episode {i+1}: {type(ep)}")
+        # Wait for completion
+        logger.info("⏳ Waiting for selection process to complete...")
+        if self._selection_complete.wait(timeout=600):  # 10 minute timeout
+            logger.info("✅ Selection event received")
         else:
-            logger.warning("⏰ Selection timeout - no episodes selected within 5 minutes")
-            selected_episodes = []
+            logger.warning("⏰ Selection timeout")
+        
+        # Get selected episodes
+        selected_episodes = []
+        if self._selected_episode_indices:
+            logger.info(f"📋 Processing {len(self._selected_episode_indices)} selected episode indices")
+            for idx in self._selected_episode_indices:
+                if 0 <= idx < len(self.episode_cache):
+                    selected_episodes.append(self.episode_cache[idx])
+                else:
+                    logger.warning(f"Invalid episode index: {idx}")
         
         # Cleanup
-        logger.info("🧹 Starting cleanup...")
-        time.sleep(1)  # Give time for final responses
-        self._shutdown_server(server)
-        self._cleanup_session(session_id)
+        self._shutdown_server()
         
-        logger.info(f"✅ Returning {len(selected_episodes)} episodes to main process")
-        return selected_episodes
+        logger.info(f"✅ Selection complete: {len(selected_episodes)} episodes")
+        return selected_episodes, self.configuration
     
-    def _fetch_episodes_thread(self, selected_podcasts, configuration, fetch_callback, progress_callback, session_id):
-        """Thread function for fetching episodes"""
-        try:
-            logger.info("📡 Fetching episodes in background thread...")
-            episodes = fetch_callback(selected_podcasts, configuration['lookback_days'], progress_callback)
-            
-            # Update cache and status
-            self.episode_cache[session_id] = episodes
-            self.loading_status[session_id] = {'status': 'ready', 'episode_count': len(episodes)}
-            logger.info(f"✅ Fetched {len(episodes)} episodes total")
-        except Exception as e:
-            logger.error(f"Error fetching episodes: {e}", exc_info=True)
-            self.loading_status[session_id] = {'status': 'error', 'error': str(e)}
-    
-    def _create_server(self, html_generator, selection_handler) -> HTTPServer:
-        """Create HTTP server with given handlers"""
-        parent_instance = self
+    def _create_unified_server(self, port: int) -> HTTPServer:
+        """Create a single server that handles all states"""
+        parent = self
         
         class Handler(SimpleHTTPRequestHandler):
             def do_GET(self):
                 if self.path == '/':
-                    self._send_html(html_generator())
+                    self._send_html(parent._generate_html())
+                elif self.path == '/api/state':
+                    # Include episode data when ready
+                    response_data = {
+                        'state': parent.state,
+                        'selected_podcasts': len(parent.selected_podcasts),
+                        'episode_count': len(parent.episode_cache)
+                    }
+                    
+                    if parent.state == 'episode_selection' and parent.episode_cache:
+                        response_data['episodes'] = [{
+                            'podcast': ep.podcast,
+                            'title': ep.title,
+                            'published': ep.published.isoformat() if hasattr(ep.published, 'isoformat') else str(ep.published),
+                            'duration': ep.duration,
+                            'has_transcript': ep.transcript_url is not None,
+                            'description': ep.description[:200] if ep.description else ''
+                        } for ep in parent.episode_cache]
+                    
+                    self._send_json(response_data)
+                elif self.path == f'/api/status':
+                    self._send_json(parent.loading_status)
                 else:
                     self.send_error(404)
             
             def do_POST(self):
-                if self.path == '/select':
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                if self.path == '/api/select-podcasts':
+                    # Handle podcast selection
+                    parent.selected_podcasts = data.get('selected_podcasts', [])
+                    parent.configuration['lookback_days'] = data.get('lookback_days', 7)
+                    parent.configuration['transcription_mode'] = data.get('transcription_mode', 'test')
+                    
+                    parent.state = "loading"
+                    parent.loading_status = {
+                        'status': 'loading',
+                        'progress': 0,
+                        'total': len(parent.selected_podcasts)
+                    }
+                    
+                    self._send_json({'status': 'success'})
+                    
+                    # Start fetching episodes in background
+                    threading.Thread(target=parent._fetch_episodes_background, daemon=True).start()
+                    
+                elif self.path == '/api/select-episodes':
                     try:
-                        content_length = int(self.headers['Content-Length'])
-                        post_data = self.rfile.read(content_length)
-                        data = json.loads(post_data.decode('utf-8'))
+                        # Handle episode selection
+                        parent._selected_episode_indices = data.get('selected_episodes', [])
+                        parent.state = "complete"
                         
-                        selection_handler(data)
+                        logger.info(f"📥 Received episode selection: {len(parent._selected_episode_indices)} episodes")
                         
-                        self.send_response(200)
-                        self.send_header('Content-type', 'application/json')
-                        self.end_headers()
-                        self.wfile.write(json.dumps({'status': 'success'}).encode())
+                        self._send_json({'status': 'success', 'count': len(parent._selected_episode_indices)})
+                        
+                        # Signal completion after response is sent
+                        threading.Thread(target=lambda: (time.sleep(0.1), parent._selection_complete.set()), daemon=True).start()
                         
                     except Exception as e:
-                        logger.error(f"Error handling selection: {e}")
-                        self.send_error(500)
+                        logger.error(f"Error in episode selection: {e}", exc_info=True)
+                        self._send_json({'status': 'error', 'message': str(e)})
+                    
+                else:
+                    self.send_error(404)
             
             def _send_html(self, content):
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(content.encode())
-            
-            def log_message(self, format, *args):
-                pass  # Suppress logs
-        
-        self.server_port = self._find_available_port()
-        server = HTTPServer(('localhost', self.server_port), Handler)
-        server.timeout = 0.5
-        return server
-    
-    def _create_loading_server(self, session_id: str, selected_podcasts: List[str], configuration: Dict) -> HTTPServer:
-        """Create server for loading/selection screen"""
-        parent_instance = self
-        
-        class Handler(SimpleHTTPRequestHandler):
-            def do_GET(self):
-                if self.path == '/':
-                    self._send_html(parent_instance._create_loading_html(session_id, selected_podcasts, configuration))
-                elif self.path == f'/status/{session_id}':
-                    self._send_json(parent_instance.loading_status.get(session_id, {'status': 'unknown'}))
-                elif self.path == f'/episodes/{session_id}':
-                    if session_id in parent_instance.episode_cache:
-                        self._send_html(parent_instance._create_episode_selection_html(
-                            parent_instance.episode_cache[session_id], selected_podcasts, configuration
-                        ))
-                    else:
-                        self.send_error(404)
-                elif self.path == '/complete':
-                    # Just in case any requests come here
-                    self._send_html(parent_instance._create_complete_html())
-                else:
-                    self.send_error(404)
-            
-            def do_POST(self):
-                if self.path == '/select':
-                    try:
-                        content_length = int(self.headers['Content-Length'])
-                        post_data = self.rfile.read(content_length)
-                        data = json.loads(post_data.decode('utf-8'))
-                        
-                        logger.info(f"📥 Received selection POST request")
-                        
-                        # Process selected episodes
-                        selected_indices = data.get('selected_episodes', [])
-                        selected_episodes = []
-                        
-                        if session_id in parent_instance.episode_cache:
-                            all_episodes = parent_instance.episode_cache[session_id]
-                            logger.info(f"📋 Processing selection: {len(selected_indices)} indices from {len(all_episodes)} episodes")
-                            
-                            for idx in selected_indices:
-                                if 0 <= idx < len(all_episodes):
-                                    selected_episodes.append(all_episodes[idx])
-                                    logger.debug(f"  Selected episode {idx}: {all_episodes[idx].title if hasattr(all_episodes[idx], 'title') else 'Unknown'}")
-                        else:
-                            logger.error(f"❌ No episode cache found for session {session_id}")
-                        
-                        logger.info(f"✅ User selected {len(selected_episodes)} episodes")
-                        
-                        # Store result and signal completion
-                        parent_instance._selection_result = selected_episodes
-                        parent_instance._selection_event.set()
-                        
-                        # Send success response
-                        self.send_response(200)
-                        self.send_header('Content-type', 'application/json')
-                        self.end_headers()
-                        response_data = {
-                            'status': 'success',
-                            'selected_count': len(selected_episodes),
-                            'message': 'Processing your selection...'
-                        }
-                        self.wfile.write(json.dumps(response_data).encode())
-                        logger.info(f"✅ Sent success response to client")
-                        
-                    except Exception as e:
-                        logger.error(f"Error processing selection: {e}", exc_info=True)
-                        self.send_response(500)
-                        self.send_header('Content-type', 'application/json')
-                        self.end_headers()
-                        self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
-                else:
-                    self.send_error(404)
-            
-            def _send_html(self, content):
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                self.wfile.write(content.encode() if isinstance(content, str) else content)
             
             def _send_json(self, data):
                 self.send_response(200)
@@ -302,70 +175,84 @@ class EpisodeSelector:
                 self.wfile.write(json.dumps(data).encode())
             
             def log_message(self, format, *args):
-                if 'select' in format or 'status' in format:
-                    logger.debug(f"Server: {format % args}")
+                pass  # Suppress logs
         
-        port = self.server_port if self.server_port else self._find_available_port()
         server = HTTPServer(('localhost', port), Handler)
         server.timeout = 0.5
-        self.server_port = port
         return server
     
-    def _run_server_until_selection(self, server: HTTPServer):
-        """Run server until selection is made"""
-        while getattr(server.RequestHandlerClass, 'server_running', True):
-            server.handle_request()
-        server.server_close()
+    def _run_server(self):
+        """Run server until completion"""
+        logger.debug("Server thread started")
+        while not self._selection_complete.is_set():
+            try:
+                self._server.handle_request()
+            except Exception as e:
+                if not self._selection_complete.is_set():
+                    logger.debug(f"Server error: {e}")
+        logger.debug("Server thread ending")
     
-    def _run_loading_server(self, server: HTTPServer):
-        """Run loading/selection server with proper timeout handling"""
-        logger.debug("Loading server thread started")
-        start_time = time.time()
-        timeout = 600  # 10 minutes total timeout
+    def _shutdown_server(self):
+        """Shutdown server cleanly"""
+        logger.debug("Shutting down server...")
         
-        while not self._selection_event.is_set():
-            # Check for timeout
-            if time.time() - start_time > timeout:
-                logger.warning("Loading server timeout")
-                break
-                
-            # Handle one request with timeout
-            server.handle_request()
-            
-            # Small sleep to prevent CPU spinning
-            time.sleep(0.01)
+        # Signal server to stop
+        self._selection_complete.set()
         
-        # Handle a few more requests after selection for cleanup
-        logger.debug("Selection made, handling cleanup requests...")
-        for _ in range(10):
-            server.handle_request()
-            time.sleep(0.1)
-            
-        logger.debug("Loading server thread ending")
+        # Wait for server thread to finish
+        if self._server_thread and self._server_thread.is_alive():
+            self._server_thread.join(timeout=2)
+            logger.debug("Server thread joined")
+        
+        # Close server
+        if self._server:
+            try:
+                self._server.server_close()
+                logger.debug("Server closed")
+            except Exception as e:
+                logger.debug(f"Server close error: {e}")
     
-    def _shutdown_server(self, server: HTTPServer):
-        """Safely shutdown server"""
+    def _fetch_episodes_background(self):
+        """Fetch episodes in background"""
         try:
-            server.shutdown()
-            server.server_close()
-        except:
-            pass
-    
-    def _cleanup_session(self, session_id: str):
-        """Clean up session data"""
-        if session_id in self.loading_status:
-            del self.loading_status[session_id]
-        if session_id in self.episode_cache:
-            del self.episode_cache[session_id]
-    
-    def _handle_podcast_selection(self, data: dict, selected_podcasts: list, configuration: dict, selection_complete: threading.Event = None):
-        """Handle podcast selection data"""
-        configuration['lookback_days'] = data.get('lookback_days', 7)
-        configuration['transcription_mode'] = data.get('transcription_mode', 'test')
-        configuration['max_transcription_minutes'] = 10 if data.get('transcription_mode') == 'test' else float('inf')
-        selected_podcasts.extend(data.get('selected_podcasts', []))
-        if selection_complete:
-            selection_complete.set()
+            if not self._fetch_callback:
+                raise Exception("No fetch callback provided")
+            
+            logger.info(f"📡 Background fetch started for {len(self.selected_podcasts)} podcasts")
+            
+            def progress_callback(podcast_name, index, total):
+                self.loading_status = {
+                    'status': 'loading',
+                    'progress': index,
+                    'total': total,
+                    'current_podcast': podcast_name
+                }
+                logger.debug(f"Progress: {podcast_name} ({index+1}/{total})")
+            
+            # Call the fetch callback (it handles its own event loop)
+            episodes = self._fetch_callback(
+                self.selected_podcasts,
+                self.configuration['lookback_days'],
+                progress_callback
+            )
+            
+            # Store episodes
+            self.episode_cache = episodes
+            self.state = "episode_selection"
+            self.loading_status = {
+                'status': 'ready',
+                'episode_count': len(episodes)
+            }
+            
+            logger.info(f"✅ Background fetch complete: {len(episodes)} episodes")
+            
+        except Exception as e:
+            logger.error(f"Error fetching episodes: {e}", exc_info=True)
+            self.state = "error"
+            self.loading_status = {
+                'status': 'error',
+                'error': str(e)
+            }
     
     def _find_available_port(self, start_port: int = 8888) -> int:
         """Find an available port"""
@@ -379,18 +266,507 @@ class EpisodeSelector:
                 continue
         return start_port
     
-    def _create_complete_html(self) -> str:
-        """Create completion page HTML"""
-        return """<!DOCTYPE html>
-<html><head><title>Complete</title></head>
-<body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-<div style="text-align: center;">
-<h2>✅ Selection Complete</h2>
-<p>Processing your episodes...</p>
-<p style="color: #666;">This window will close automatically.</p>
-<script>setTimeout(() => window.close(), 2000);</script>
-</div>
-</body></html>"""
+    def _generate_html(self) -> str:
+        """Generate single-page HTML that handles all states"""
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renaissance Weekly</title>
+    <style>{self._get_css()}</style>
+</head>
+<body>
+    <div id="app"></div>
+    
+    <script>
+        const APP_STATE = {{
+            state: '{self.state}',
+            selectedPodcasts: new Set(),
+            selectedEpisodes: new Set(),
+            configuration: {{
+                lookback_days: {self.configuration.get('lookback_days', 7)},
+                transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
+            }},
+            episodes: [],
+            statusInterval: null
+        }};
+        
+        // Render functions for each state
+        function renderPodcastSelection() {{
+            const podcasts = {json.dumps([{
+                'name': p['name'],
+                'description': p.get('description', ''),
+                'has_apple': bool(p.get('apple_id')),
+                'has_rss': bool(p.get('rss_feeds'))
+            } for p in PODCAST_CONFIGS])};
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Choose podcasts to monitor</div>
+                </div>
+                
+                <div class="container">
+                    <div class="stage-indicator">
+                        <div class="stage-wrapper">
+                            <div class="stage-dot active"></div>
+                            <div class="stage-label active">Podcasts</div>
+                        </div>
+                        <div class="stage-connector"></div>
+                        <div class="stage-wrapper">
+                            <div class="stage-dot"></div>
+                            <div class="stage-label">Episodes</div>
+                        </div>
+                        <div class="stage-connector"></div>
+                        <div class="stage-wrapper">
+                            <div class="stage-dot"></div>
+                            <div class="stage-label">Process</div>
+                        </div>
+                    </div>
+                    
+                    <div class="config-section">
+                        <div class="config-row">
+                            <div class="config-group">
+                                <div class="config-label">Lookback period</div>
+                                <div class="radio-group">
+                                    <div class="radio-option">
+                                        <input type="radio" name="lookback" id="week" value="7" ${{APP_STATE.configuration.lookback_days === 7 ? 'checked' : ''}}>
+                                        <label for="week">1 Week</label>
+                                    </div>
+                                    <div class="radio-option">
+                                        <input type="radio" name="lookback" id="twoweek" value="14" ${{APP_STATE.configuration.lookback_days === 14 ? 'checked' : ''}}>
+                                        <label for="twoweek">2 Weeks</label>
+                                    </div>
+                                    <div class="radio-option">
+                                        <input type="radio" name="lookback" id="month" value="30" ${{APP_STATE.configuration.lookback_days === 30 ? 'checked' : ''}}>
+                                        <label for="month">1 Month</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="config-group">
+                                <div class="config-label">Transcription mode</div>
+                                <div class="radio-group">
+                                    <div class="radio-option">
+                                        <input type="radio" name="transcription" id="test" value="test" ${{APP_STATE.configuration.transcription_mode === 'test' ? 'checked' : ''}}>
+                                        <label for="test">Test</label>
+                                    </div>
+                                    <div class="radio-option">
+                                        <input type="radio" name="transcription" id="full" value="full" ${{APP_STATE.configuration.transcription_mode === 'full' ? 'checked' : ''}}>
+                                        <label for="full">Full</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="content-grid">
+                        ${{podcasts.map(p => `
+                            <div class="card ${{APP_STATE.selectedPodcasts.has(p.name) ? 'selected' : ''}}" onclick="togglePodcast('${{p.name}}')">
+                                <div class="card-checkbox"></div>
+                                <div class="card-title">${{p.name}}</div>
+                                <div class="card-description">${{p.description || 'Podcast: ' + p.name}}</div>
+                                <div class="card-meta">${{[p.has_apple ? 'Apple' : '', p.has_rss ? 'RSS' : ''].filter(Boolean).join(' · ')}}</div>
+                            </div>
+                        `).join('')}}
+                    </div>
+                    
+                    <div class="action-bar">
+                        <div class="button-group">
+                            <button class="button button-text" onclick="selectAllPodcasts()">All</button>
+                            <button class="button button-text" onclick="selectNonePodcasts()">None</button>
+                        </div>
+                        <div class="selection-info">
+                            <span class="selection-count">${{APP_STATE.selectedPodcasts.size}}</span> selected
+                        </div>
+                        <button class="button button-primary" onclick="submitPodcasts()" ${{APP_STATE.selectedPodcasts.size === 0 ? 'disabled' : ''}}>
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderLoading() {{
+            const podcasts = Array.from(APP_STATE.selectedPodcasts);
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Please wait</div>
+                </div>
+                
+                <div class="container">
+                    <div class="loading-content" style="margin: 100px auto;">
+                        <div class="loading-spinner"></div>
+                        <h2 class="loading-title">Fetching episodes</h2>
+                        <p class="loading-status" id="status">Connecting to feeds...</p>
+                        
+                        <div class="progress-track">
+                            <div class="progress-fill" id="progress"></div>
+                        </div>
+                        
+                        <div class="podcast-progress-list">
+                            ${{podcasts.map((p, i) => `
+                                <div class="progress-item" id="podcast-${{i}}">
+                                    <div class="progress-dot"></div>
+                                    <span>${{p}}</span>
+                                </div>
+                            `).join('')}}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderEpisodeSelection() {{
+            if (!APP_STATE.episodes || APP_STATE.episodes.length === 0) {{
+                return `
+                    <div class="header">
+                        <div class="logo">RW</div>
+                        <div class="header-text">Loading episodes...</div>
+                    </div>
+                    
+                    <div class="container">
+                        <div class="loading-content" style="margin: 100px auto;">
+                            <div class="loading-spinner"></div>
+                            <p>Loading episode data...</p>
+                        </div>
+                    </div>
+                `;
+            }}
+            
+            // Group episodes by podcast
+            const episodesByPodcast = {{}};
+            APP_STATE.episodes.forEach((ep, idx) => {{
+                if (!episodesByPodcast[ep.podcast]) {{
+                    episodesByPodcast[ep.podcast] = [];
+                }}
+                episodesByPodcast[ep.podcast].push({{...ep, index: idx}});
+            }});
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Choose episodes to process</div>
+                </div>
+                
+                <div class="container">
+                    <div class="stage-indicator">
+                        <div class="stage-wrapper">
+                            <div class="stage-dot" style="background: var(--black);"></div>
+                            <div class="stage-label" style="color: var(--gray-600);">Podcasts</div>
+                        </div>
+                        <div class="stage-connector"></div>
+                        <div class="stage-wrapper">
+                            <div class="stage-dot active"></div>
+                            <div class="stage-label active">Episodes</div>
+                        </div>
+                        <div class="stage-connector"></div>
+                        <div class="stage-wrapper">
+                            <div class="stage-dot"></div>
+                            <div class="stage-label">Process</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-bar">
+                        <div class="stat">
+                            <div class="stat-value">${{APP_STATE.configuration.lookback_days}}</div>
+                            <div class="stat-label">Days</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${{Object.keys(episodesByPodcast).length}}</div>
+                            <div class="stat-label">Podcasts</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${{APP_STATE.episodes.length}}</div>
+                            <div class="stat-label">Episodes</div>
+                        </div>
+                    </div>
+                    
+                    ${{APP_STATE.configuration.transcription_mode === 'test' ? `
+                        <div class="notice">
+                            Test mode: Transcriptions limited to 10 minutes
+                        </div>
+                    ` : ''}}
+                    
+                    <div id="content">
+                        ${{Object.entries(episodesByPodcast).map(([podcast, episodes]) => `
+                            <div class="episode-section">
+                                <div class="episode-header">
+                                    <h3 class="episode-podcast-name">${{podcast}}</h3>
+                                    <div class="episode-count">${{episodes.length}} episode${{episodes.length !== 1 ? 's' : ''}}</div>
+                                </div>
+                                <div class="episodes-list">
+                                    ${{episodes.map(ep => `
+                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.index) ? 'selected' : ''}}" id="episode-${{ep.index}}" onclick="toggleEpisode(${{ep.index}})">
+                                            <div class="episode-checkbox"></div>
+                                            <div class="episode-content">
+                                                <div class="episode-title">${{ep.title}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
+                                                <div class="episode-meta">${{formatDate(ep.published)}} · ${{ep.duration}}</div>
+                                                <div class="episode-description">${{(ep.description || '').substring(0, 150)}}...</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}}
+                                </div>
+                            </div>
+                        `).join('')}}
+                    </div>
+                    
+                    <div class="action-bar">
+                        <div class="button-group">
+                            <button class="button button-text" onclick="selectAllEpisodes()">All</button>
+                            <button class="button button-text" onclick="selectNoneEpisodes()">None</button>
+                        </div>
+                        <div class="selection-info">
+                            <span class="selection-count">${{APP_STATE.selectedEpisodes.size}}</span> selected
+                        </div>
+                        <button class="button button-primary" onclick="submitEpisodes()" ${{APP_STATE.selectedEpisodes.size === 0 ? 'disabled' : ''}}>
+                            Process
+                        </button>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderComplete() {{
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Selection Complete</div>
+                </div>
+                
+                <div class="container">
+                    <div class="loading-content" style="margin: 100px auto;">
+                        <div style="font-size: 60px; color: #28a745; margin-bottom: 20px;">✓</div>
+                        <h2>Processing ${{APP_STATE.selectedEpisodes.size}} episodes...</h2>
+                        <p style="margin-top: 20px; color: #666;">This window will close automatically.</p>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        // Helper functions
+        function formatDate(dateStr) {{
+            const date = new Date(dateStr);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months[date.getMonth()] + ' ' + date.getDate();
+        }}
+        
+        function togglePodcast(name) {{
+            const card = event.currentTarget;
+            if (APP_STATE.selectedPodcasts.has(name)) {{
+                APP_STATE.selectedPodcasts.delete(name);
+                card.classList.remove('selected');
+            }} else {{
+                APP_STATE.selectedPodcasts.add(name);
+                card.classList.add('selected');
+            }}
+            updatePodcastCount();
+        }}
+        
+        function selectAllPodcasts() {{
+            document.querySelectorAll('.card').forEach(card => {{
+                const name = card.querySelector('.card-title').textContent;
+                APP_STATE.selectedPodcasts.add(name);
+                card.classList.add('selected');
+            }});
+            updatePodcastCount();
+        }}
+        
+        function selectNonePodcasts() {{
+            APP_STATE.selectedPodcasts.clear();
+            document.querySelectorAll('.card').forEach(card => {{
+                card.classList.remove('selected');
+            }});
+            updatePodcastCount();
+        }}
+        
+        function updatePodcastCount() {{
+            document.querySelector('.selection-count').textContent = APP_STATE.selectedPodcasts.size;
+            document.querySelector('.button-primary').disabled = APP_STATE.selectedPodcasts.size === 0;
+        }}
+        
+        function toggleEpisode(index) {{
+            const episode = document.getElementById('episode-' + index);
+            if (APP_STATE.selectedEpisodes.has(index)) {{
+                APP_STATE.selectedEpisodes.delete(index);
+                episode.classList.remove('selected');
+            }} else {{
+                APP_STATE.selectedEpisodes.add(index);
+                episode.classList.add('selected');
+            }}
+            updateEpisodeCount();
+        }}
+        
+        function selectAllEpisodes() {{
+            document.querySelectorAll('.episode-item').forEach(episode => {{
+                const index = parseInt(episode.id.split('-')[1]);
+                APP_STATE.selectedEpisodes.add(index);
+                episode.classList.add('selected');
+            }});
+            updateEpisodeCount();
+        }}
+        
+        function selectNoneEpisodes() {{
+            APP_STATE.selectedEpisodes.clear();
+            document.querySelectorAll('.episode-item').forEach(episode => {{
+                episode.classList.remove('selected');
+            }});
+            updateEpisodeCount();
+        }}
+        
+        function updateEpisodeCount() {{
+            document.querySelector('.selection-count').textContent = APP_STATE.selectedEpisodes.size;
+            document.querySelector('.button-primary').disabled = APP_STATE.selectedEpisodes.size === 0;
+        }}
+        
+        // API functions
+        async function submitPodcasts() {{
+            APP_STATE.configuration.lookback_days = parseInt(document.querySelector('input[name="lookback"]:checked').value);
+            APP_STATE.configuration.transcription_mode = document.querySelector('input[name="transcription"]:checked').value;
+            
+            const response = await fetch('/api/select-podcasts', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{
+                    selected_podcasts: Array.from(APP_STATE.selectedPodcasts),
+                    lookback_days: APP_STATE.configuration.lookback_days,
+                    transcription_mode: APP_STATE.configuration.transcription_mode
+                }})
+            }});
+            
+            if (response.ok) {{
+                APP_STATE.state = 'loading';
+                render();
+                startStatusPolling();
+            }}
+        }}
+        
+        async function submitEpisodes() {{
+            console.log('Submitting episodes:', Array.from(APP_STATE.selectedEpisodes));
+            
+            try {{
+                const response = await fetch('/api/select-episodes', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        selected_episodes: Array.from(APP_STATE.selectedEpisodes)
+                    }})
+                }});
+                
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok && data.status === 'success') {{
+                    APP_STATE.state = 'complete';
+                    render();
+                    setTimeout(() => window.close(), 3000);
+                }} else {{
+                    alert('Failed to submit episodes');
+                }}
+            }} catch (error) {{
+                console.error('Submit error:', error);
+                alert('Error submitting episodes: ' + error.message);
+            }}
+        }}
+        
+        function startStatusPolling() {{
+            APP_STATE.statusInterval = setInterval(async () => {{
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                if (status.status === 'loading') {{
+                    const progress = Math.max(5, ((status.progress + 1) / status.total) * 100);
+                    document.getElementById('progress').style.width = progress + '%';
+                    
+                    if (status.current_podcast) {{
+                        document.getElementById('status').textContent = `Fetching from ${{status.current_podcast}}...`;
+                        
+                        // Update podcast items
+                        const items = document.querySelectorAll('.progress-item');
+                        items.forEach((item, idx) => {{
+                            if (idx < status.progress) {{
+                                item.classList.remove('active');
+                                item.classList.add('complete');
+                            }} else if (idx === status.progress) {{
+                                item.classList.add('active');
+                                item.classList.remove('complete');
+                            }} else {{
+                                item.classList.remove('active', 'complete');
+                            }}
+                        }});
+                    }}
+                }} else if (status.status === 'ready') {{
+                    clearInterval(APP_STATE.statusInterval);
+                    
+                    // Update all progress items to complete
+                    document.querySelectorAll('.progress-item').forEach(item => {{
+                        item.classList.remove('active');
+                        item.classList.add('complete');
+                    }});
+                    
+                    document.getElementById('progress').style.width = '100%';
+                    document.getElementById('status').textContent = `Found ${{status.episode_count}} episodes`;
+                    document.querySelector('.loading-title').textContent = 'Loading episodes...';
+                    
+                    // Wait a moment then check for episode data
+                    setTimeout(async () => {{
+                        const stateResponse = await fetch('/api/state');
+                        const stateData = await stateResponse.json();
+                        if (stateData.state === 'episode_selection' && stateData.episodes) {{
+                            APP_STATE.state = 'episode_selection';
+                            APP_STATE.episodes = stateData.episodes;
+                            render();
+                        }}
+                    }}, 1000);
+                }}
+            }}, 1000);
+        }}
+        
+        // Main render function
+        function render() {{
+            const app = document.getElementById('app');
+            
+            switch (APP_STATE.state) {{
+                case 'podcast_selection':
+                    app.innerHTML = renderPodcastSelection();
+                    break;
+                case 'loading':
+                    app.innerHTML = renderLoading();
+                    break;
+                case 'episode_selection':
+                    app.innerHTML = renderEpisodeSelection();
+                    break;
+                case 'complete':
+                    app.innerHTML = renderComplete();
+                    break;
+            }}
+        }}
+        
+        // Initial render
+        render();
+        
+        // Start checking for state updates after a brief delay
+        setTimeout(() => {{
+            setInterval(async () => {{
+                if (APP_STATE.state !== 'loading' && APP_STATE.state !== 'complete') {{
+                    const response = await fetch('/api/state');
+                    const data = await response.json();
+                    if (data.state !== APP_STATE.state || (data.episodes && data.episodes.length > 0 && APP_STATE.episodes.length === 0)) {{
+                        APP_STATE.state = data.state;
+                        if (data.episodes) {{
+                            APP_STATE.episodes = data.episodes;
+                        }}
+                        render();
+                    }}
+                }}
+            }}, 1000);
+        }}, 500);
+    </script>
+</body>
+</html>'''
     
     def _get_css(self) -> str:
         """Get minimalist CSS styles"""
@@ -831,20 +1207,6 @@ class EpisodeSelector:
             cursor: not-allowed;
         }
         
-        .loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: var(--white);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        
         .loading-content {
             text-align: center;
             max-width: 480px;
@@ -936,10 +1298,6 @@ class EpisodeSelector:
             50% { transform: scale(1.5); opacity: 0.5; }
         }
         
-        .hidden {
-            display: none;
-        }
-        
         @media (max-width: 768px) {
             .container {
                 padding: 32px 24px 120px;
@@ -969,560 +1327,18 @@ class EpisodeSelector:
         }
         """
     
-    def _create_podcast_selection_html(self, current_days_back: int, session_id: str) -> str:
-        """Create HTML for Stage 1: Podcast Selection"""
-        podcasts_html = ""
-        for config in PODCAST_CONFIGS:
-            name = escape(config['name'])
-            desc = escape(config.get('description', f"Podcast: {config['name']}"))
-            has_apple = 'Apple' if config.get('apple_id') else ''
-            has_rss = 'RSS' if config.get('rss_feeds', []) else ''
-            meta = ' · '.join(filter(None, [has_apple, has_rss]))
-            
-            podcasts_html += f'''
-                <div class="card" onclick="toggleCard(this, '{name}')">
-                    <div class="card-checkbox"></div>
-                    <div class="card-title">{name}</div>
-                    <div class="card-description">{desc}</div>
-                    <div class="card-meta">{meta}</div>
-                </div>'''
-        
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Podcasts - Renaissance Weekly</title>
-    <style>{self._get_css()}</style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">RW</div>
-        <div class="header-text">Choose podcasts to monitor</div>
-    </div>
+    # Backward compatibility methods
+    def run_podcast_selection(self, days_back: int = 7) -> Tuple[List[str], Dict]:
+        """Backward compatibility - now handled in single flow"""
+        # Return empty results as this is now part of the unified flow
+        return [], {'lookback_days': days_back, 'transcription_mode': 'test' if TESTING_MODE else 'full'}
     
-    <div class="container">
-        <div class="stage-indicator">
-            <div class="stage-wrapper">
-                <div class="stage-dot active"></div>
-                <div class="stage-label active">Podcasts</div>
-            </div>
-            <div class="stage-connector"></div>
-            <div class="stage-wrapper">
-                <div class="stage-dot"></div>
-                <div class="stage-label">Episodes</div>
-            </div>
-            <div class="stage-connector"></div>
-            <div class="stage-wrapper">
-                <div class="stage-dot"></div>
-                <div class="stage-label">Process</div>
-            </div>
-        </div>
-        
-        <div class="config-section">
-            <div class="config-row">
-                <div class="config-group">
-                    <div class="config-label">Lookback period</div>
-                    <div class="radio-group">
-                        <div class="radio-option">
-                            <input type="radio" name="lookback" id="week" value="7" {'checked' if current_days_back == 7 else ''}>
-                            <label for="week">1 Week</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" name="lookback" id="twoweek" value="14" {'checked' if current_days_back == 14 else ''}>
-                            <label for="twoweek">2 Weeks</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" name="lookback" id="month" value="30" {'checked' if current_days_back == 30 else ''}>
-                            <label for="month">1 Month</label>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="config-group">
-                    <div class="config-label">Transcription mode</div>
-                    <div class="radio-group">
-                        <div class="radio-option">
-                            <input type="radio" name="transcription" id="test" value="test" {'checked' if TESTING_MODE else ''}>
-                            <label for="test">Test</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" name="transcription" id="full" value="full" {'checked' if not TESTING_MODE else ''}>
-                            <label for="full">Full</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="content-grid">{podcasts_html}</div>
-        
-        <div class="action-bar">
-            <div class="button-group">
-                <button class="button button-text" onclick="selectAll()">All</button>
-                <button class="button button-text" onclick="selectNone()">None</button>
-            </div>
-            <div class="selection-info">
-                <span class="selection-count">0</span> selected
-            </div>
-            <button class="button button-primary" onclick="submitSelection()" disabled>
-                Continue
-            </button>
-        </div>
-    </div>
-    
-    <div class="loading-screen hidden" id="loadingScreen">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-title">Preparing</div>
-            <div class="loading-status">Setting up your selection...</div>
-        </div>
-    </div>
-    
-    <script>
-        const sessionId = '{session_id}';
-        const selectedPodcasts = new Set();
-        
-        function toggleCard(card, name) {{
-            if (selectedPodcasts.has(name)) {{
-                selectedPodcasts.delete(name);
-                card.classList.remove('selected');
-            }} else {{
-                selectedPodcasts.add(name);
-                card.classList.add('selected');
-            }}
-            updateSelection();
-        }}
-        
-        function selectAll() {{
-            document.querySelectorAll('.card').forEach(card => {{
-                const name = card.querySelector('.card-title').textContent;
-                selectedPodcasts.add(name);
-                card.classList.add('selected');
-            }});
-            updateSelection();
-        }}
-        
-        function selectNone() {{
-            selectedPodcasts.clear();
-            document.querySelectorAll('.card').forEach(card => {{
-                card.classList.remove('selected');
-            }});
-            updateSelection();
-        }}
-        
-        function updateSelection() {{
-            const count = selectedPodcasts.size;
-            document.querySelector('.selection-count').textContent = count;
-            document.querySelector('.button-primary').disabled = count === 0;
-        }}
-        
-        function submitSelection() {{
-            if (selectedPodcasts.size === 0) return;
-            
-            document.getElementById('loadingScreen').classList.remove('hidden');
-            
-            fetch('/select', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{
-                    selected_podcasts: Array.from(selectedPodcasts),
-                    lookback_days: parseInt(document.querySelector('input[name="lookback"]:checked').value),
-                    transcription_mode: document.querySelector('input[name="transcription"]:checked').value
-                }})
-            }})
-            .then(response => response.json())
-            .then(data => {{
-                if (data.status === 'success') {{
-                    // Keep showing loading screen - Python will handle the transition
-                    document.getElementById('loadingScreen').querySelector('.loading-status').textContent = 'Selection saved. Starting episode fetch...';
-                    
-                    // The Python server will close and the next stage will begin
-                    // No need to reload or redirect from here
-                }}
-            }})
-            .catch(error => {{
-                document.getElementById('loadingScreen').classList.add('hidden');
-                console.error('Error:', error);
-                alert('Error submitting selection. Please try again.');
-            }});
-        }}
-    </script>
-</body>
-</html>"""
-    
-    def _create_loading_html(self, session_id: str, selected_podcasts: List[str], configuration: Dict) -> str:
-        """Create loading screen HTML"""
-        podcast_items = ''.join(f'''
-            <div class="progress-item" id="podcast-{i}">
-                <div class="progress-dot"></div>
-                <span>{escape(p)}</span>
-            </div>''' for i, p in enumerate(selected_podcasts))
-        
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading - Renaissance Weekly</title>
-    <style>{self._get_css()}</style>
-    <style>.loading-screen {{ position: static; }} .container {{ display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 200px); }}</style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">RW</div>
-        <div class="header-text">Please wait</div>
-    </div>
-    
-    <div class="container">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <h2 class="loading-title">Fetching episodes</h2>
-            <p class="loading-status" id="status">Connecting to feeds...</p>
-            
-            <div class="progress-track">
-                <div class="progress-fill" id="progress"></div>
-            </div>
-            
-            <div class="podcast-progress-list">
-                {podcast_items}
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        const sessionId = '{session_id}';
-        let checkInterval;
-        
-        function updateStatus() {{
-            fetch(`/status/${{sessionId}}`)
-                .then(response => response.json())
-                .then(data => {{
-                    if (data.status === 'loading') {{
-                        const progress = Math.max(5, ((data.progress + 1) / data.total) * 100);
-                        document.getElementById('progress').style.width = progress + '%';
-                        
-                        if (data.current_podcast) {{
-                            document.getElementById('status').textContent = `Fetching from ${{data.current_podcast}}...`;
-                            
-                            const allPodcasts = document.querySelectorAll('.progress-item');
-                            allPodcasts.forEach((item, idx) => {{
-                                const podcastName = item.querySelector('span').textContent;
-                                
-                                if (podcastName === data.current_podcast) {{
-                                    item.classList.remove('complete');
-                                    item.classList.add('active');
-                                }} else if (item.classList.contains('active')) {{
-                                    item.classList.remove('active');
-                                    item.classList.add('complete');
-                                }}
-                            }});
-                        }}
-                    }} else if (data.status === 'ready') {{
-                        clearInterval(checkInterval);
-                        
-                        document.querySelectorAll('.progress-item').forEach(item => {{
-                            item.classList.remove('active');
-                            item.classList.add('complete');
-                        }});
-                        
-                        document.getElementById('progress').style.width = '100%';
-                        
-                        const statusEl = document.getElementById('status');
-                        const titleEl = document.querySelector('.loading-title');
-                        
-                        titleEl.textContent = 'Complete';
-                        statusEl.textContent = `Found ${{data.episode_count}} episodes`;
-                        
-                        document.querySelector('.loading-spinner').style.display = 'none';
-                        
-                        setTimeout(() => {{
-                            window.location.href = '/episodes/' + sessionId;
-                        }}, 1500);
-                    }} else if (data.status === 'error') {{
-                        clearInterval(checkInterval);
-                        
-                        const statusEl = document.getElementById('status');
-                        const titleEl = document.querySelector('.loading-title');
-                        
-                        titleEl.textContent = 'Error';
-                        statusEl.textContent = data.error || 'Failed to fetch episodes';
-                        statusEl.style.color = '#DC2626';
-                        
-                        document.querySelector('.loading-spinner').style.display = 'none';
-                    }}
-                }})
-                .catch(error => console.error('Status check error:', error));
-        }}
-        
-        checkInterval = setInterval(updateStatus, 1000);
-        updateStatus();
-    </script>
-</body>
-</html>"""
-    
-    def _create_episode_selection_html(self, episodes: List[Episode], selected_podcasts: List[str], 
-                                      configuration: Dict) -> str:
-        """Create HTML for Stage 2: Episode Selection"""
-        episodes_by_podcast = defaultdict(list)
-        for i, ep in enumerate(episodes):
-            podcast_name = ep.podcast if isinstance(ep, Episode) else ep.get('podcast', 'Unknown')
-            episodes_by_podcast[podcast_name].append((i, ep))
-        
-        total_episodes = len(episodes)
-        total_podcasts = len(episodes_by_podcast)
-        transcription_mode = configuration.get('transcription_mode', 'test')
-        
-        stats_html = f'''
-            <div class="stats-bar">
-                <div class="stat">
-                    <div class="stat-value">{configuration.get('lookback_days', 7)}</div>
-                    <div class="stat-label">Days</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{total_podcasts}</div>
-                    <div class="stat-label">Podcasts</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{total_episodes}</div>
-                    <div class="stat-label">Episodes</div>
-                </div>
-            </div>'''
-        
-        if transcription_mode == 'test':
-            stats_html += '''
-                <div class="notice">
-                    Test mode: Transcriptions limited to 10 minutes
-                </div>'''
-        
-        episodes_html = ""
-        for podcast_name in sorted(episodes_by_podcast.keys()):
-            podcast_episodes = episodes_by_podcast[podcast_name]
-            
-            episodes_list = ""
-            for idx, ep in podcast_episodes:
-                if isinstance(ep, Episode):
-                    title = escape(ep.title)
-                    published = ep.published.strftime('%b %d')
-                    duration = ep.duration
-                    has_transcript = ep.transcript_url is not None
-                    description = escape(ep.description[:150] + '...' if ep.description else '')
-                else:
-                    title = escape(ep.get('title', 'Unknown'))
-                    published = str(ep.get('published', 'Unknown'))[:10]
-                    duration = ep.get('duration', 'Unknown')
-                    has_transcript = ep.get('transcript_url') is not None
-                    description = escape(str(ep.get('description', ''))[:150] + '...')
-                
-                transcript_indicator = '<span class="transcript-indicator"></span>' if has_transcript else ''
-                
-                episodes_list += f'''
-                    <div class="episode-item" id="episode-{idx}" onclick="toggleEpisode({idx})">
-                        <div class="episode-checkbox"></div>
-                        <div class="episode-content">
-                            <div class="episode-title">{title}{transcript_indicator}</div>
-                            <div class="episode-meta">{published} · {duration}</div>
-                            <div class="episode-description">{description}</div>
-                        </div>
-                    </div>'''
-            
-            episodes_html += f'''
-                <div class="episode-section">
-                    <div class="episode-header">
-                        <h3 class="episode-podcast-name">{escape(podcast_name)}</h3>
-                        <div class="episode-count">{len(podcast_episodes)} episode{'s' if len(podcast_episodes) != 1 else ''}</div>
-                    </div>
-                    <div class="episodes-list">
-                        {episodes_list}
-                    </div>
-                </div>'''
-        
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Episodes - Renaissance Weekly</title>
-    <style>{self._get_css()}</style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">RW</div>
-        <div class="header-text">Choose episodes to process</div>
-    </div>
-    
-    <div class="container">
-        <div class="stage-indicator">
-            <div class="stage-wrapper">
-                <div class="stage-dot" style="background: var(--black);"></div>
-                <div class="stage-label" style="color: var(--gray-600);">Podcasts</div>
-            </div>
-            <div class="stage-connector"></div>
-            <div class="stage-wrapper">
-                <div class="stage-dot active"></div>
-                <div class="stage-label active">Episodes</div>
-            </div>
-            <div class="stage-connector"></div>
-            <div class="stage-wrapper">
-                <div class="stage-dot"></div>
-                <div class="stage-label">Process</div>
-            </div>
-        </div>
-        
-        {stats_html}
-        
-        <div id="content">
-            {episodes_html}
-        </div>
-        
-        <div class="action-bar">
-            <div class="button-group">
-                <button class="button button-text" onclick="selectAll()">All</button>
-                <button class="button button-text" onclick="selectNone()">None</button>
-            </div>
-            <div class="selection-info">
-                <span class="selection-count">0</span> selected
-            </div>
-            <button class="button button-primary" onclick="submitSelection()" disabled>
-                Process
-            </button>
-        </div>
-    </div>
-    
-    <div class="loading-screen hidden" id="loadingScreen">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-title">Processing</div>
-            <div class="loading-status">Preparing your selection...</div>
-        </div>
-    </div>
-    
-    <script>
-        const selectedEpisodes = new Set();
-        
-        function toggleEpisode(index) {{
-            const episode = document.getElementById('episode-' + index);
-            if (selectedEpisodes.has(index)) {{
-                selectedEpisodes.delete(index);
-                episode.classList.remove('selected');
-            }} else {{
-                selectedEpisodes.add(index);
-                episode.classList.add('selected');
-            }}
-            updateSelection();
-        }}
-        
-        function selectAll() {{
-            document.querySelectorAll('.episode-item').forEach(episode => {{
-                const index = parseInt(episode.id.split('-')[1]);
-                selectedEpisodes.add(index);
-                episode.classList.add('selected');
-            }});
-            updateSelection();
-        }}
-        
-        function selectNone() {{
-            selectedEpisodes.clear();
-            document.querySelectorAll('.episode-item').forEach(episode => {{
-                episode.classList.remove('selected');
-            }});
-            updateSelection();
-        }}
-        
-        function updateSelection() {{
-            const count = selectedEpisodes.size;
-            document.querySelector('.selection-count').textContent = count;
-            document.querySelector('.button-primary').disabled = count === 0;
-        }}
-        
-        function submitSelection() {{
-            if (selectedEpisodes.size === 0) return;
-            
-            console.log('Submitting', selectedEpisodes.size, 'episodes');
-            document.getElementById('loadingScreen').classList.remove('hidden');
-            
-            const data = {{selected_episodes: Array.from(selectedEpisodes)}};
-            console.log('Sending data:', data);
-            
-            fetch('/select', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify(data)
-            }})
-            .then(response => {{
-                console.log('Response status:', response.status);
-                if (!response.ok) {{
-                    throw new Error(`Server error: ${{response.status}}`);
-                }}
-                return response.json();
-            }})
-            .then(data => {{
-                console.log('Response:', data);
-                if (data.status === 'success') {{
-                    // Update loading screen with success message
-                    document.querySelector('.loading-title').textContent = 'Processing Episodes';
-                    document.querySelector('.loading-status').textContent = `Starting processing of ${{data.selected_count}} episodes...`;
-                    
-                    // Keep showing the loading screen - the server will close when ready
-                    console.log('Selection successful, waiting for server to process...');
-                }}
-            }})
-            .catch(error => {{
-                console.error('Error:', error);
-                document.getElementById('loadingScreen').classList.add('hidden');
-                alert('Failed to submit selection: ' + error.message);
-            }});
-        }}
-    </script>
-</body>
-</html>"""
-    
-    def run_selection_server(self, episodes: List[Episode]) -> List[Episode]:
-        """Legacy single-stage selection for backward compatibility"""
-        # Convert to two-stage approach
-        all_podcasts = list(set(ep.podcast for ep in episodes))
-        
-        # Simulate first stage - select all podcasts
-        configuration = {
-            'lookback_days': 7,
-            'transcription_mode': 'test' if TESTING_MODE else 'full',
-            'session_id': str(uuid.uuid4())
-        }
-        
-        # Skip directly to episode selection
-        self.episode_cache[configuration['session_id']] = episodes
-        
-        # Reset selection state
-        self._selection_result = None
-        self._selection_event.clear()
-        
-        # Create server
-        server = self._create_loading_server(configuration['session_id'], all_podcasts, configuration)
-        
-        # Open browser directly to episodes page
-        url = f'http://localhost:{self.server_port}/episodes/{configuration["session_id"]}'
-        logger.info(f"🌐 Opening episode selection at {url}")
-        
-        try:
-            webbrowser.open(url)
-        except:
-            logger.warning(f"Please open: {url}")
-        
-        logger.info("⏳ Waiting for episode selection...")
-        
-        # Run server until selection
-        server_thread = threading.Thread(target=self._run_loading_server, args=(server,))
-        server_thread.daemon = True
-        server_thread.start()
-        
-        # Wait for selection
-        if self._selection_event.wait(timeout=300):
-            selected_episodes = self._selection_result or []
-        else:
-            selected_episodes = []
-        
-        # Cleanup
-        self._shutdown_server(server)
-        self._cleanup_session(configuration['session_id'])
-        
-        return selected_episodes
+    def show_loading_screen_and_fetch(self, selected_podcasts: List[str], configuration: Dict, 
+                                     fetch_episodes_callback: Callable) -> List[Episode]:
+        """Backward compatibility - now handled in single flow"""
+        # If this is called, just run the complete selection
+        episodes, _ = self.run_complete_selection(
+            configuration.get('lookback_days', 7),
+            fetch_episodes_callback
+        )
+        return episodes

@@ -44,7 +44,7 @@ class RenaissanceWeekly:
             raise
     
     async def run(self, days_back: int = 7):
-        """Main execution function with improved error handling"""
+        """Main execution function with simplified flow"""
         logger.info("🚀 Starting Renaissance Weekly System...")
         logger.info(f"📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
         
@@ -52,22 +52,7 @@ class RenaissanceWeekly:
             logger.info(f"🧪 TESTING MODE: Limited to {MAX_TRANSCRIPTION_MINUTES} min transcriptions")
         
         try:
-            # Stage 1: Select podcasts
-            logger.info("\n📻 STAGE 1: Podcast Selection")
-            selected_podcasts, configuration = self.selector.run_podcast_selection(days_back)
-            
-            if not selected_podcasts:
-                logger.warning("❌ No podcasts selected - exiting")
-                return
-            
-            logger.info(f"✅ Selected {len(selected_podcasts)} podcasts")
-            logger.info(f"📅 Looking back {configuration['lookback_days']} days")
-            logger.info(f"🔧 Transcription mode: {configuration['transcription_mode']}")
-            
-            # Small delay to ensure clean transition
-            await asyncio.sleep(1)
-            
-            # Create fetch callback for the loading screen
+            # Create fetch callback for the UI
             def fetch_episodes_callback(podcast_names: List[str], days: int, progress_callback: Callable):
                 """Callback to fetch episodes in a separate thread"""
                 # Create a new event loop for this thread
@@ -85,61 +70,45 @@ class RenaissanceWeekly:
                     loop.close()
                     asyncio.set_event_loop(None)
             
-            # Stage 2: Fetch and select episodes
-            logger.info("\n📺 STAGE 2: Episode Fetching & Selection")
-            selected_episodes = self.selector.show_loading_screen_and_fetch(
-                selected_podcasts, 
-                configuration, 
+            # Run complete selection in single page
+            logger.info("\n📺 STAGE 1: Episode Selection")
+            selected_episodes, configuration = self.selector.run_complete_selection(
+                days_back,
                 fetch_episodes_callback
             )
             
-            logger.info(f"📋 Received {len(selected_episodes) if selected_episodes else 0} episodes from selector")
-            
             if not selected_episodes:
-                logger.warning("❌ No episodes selected for processing - exiting")
+                logger.warning("❌ No episodes selected - exiting")
                 return
             
             logger.info(f"✅ Selected {len(selected_episodes)} episodes for processing")
+            logger.info(f"📅 Lookback period: {configuration['lookback_days']} days")
+            logger.info(f"🔧 Transcription mode: {configuration['transcription_mode']}")
             
-            # Validate episodes
-            logger.info(f"🔍 Validating {len(selected_episodes)} episodes...")
-            valid_episodes = self._validate_episodes(selected_episodes)
-            if not valid_episodes:
-                logger.error("❌ No valid episodes to process after validation")
-                return
-            
-            logger.info(f"✅ {len(valid_episodes)} episodes passed validation")
-            
-            # Small delay to ensure clean server shutdown
-            await asyncio.sleep(1.5)
-            
-            # Log first few episodes for debugging
+            # Log selected episodes
             logger.info("📋 Episodes to process:")
-            for i, ep in enumerate(valid_episodes[:3]):
+            for i, ep in enumerate(selected_episodes[:5]):
                 logger.info(f"  {i+1}. {ep.podcast}: {ep.title}")
-                logger.info(f"     Audio URL: {ep.audio_url[:80] if ep.audio_url else 'None'}...")
-            if len(valid_episodes) > 3:
-                logger.info(f"  ... and {len(valid_episodes) - 3} more")
+                if hasattr(ep, 'audio_url'):
+                    logger.info(f"     Audio: {'Yes' if ep.audio_url else 'No'}")
+            if len(selected_episodes) > 5:
+                logger.info(f"  ... and {len(selected_episodes) - 5} more")
             
-            # Stage 3: Process episodes
-            logger.info("\n🎯 STAGE 3: Processing Episodes")
-            logger.info(f"🚀 Starting to process {len(valid_episodes)} episodes...")
+            # Stage 2: Process episodes
+            logger.info("\n🎯 STAGE 2: Processing Episodes")
             logger.info("⏰ This may take several minutes depending on episode length...")
             
-            try:
-                summaries = await self._process_episodes(valid_episodes)
-            except Exception as e:
-                logger.error(f"❌ Error during episode processing: {e}", exc_info=True)
-                summaries = []
+            summaries = await self._process_episodes(selected_episodes)
             
             logger.info(f"\n📊 Processing Results:")
-            logger.info(f"   Episodes selected: {len(valid_episodes)}")
+            logger.info(f"   Episodes selected: {len(selected_episodes)}")
             logger.info(f"   Summaries generated: {len(summaries)}")
-            logger.info(f"   Success rate: {len(summaries)/len(valid_episodes)*100:.1f}%")
+            if selected_episodes:
+                logger.info(f"   Success rate: {len(summaries)/len(selected_episodes)*100:.1f}%")
             
-            # Stage 4: Send email digest
+            # Stage 3: Send email digest
             if summaries:
-                logger.info("\n📧 STAGE 4: Email Delivery")
+                logger.info("\n📧 STAGE 3: Email Delivery")
                 if self.email_digest.send_digest(summaries):
                     logger.info("✅ Renaissance Weekly digest sent successfully!")
                 else:
@@ -154,56 +123,13 @@ class RenaissanceWeekly:
         except Exception as e:
             logger.error(f"\n❌ Unexpected error in main run: {e}", exc_info=True)
     
-    def _validate_episodes(self, selected_episodes: List) -> List[Episode]:
-        """Validate and convert episodes to Episode objects"""
-        valid_episodes = []
-        
-        logger.info(f"🔍 Validating {len(selected_episodes)} episodes...")
-        
-        for i, ep in enumerate(selected_episodes):
-            try:
-                if isinstance(ep, Episode):
-                    valid_episodes.append(ep)
-                    logger.debug(f"  Episode {i+1}: Valid Episode object - {ep.title}")
-                elif isinstance(ep, dict):
-                    # Convert dict to Episode
-                    logger.debug(f"  Episode {i+1}: Converting dict to Episode")
-                    
-                    # Ensure published date is a datetime object
-                    published = ep.get('published')
-                    if isinstance(published, str):
-                        from dateutil import parser
-                        published = parser.parse(published)
-                    elif not isinstance(published, datetime):
-                        published = datetime.now()
-                    
-                    episode_obj = Episode(
-                        podcast=ep.get('podcast', 'Unknown'),
-                        title=ep.get('title', 'Unknown'),
-                        published=published,
-                        audio_url=ep.get('audio_url'),
-                        transcript_url=ep.get('transcript_url'),
-                        description=ep.get('description'),
-                        link=ep.get('link'),
-                        duration=ep.get('duration', 'Unknown'),
-                        guid=ep.get('guid')
-                    )
-                    valid_episodes.append(episode_obj)
-                    logger.debug(f"  Episode {i+1}: Converted to Episode - {episode_obj.title}")
-                else:
-                    logger.warning(f"  Episode {i+1}: Unknown type {type(ep)} - skipping")
-            except Exception as e:
-                logger.error(f"  Episode {i+1}: Validation error - {e}", exc_info=True)
-        
-        logger.info(f"✅ Validation complete: {len(valid_episodes)}/{len(selected_episodes)} episodes valid")
-        return valid_episodes
-    
     async def _fetch_selected_episodes(self, podcast_names: List[str], days_back: int, 
                                       progress_callback: Callable) -> List[Episode]:
         """Fetch episodes for selected podcasts with progress updates"""
         all_episodes = []
         
         logger.info(f"📡 Starting to fetch episodes from {len(podcast_names)} podcasts...")
+        logger.info(f"📅 Looking back {days_back} days")
         
         for i, podcast_name in enumerate(podcast_names):
             progress_callback(podcast_name, i, len(podcast_names))
@@ -248,11 +174,6 @@ class RenaissanceWeekly:
         logger.info(f"🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
         logger.info(f"⚙️  Max concurrent tasks: 3")
         
-        # Ensure we have episodes to process
-        if not selected_episodes:
-            logger.error("❌ No episodes provided to process")
-            return []
-        
         async def process_with_semaphore(episode: Episode, semaphore: asyncio.Semaphore, index: int):
             """Process single episode with semaphore for concurrency control"""
             async with semaphore:
@@ -269,7 +190,7 @@ class RenaissanceWeekly:
                         return None
                         
                 except Exception as e:
-                    logger.error(f"❌ [{index+1}/{len(selected_episodes)}] Failed: {episode.title[:50]}... - {e}")
+                    logger.error(f"❌ [{index+1}/{len(selected_episodes)}] Failed: {episode.title[:50]}... - {str(e)[:100]}")
                     return None
         
         # Limit concurrent processing to avoid overwhelming resources
