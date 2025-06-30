@@ -1,11 +1,15 @@
-"""Main application class for Renaissance Weekly - FIXED"""
+"""Main application class for Renaissance Weekly - FIXED with enhanced robustness"""
 
 import asyncio
 import json
 import threading
+import uuid
+import traceback
+import time
 from pathlib import Path
-from typing import List, Optional, Dict, Callable
+from typing import List, Optional, Dict, Callable, Any
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from .config import (
     TESTING_MODE, MAX_TRANSCRIPTION_MINUTES, EMAIL_TO, EMAIL_FROM,
@@ -20,15 +24,116 @@ from .processing.summarizer import Summarizer
 from .ui.selection import EpisodeSelector
 from .email.digest import EmailDigest
 from .utils.logging import get_logger
-from .utils.helpers import validate_env_vars
+from .utils.helpers import (
+    validate_env_vars, get_available_memory, get_cpu_count,
+    ProgressTracker, exponential_backoff_with_jitter
+)
 
 logger = get_logger(__name__)
+
+
+class ResourceAwareConcurrencyManager:
+    """Manage concurrency based on available system resources"""
+    
+    def __init__(self, correlation_id: str):
+        self.correlation_id = correlation_id
+        self.base_concurrency = 3
+        self.max_concurrency = 10
+        self.min_memory_per_task = 500  # MB
+        self.cpu_multiplier = 1.5
+        
+    def get_optimal_concurrency(self) -> int:
+        """Calculate optimal concurrency based on system resources"""
+        try:
+            # Get available resources
+            available_memory = get_available_memory()
+            cpu_count = get_cpu_count()
+            
+            # Calculate memory-based limit
+            memory_limit = int(available_memory / self.min_memory_per_task)
+            
+            # Calculate CPU-based limit
+            cpu_limit = int(cpu_count * self.cpu_multiplier)
+            
+            # Take the minimum of all limits
+            optimal = min(
+                max(self.base_concurrency, memory_limit),
+                cpu_limit,
+                self.max_concurrency
+            )
+            
+            logger.info(
+                f"[{self.correlation_id}] Resource-aware concurrency: {optimal} "
+                f"(Memory: {available_memory:.0f}MB allows {memory_limit}, "
+                f"CPU: {cpu_count} cores allows {cpu_limit})"
+            )
+            
+            return optimal
+            
+        except Exception as e:
+            logger.warning(f"[{self.correlation_id}] Could not determine optimal concurrency: {e}")
+            return self.base_concurrency
+
+
+class ExceptionAggregator:
+    """Aggregate exceptions from concurrent tasks"""
+    
+    def __init__(self, correlation_id: str):
+        self.correlation_id = correlation_id
+        self.exceptions = []
+        self._lock = asyncio.Lock()
+    
+    async def add_exception(self, task_name: str, exception: Exception):
+        """Add an exception with context"""
+        async with self._lock:
+            self.exceptions.append({
+                'task': task_name,
+                'exception': exception,
+                'traceback': traceback.format_exc(),
+                'timestamp': datetime.now()
+            })
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get exception summary"""
+        if not self.exceptions:
+            return {'has_errors': False}
+        
+        # Group by exception type
+        by_type = defaultdict(list)
+        for exc_data in self.exceptions:
+            exc_type = type(exc_data['exception']).__name__
+            by_type[exc_type].append(exc_data)
+        
+        return {
+            'has_errors': True,
+            'total_errors': len(self.exceptions),
+            'error_types': dict(by_type),
+            'first_error': self.exceptions[0] if self.exceptions else None,
+            'last_error': self.exceptions[-1] if self.exceptions else None
+        }
+    
+    def log_summary(self):
+        """Log exception summary"""
+        summary = self.get_summary()
+        if summary['has_errors']:
+            logger.error(f"[{self.correlation_id}] Exception Summary:")
+            logger.error(f"  Total errors: {summary['total_errors']}")
+            
+            for exc_type, errors in summary['error_types'].items():
+                logger.error(f"  {exc_type}: {len(errors)} occurrences")
+                
+                # Log first occurrence of each type
+                first_error = errors[0]
+                logger.error(f"    First occurred in: {first_error['task']}")
+                logger.error(f"    Message: {str(first_error['exception'])[:200]}")
 
 
 class RenaissanceWeekly:
     """Main application class with improved error handling and reliability"""
     
     def __init__(self):
+        self.correlation_id = str(uuid.uuid4())[:8]
+        
         try:
             validate_env_vars()
             self.db = PodcastDatabase()
@@ -38,18 +143,28 @@ class RenaissanceWeekly:
             self.summarizer = Summarizer()
             self.selector = EpisodeSelector()
             self.email_digest = EmailDigest()
-            logger.info("✅ Renaissance Weekly initialized successfully")
+            
+            # Resource management
+            self.concurrency_manager = ResourceAwareConcurrencyManager(self.correlation_id)
+            self.exception_aggregator = ExceptionAggregator(self.correlation_id)
+            
+            logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly initialized successfully")
+            
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Renaissance Weekly: {e}")
+            logger.error(f"[{self.correlation_id}] ❌ Failed to initialize Renaissance Weekly: {e}")
             raise
     
     async def run(self, days_back: int = 7):
-        """Main execution function with simplified flow"""
-        logger.info("🚀 Starting Renaissance Weekly System...")
-        logger.info(f"📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
+        """Main execution function with simplified flow and progress tracking"""
+        start_time = time.time()
+        logger.info(f"[{self.correlation_id}] 🚀 Starting Renaissance Weekly System...")
+        logger.info(f"[{self.correlation_id}] 📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
         
         if TESTING_MODE:
-            logger.info(f"🧪 TESTING MODE: Limited to {MAX_TRANSCRIPTION_MINUTES} min transcriptions")
+            logger.info(f"[{self.correlation_id}] 🧪 TESTING MODE: Limited to {MAX_TRANSCRIPTION_MINUTES} min transcriptions")
+        
+        # Pipeline progress tracker
+        pipeline_progress = ProgressTracker(3, self.correlation_id)  # 3 stages
         
         try:
             # Create fetch callback for the UI
@@ -64,64 +179,94 @@ class RenaissanceWeekly:
                     )
                     return result
                 except Exception as e:
-                    logger.error(f"Error in fetch callback: {e}", exc_info=True)
+                    logger.error(f"[{self.correlation_id}] Error in fetch callback: {e}", exc_info=True)
                     raise
                 finally:
                     loop.close()
                     asyncio.set_event_loop(None)
             
-            # Run complete selection in single page
-            logger.info("\n📺 STAGE 1: Episode Selection")
+            # Stage 1: Episode Selection
+            await pipeline_progress.start_item("Episode Selection")
+            logger.info(f"\n[{self.correlation_id}] 📺 STAGE 1: Episode Selection")
+            
             selected_episodes, configuration = self.selector.run_complete_selection(
                 days_back,
                 fetch_episodes_callback
             )
             
             if not selected_episodes:
-                logger.warning("❌ No episodes selected - exiting")
+                logger.warning(f"[{self.correlation_id}] ❌ No episodes selected - exiting")
+                await pipeline_progress.complete_item(False)
                 return
             
-            logger.info(f"✅ Selected {len(selected_episodes)} episodes for processing")
-            logger.info(f"📅 Lookback period: {configuration['lookback_days']} days")
-            logger.info(f"🔧 Transcription mode: {configuration['transcription_mode']}")
+            logger.info(f"[{self.correlation_id}] ✅ Selected {len(selected_episodes)} episodes for processing")
+            logger.info(f"[{self.correlation_id}] 📅 Lookback period: {configuration['lookback_days']} days")
+            logger.info(f"[{self.correlation_id}] 🔧 Transcription mode: {configuration['transcription_mode']}")
+            
+            await pipeline_progress.complete_item(True)
             
             # Log selected episodes
-            logger.info("📋 Episodes to process:")
+            logger.info(f"[{self.correlation_id}] 📋 Episodes to process:")
             for i, ep in enumerate(selected_episodes[:5]):
-                logger.info(f"  {i+1}. {ep.podcast}: {ep.title}")
+                logger.info(f"[{self.correlation_id}]   {i+1}. {ep.podcast}: {ep.title}")
                 if hasattr(ep, 'audio_url'):
-                    logger.info(f"     Audio: {'Yes' if ep.audio_url else 'No'}")
+                    logger.info(f"[{self.correlation_id}]      Audio: {'Yes' if ep.audio_url else 'No'}")
             if len(selected_episodes) > 5:
-                logger.info(f"  ... and {len(selected_episodes) - 5} more")
+                logger.info(f"[{self.correlation_id}]   ... and {len(selected_episodes) - 5} more")
             
             # Stage 2: Process episodes
-            logger.info("\n🎯 STAGE 2: Processing Episodes")
-            logger.info("⏰ This may take several minutes depending on episode length...")
+            await pipeline_progress.start_item("Episode Processing")
+            logger.info(f"\n[{self.correlation_id}] 🎯 STAGE 2: Processing Episodes")
+            logger.info(f"[{self.correlation_id}] ⏰ This may take several minutes depending on episode length...")
             
-            summaries = await self._process_episodes(selected_episodes)
+            summaries = await self._process_episodes_with_resource_management(selected_episodes)
             
-            logger.info(f"\n📊 Processing Results:")
-            logger.info(f"   Episodes selected: {len(selected_episodes)}")
-            logger.info(f"   Summaries generated: {len(summaries)}")
+            logger.info(f"\n[{self.correlation_id}] 📊 Processing Results:")
+            logger.info(f"[{self.correlation_id}]    Episodes selected: {len(selected_episodes)}")
+            logger.info(f"[{self.correlation_id}]    Summaries generated: {len(summaries)}")
             if selected_episodes:
-                logger.info(f"   Success rate: {len(summaries)/len(selected_episodes)*100:.1f}%")
+                logger.info(f"[{self.correlation_id}]    Success rate: {len(summaries)/len(selected_episodes)*100:.1f}%")
+            
+            # Log exception summary if any
+            self.exception_aggregator.log_summary()
+            
+            await pipeline_progress.complete_item(len(summaries) > 0)
             
             # Stage 3: Send email digest
             if summaries:
-                logger.info("\n📧 STAGE 3: Email Delivery")
+                await pipeline_progress.start_item("Email Delivery")
+                logger.info(f"\n[{self.correlation_id}] 📧 STAGE 3: Email Delivery")
+                
                 if self.email_digest.send_digest(summaries):
-                    logger.info("✅ Renaissance Weekly digest sent successfully!")
+                    logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly digest sent successfully!")
+                    await pipeline_progress.complete_item(True)
                 else:
-                    logger.error("❌ Failed to send email digest")
+                    logger.error(f"[{self.correlation_id}] ❌ Failed to send email digest")
+                    await pipeline_progress.complete_item(False)
             else:
-                logger.warning("❌ No summaries generated - nothing to send")
+                logger.warning(f"[{self.correlation_id}] ❌ No summaries generated - nothing to send")
             
-            logger.info("\n✨ Renaissance Weekly pipeline completed!")
+            # Final summary
+            total_time = time.time() - start_time
+            summary = pipeline_progress.get_summary()
+            
+            logger.info(f"\n[{self.correlation_id}] ✨ Renaissance Weekly pipeline completed!")
+            logger.info(f"[{self.correlation_id}] ⏱️  Total time: {total_time/60:.1f} minutes")
+            logger.info(f"[{self.correlation_id}] 📈 Pipeline success rate: {summary['success_rate']:.0f}%")
+            
+            # Log any critical issues
+            exc_summary = self.exception_aggregator.get_summary()
+            if exc_summary['has_errors']:
+                logger.warning(
+                    f"[{self.correlation_id}] ⚠️  Pipeline completed with {exc_summary['total_errors']} errors. "
+                    f"Check logs for details."
+                )
                 
         except KeyboardInterrupt:
-            logger.info("\n⚠️ Operation cancelled by user")
+            logger.info(f"\n[{self.correlation_id}] ⚠️ Operation cancelled by user")
         except Exception as e:
-            logger.error(f"\n❌ Unexpected error in main run: {e}", exc_info=True)
+            logger.error(f"\n[{self.correlation_id}] ❌ Unexpected error in main run: {e}", exc_info=True)
+            await self.exception_aggregator.add_exception("main_run", e)
         finally:
             # Ensure cleanup happens
             await self.cleanup()
@@ -131,8 +276,11 @@ class RenaissanceWeekly:
         """Fetch episodes for selected podcasts with progress updates"""
         all_episodes = []
         
-        logger.info(f"📡 Starting to fetch episodes from {len(podcast_names)} podcasts...")
-        logger.info(f"📅 Looking back {days_back} days")
+        logger.info(f"[{self.correlation_id}] 📡 Starting to fetch episodes from {len(podcast_names)} podcasts...")
+        logger.info(f"[{self.correlation_id}] 📅 Looking back {days_back} days")
+        
+        # Progress tracker for fetching
+        fetch_progress = ProgressTracker(len(podcast_names), self.correlation_id)
         
         for i, podcast_name in enumerate(podcast_names):
             progress_callback(podcast_name, i, len(podcast_names))
@@ -144,159 +292,255 @@ class RenaissanceWeekly:
             )
             
             if not podcast_config:
-                logger.warning(f"⚠️ No configuration found for {podcast_name}")
+                logger.warning(f"[{self.correlation_id}] ⚠️ No configuration found for {podcast_name}")
+                await fetch_progress.complete_item(False)
                 continue
             
             try:
-                logger.info(f"📻 Fetching episodes for {podcast_name}...")
+                await fetch_progress.start_item(podcast_name)
+                logger.info(f"[{self.correlation_id}] 📻 Fetching episodes for {podcast_name}...")
+                
                 episodes = await self.episode_fetcher.fetch_episodes(podcast_config, days_back)
                 
                 if episodes:
                     all_episodes.extend(episodes)
-                    logger.info(f"  ✅ {podcast_name}: Found {len(episodes)} episodes")
+                    logger.info(f"[{self.correlation_id}]   ✅ {podcast_name}: Found {len(episodes)} episodes")
                     
                     # Save to database
                     for episode in episodes:
                         try:
                             self.db.save_episode(episode)
                         except Exception as e:
-                            logger.debug(f"  Failed to cache episode: {e}")
+                            logger.debug(f"[{self.correlation_id}]   Failed to cache episode: {e}")
+                    
+                    await fetch_progress.complete_item(True)
                 else:
-                    logger.warning(f"  ⚠️ {podcast_name}: No episodes found")
+                    logger.warning(f"[{self.correlation_id}]   ⚠️ {podcast_name}: No episodes found")
+                    await fetch_progress.complete_item(False)
                     
             except Exception as e:
-                logger.error(f"  ❌ {podcast_name}: Failed to fetch episodes - {e}")
+                logger.error(f"[{self.correlation_id}]   ❌ {podcast_name}: Failed to fetch episodes - {e}")
+                await self.exception_aggregator.add_exception(f"fetch_{podcast_name}", e)
+                await fetch_progress.complete_item(False)
         
-        logger.info(f"📊 Total episodes fetched: {len(all_episodes)}")
+        # Log fetch summary
+        fetch_summary = fetch_progress.get_summary()
+        logger.info(
+            f"[{self.correlation_id}] 📊 Fetch complete: {fetch_summary['completed']}/{fetch_summary['total_items']} successful, "
+            f"{len(all_episodes)} total episodes"
+        )
+        
         return all_episodes
     
-    async def _process_episodes(self, selected_episodes: List[Episode]) -> List[Dict]:
-        """Process selected episodes concurrently with better error handling"""
+    async def _process_episodes_with_resource_management(self, selected_episodes: List[Episode]) -> List[Dict]:
+        """Process episodes with dynamic concurrency based on system resources"""
         summaries = []
         
-        logger.info(f"🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"⚙️  Max concurrent tasks: 3")
+        # Get optimal concurrency
+        max_concurrent = self.concurrency_manager.get_optimal_concurrency()
         
-        async def process_with_semaphore(episode: Episode, semaphore: asyncio.Semaphore, index: int):
-            """Process single episode with semaphore for concurrency control"""
-            async with semaphore:
-                try:
-                    logger.info(f"\n🎯 [{index+1}/{len(selected_episodes)}] Starting: {episode.title[:50]}...")
-                    
-                    summary = await self.process_episode(episode)
-                    
-                    if summary:
-                        logger.info(f"✅ [{index+1}/{len(selected_episodes)}] Success: {episode.title[:50]}...")
-                        return {"episode": episode, "summary": summary}
-                    else:
-                        logger.warning(f"⚠️ [{index+1}/{len(selected_episodes)}] No summary: {episode.title[:50]}...")
-                        return None
-                        
-                except Exception as e:
-                    logger.error(f"❌ [{index+1}/{len(selected_episodes)}] Failed: {episode.title[:50]}... - {str(e)[:100]}")
-                    return None
+        logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
+        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {max_concurrent} (based on system resources)")
         
-        # Limit concurrent processing to avoid overwhelming resources
-        semaphore = asyncio.Semaphore(3)
+        # Progress tracker for processing
+        process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
         
-        # Create all tasks
-        logger.info("📋 Creating processing tasks...")
-        tasks = [
-            process_with_semaphore(ep, semaphore, i)
-            for i, ep in enumerate(selected_episodes)
-        ]
+        # Create semaphore for concurrency control
+        semaphore = asyncio.Semaphore(max_concurrent)
         
-        # Execute tasks and gather results
-        logger.info("⚡ Executing tasks concurrently...")
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Create tasks with enhanced error handling
+        tasks = []
+        for i, episode in enumerate(selected_episodes):
+            task = asyncio.create_task(
+                self._process_episode_with_monitoring(
+                    episode, semaphore, process_progress, i
+                )
+            )
+            tasks.append(task)
         
-        # Process results
-        logger.info("📊 Processing results...")
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"Episode {i+1} processing failed with exception: {result}")
-            elif isinstance(result, dict) and result:
-                summaries.append(result)
-            elif result is None:
-                logger.debug(f"Episode {i+1} returned None")
+        # Monitor resource usage periodically
+        monitor_task = asyncio.create_task(self._monitor_resources(max_concurrent))
         
-        logger.info(f"✅ Processing complete: {len(summaries)}/{len(selected_episodes)} episodes succeeded")
+        try:
+            # Execute all tasks
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    episode = selected_episodes[i]
+                    logger.error(
+                        f"[{self.correlation_id}] Episode {i+1} ({episode.title[:50]}...) "
+                        f"failed with exception: {result}"
+                    )
+                    await self.exception_aggregator.add_exception(
+                        f"process_episode_{i}_{episode.title[:30]}", 
+                        result
+                    )
+                elif isinstance(result, dict) and result:
+                    summaries.append(result)
+                elif result is None:
+                    logger.debug(f"[{self.correlation_id}] Episode {i+1} returned None")
+            
+        finally:
+            # Cancel monitoring
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Log processing summary
+        process_summary = process_progress.get_summary()
+        logger.info(
+            f"[{self.correlation_id}] ✅ Processing complete: "
+            f"{process_summary['completed']}/{process_summary['total_items']} episodes succeeded "
+            f"({process_summary['success_rate']:.0f}% success rate) "
+            f"in {process_summary['duration_seconds']/60:.1f} minutes"
+        )
+        
         return summaries
+    
+    async def _process_episode_with_monitoring(self, episode: Episode, semaphore: asyncio.Semaphore, 
+                                             progress: ProgressTracker, index: int) -> Optional[Dict]:
+        """Process single episode with monitoring and error handling"""
+        async with semaphore:
+            episode_id = f"{episode.podcast}:{episode.title[:30]}"
+            
+            try:
+                await progress.start_item(episode_id)
+                
+                # Add retry logic with exponential backoff
+                max_retries = 3
+                last_exception = None
+                
+                for attempt in range(max_retries):
+                    try:
+                        summary = await self.process_episode(episode)
+                        
+                        if summary:
+                            await progress.complete_item(True)
+                            return {"episode": episode, "summary": summary}
+                        else:
+                            await progress.complete_item(False)
+                            return None
+                            
+                    except Exception as e:
+                        last_exception = e
+                        if attempt < max_retries - 1:
+                            delay = exponential_backoff_with_jitter(attempt)
+                            logger.warning(
+                                f"[{self.correlation_id}] Episode processing attempt {attempt + 1} failed: {e}. "
+                                f"Retrying in {delay:.1f}s..."
+                            )
+                            await asyncio.sleep(delay)
+                        else:
+                            raise
+                
+            except Exception as e:
+                logger.error(
+                    f"[{self.correlation_id}] Failed to process {episode_id} after {max_retries} attempts: {e}"
+                )
+                await self.exception_aggregator.add_exception(episode_id, e)
+                await progress.complete_item(False)
+                return None
+    
+    async def _monitor_resources(self, initial_concurrency: int):
+        """Monitor system resources and log warnings if needed"""
+        check_interval = 30  # seconds
+        low_memory_threshold = 200  # MB
+        
+        while True:
+            try:
+                await asyncio.sleep(check_interval)
+                
+                available_memory = get_available_memory()
+                if available_memory < low_memory_threshold:
+                    logger.warning(
+                        f"[{self.correlation_id}] ⚠️  Low memory warning: {available_memory:.0f}MB available. "
+                        f"Consider reducing concurrency from {initial_concurrency}."
+                    )
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"[{self.correlation_id}] Resource monitoring error: {e}")
     
     async def process_episode(self, episode: Episode) -> Optional[str]:
         """Process a single episode with comprehensive logging"""
-        logger.info(f"\n{'='*60}")
-        logger.info(f"🎧 PROCESSING EPISODE:")
-        logger.info(f"   Title: {episode.title}")
-        logger.info(f"   Podcast: {episode.podcast}")
-        logger.info(f"   Published: {episode.published.strftime('%Y-%m-%d')}")
-        logger.info(f"   Duration: {episode.duration}")
-        logger.info(f"   Audio URL: {'Yes' if episode.audio_url else 'No'}")
-        logger.info(f"   Transcript URL: {'Yes' if episode.transcript_url else 'No'}")
-        logger.info(f"{'='*60}")
+        episode_id = str(uuid.uuid4())[:8]
+        logger.info(f"\n[{episode_id}] {'='*60}")
+        logger.info(f"[{episode_id}] 🎧 PROCESSING EPISODE:")
+        logger.info(f"[{episode_id}]    Title: {episode.title}")
+        logger.info(f"[{episode_id}]    Podcast: {episode.podcast}")
+        logger.info(f"[{episode_id}]    Published: {episode.published.strftime('%Y-%m-%d')}")
+        logger.info(f"[{episode_id}]    Duration: {episode.duration}")
+        logger.info(f"[{episode_id}]    Audio URL: {'Yes' if episode.audio_url else 'No'}")
+        logger.info(f"[{episode_id}]    Transcript URL: {'Yes' if episode.transcript_url else 'No'}")
+        logger.info(f"[{episode_id}] {'='*60}")
         
         try:
             # Step 1: Try to find existing transcript
-            logger.info("\n📄 Step 1: Checking for existing transcript...")
+            logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
             transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode)
             
             # Step 2: If no transcript found, transcribe from audio
             if not transcript_text:
-                logger.info("\n🎵 Step 2: No transcript found - transcribing from audio...")
+                logger.info(f"\n[{episode_id}] 🎵 Step 2: No transcript found - transcribing from audio...")
                 
                 # Check if we have audio URL
                 if not episode.audio_url:
-                    logger.error("❌ No audio URL available for this episode")
+                    logger.error(f"[{episode_id}] ❌ No audio URL available for this episode")
                     return None
                 
-                logger.info(f"🔗 Audio URL: {episode.audio_url[:80]}...")
+                logger.info(f"[{episode_id}] 🔗 Audio URL: {episode.audio_url[:80]}...")
                 transcript_text = await self.transcriber.transcribe_episode(episode)
                 
                 if transcript_text:
                     transcript_source = TranscriptSource.GENERATED
-                    logger.info("✅ Audio transcribed successfully")
-                    logger.info(f"📏 Transcript length: {len(transcript_text)} characters")
+                    logger.info(f"[{episode_id}] ✅ Audio transcribed successfully")
+                    logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
                 else:
-                    logger.error("❌ Failed to transcribe audio")
+                    logger.error(f"[{episode_id}] ❌ Failed to transcribe audio")
                     return None
             else:
-                logger.info(f"✅ Found existing transcript (source: {transcript_source.value})")
-                logger.info(f"📏 Transcript length: {len(transcript_text)} characters")
+                logger.info(f"[{episode_id}] ✅ Found existing transcript (source: {transcript_source.value})")
+                logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
             
             # Save transcript to database
             try:
                 self.db.save_episode(episode, transcript_text, transcript_source)
-                logger.info("💾 Transcript saved to database")
+                logger.info(f"[{episode_id}] 💾 Transcript saved to database")
             except Exception as e:
-                logger.warning(f"Failed to save transcript to database: {e}")
+                logger.warning(f"[{episode_id}] Failed to save transcript to database: {e}")
             
             # Step 3: Generate summary
-            logger.info("\n📝 Step 3: Generating executive summary...")
+            logger.info(f"\n[{episode_id}] 📝 Step 3: Generating executive summary...")
             summary = await self.summarizer.generate_summary(episode, transcript_text, transcript_source)
             
             if summary:
-                logger.info("✅ Summary generated successfully!")
-                logger.info(f"📏 Summary length: {len(summary)} characters")
+                logger.info(f"[{episode_id}] ✅ Summary generated successfully!")
+                logger.info(f"[{episode_id}] 📏 Summary length: {len(summary)} characters")
                 # Save summary to database
                 try:
                     self.db.save_episode(episode, transcript_text, transcript_source, summary)
-                    logger.info("💾 Summary saved to database")
+                    logger.info(f"[{episode_id}] 💾 Summary saved to database")
                 except Exception as e:
-                    logger.warning(f"Failed to save summary to database: {e}")
+                    logger.warning(f"[{episode_id}] Failed to save summary to database: {e}")
             else:
-                logger.error("❌ Failed to generate summary")
+                logger.error(f"[{episode_id}] ❌ Failed to generate summary")
             
             return summary
             
         except Exception as e:
-            logger.error(f"❌ Error processing episode: {e}", exc_info=True)
-            return None
+            logger.error(f"[{episode_id}] ❌ Error processing episode: {e}", exc_info=True)
+            raise
         finally:
-            logger.info(f"{'='*60}\n")
+            logger.info(f"[{episode_id}] {'='*60}\n")
     
     async def check_single_podcast(self, podcast_name: str, days_back: int = 7):
         """Debug function to check a single podcast"""
-        logger.info(f"\n🔍 DEBUG MODE: Checking single podcast '{podcast_name}'")
+        logger.info(f"\n[{self.correlation_id}] 🔍 DEBUG MODE: Checking single podcast '{podcast_name}'")
         
         # Find the podcast config
         podcast_config = None
@@ -306,28 +550,33 @@ class RenaissanceWeekly:
                 break
         
         if not podcast_config:
-            logger.error(f"❌ Podcast '{podcast_name}' not found in configuration")
-            logger.info("\n📋 Available podcasts:")
+            logger.error(f"[{self.correlation_id}] ❌ Podcast '{podcast_name}' not found in configuration")
+            logger.info(f"\n[{self.correlation_id}] 📋 Available podcasts:")
             for config in PODCAST_CONFIGS:
-                logger.info(f"  - {config['name']}")
+                logger.info(f"[{self.correlation_id}]   - {config['name']}")
             return
         
         await self.episode_fetcher.debug_single_podcast(podcast_config, days_back)
     
     async def run_verification_report(self, days_back: int = 7):
         """Run a verification report comparing all sources against Apple Podcasts"""
-        logger.info("🔍 Running Apple Podcasts Verification Report...")
-        logger.info(f"📅 Checking episodes from the last {days_back} days\n")
+        logger.info(f"[{self.correlation_id}] 🔍 Running Apple Podcasts Verification Report...")
+        logger.info(f"[{self.correlation_id}] 📅 Checking episodes from the last {days_back} days\n")
         
         report_data = []
         total_found = 0
         total_missing = 0
         
+        # Progress tracker for verification
+        verify_progress = ProgressTracker(len(PODCAST_CONFIGS), self.correlation_id)
+        
         for podcast_config in PODCAST_CONFIGS:
             podcast_name = podcast_config["name"]
-            logger.info(f"\n📻 Checking {podcast_name}...")
             
             try:
+                await verify_progress.start_item(podcast_name)
+                logger.info(f"\n[{self.correlation_id}] 📻 Checking {podcast_name}...")
+                
                 # Fetch episodes using our methods
                 episodes = await self.episode_fetcher.fetch_episodes(podcast_config, days_back)
                 
@@ -339,13 +588,18 @@ class RenaissanceWeekly:
                     
                     # Optionally fetch missing episodes
                     if FETCH_MISSING_EPISODES and verification.get("missing_count", 0) > 0:
-                        logger.info(f"  🔄 Fetching {verification['missing_count']} missing episodes from Apple...")
+                        logger.info(
+                            f"[{self.correlation_id}]   🔄 Fetching {verification['missing_count']} "
+                            f"missing episodes from Apple..."
+                        )
                         missing_episodes = await self.episode_fetcher.fetch_missing_from_apple(
                             podcast_config, episodes, verification
                         )
                         if missing_episodes:
                             episodes.extend(missing_episodes)
-                            logger.info(f"  ✅ Added {len(missing_episodes)} missing episodes")
+                            logger.info(
+                                f"[{self.correlation_id}]   ✅ Added {len(missing_episodes)} missing episodes"
+                            )
                 else:
                     verification = {"status": "skipped", "reason": "Apple verification disabled or no Apple ID"}
                 
@@ -362,13 +616,15 @@ class RenaissanceWeekly:
                     total_missing += verification.get("missing_count", 0)
                 
                 report_data.append(report_entry)
+                await verify_progress.complete_item(True)
                 
             except Exception as e:
-                logger.error(f"Error checking {podcast_name}: {e}")
+                logger.error(f"[{self.correlation_id}] Error checking {podcast_name}: {e}")
                 report_data.append({
                     "podcast": podcast_name,
                     "error": str(e)
                 })
+                await verify_progress.complete_item(False)
         
         # Generate and display report
         self._display_verification_report(report_data, total_found, total_missing)
@@ -379,27 +635,36 @@ class RenaissanceWeekly:
             json.dump({
                 "verification_date": datetime.now().isoformat(),
                 "days_back": days_back,
+                "correlation_id": self.correlation_id,
                 "summary": {
                     "total_podcasts": len(PODCAST_CONFIGS),
                     "episodes_found": total_found,
                     "episodes_missing": total_missing
                 },
-                "details": report_data
+                "details": report_data,
+                "exceptions": self.exception_aggregator.get_summary()
             }, f, indent=2, default=str)
-        logger.info(f"\n💾 Detailed report saved to: {report_file}")
+        logger.info(f"\n[{self.correlation_id}] 💾 Detailed report saved to: {report_file}")
+        
+        # Log verification summary
+        verify_summary = verify_progress.get_summary()
+        logger.info(
+            f"\n[{self.correlation_id}] 📊 Verification complete: "
+            f"{verify_summary['completed']}/{verify_summary['total_items']} podcasts verified successfully"
+        )
     
     def _display_verification_report(self, report_data: List[Dict], total_found: int, total_missing: int):
         """Display verification report in a clean format"""
-        logger.info("\n" + "="*80)
-        logger.info("📊 VERIFICATION REPORT SUMMARY")
-        logger.info("="*80)
+        logger.info(f"\n[{self.correlation_id}] " + "="*80)
+        logger.info(f"[{self.correlation_id}] 📊 VERIFICATION REPORT SUMMARY")
+        logger.info(f"[{self.correlation_id}] " + "="*80)
         
         for entry in report_data:
             podcast = entry["podcast"]
             
             if "error" in entry:
-                logger.error(f"\n❌ {podcast}")
-                logger.error(f"   Error: {entry['error']}")
+                logger.error(f"\n[{self.correlation_id}] ❌ {podcast}")
+                logger.error(f"[{self.correlation_id}]    Error: {entry['error']}")
                 continue
             
             found = entry["found_episodes"]
@@ -410,59 +675,80 @@ class RenaissanceWeekly:
                 missing = verification["missing_count"]
                 
                 status = "✅" if missing == 0 else "⚠️"
-                logger.info(f"\n{status} {podcast}")
-                logger.info(f"   Found: {found} episodes")
-                logger.info(f"   Apple: {apple_count} episodes")
+                logger.info(f"\n[{self.correlation_id}] {status} {podcast}")
+                logger.info(f"[{self.correlation_id}]    Found: {found} episodes")
+                logger.info(f"[{self.correlation_id}]    Apple: {apple_count} episodes")
                 
                 if missing > 0:
-                    logger.warning(f"   Missing: {missing} episodes")
+                    logger.warning(f"[{self.correlation_id}]    Missing: {missing} episodes")
                     for i, ep in enumerate(verification["missing_episodes"][:3]):
-                        logger.warning(f"      - {ep['title']} ({ep['date'].strftime('%Y-%m-%d')})")
+                        logger.warning(
+                            f"[{self.correlation_id}]       - {ep['title']} "
+                            f"({ep['date'].strftime('%Y-%m-%d')})"
+                        )
                     if missing > 3:
-                        logger.warning(f"      ... and {missing - 3} more")
+                        logger.warning(f"[{self.correlation_id}]       ... and {missing - 3} more")
                     
                     if verification.get("apple_feed_url"):
-                        logger.info(f"   Apple Feed: {verification['apple_feed_url']}")
+                        logger.info(f"[{self.correlation_id}]    Apple Feed: {verification['apple_feed_url']}")
             elif verification["status"] == "skipped":
-                logger.info(f"\n⏭️  {podcast}")
-                logger.info(f"   Found: {found} episodes")
-                logger.info(f"   Verification: {verification['reason']}")
+                logger.info(f"\n[{self.correlation_id}] ⏭️  {podcast}")
+                logger.info(f"[{self.correlation_id}]    Found: {found} episodes")
+                logger.info(f"[{self.correlation_id}]    Verification: {verification['reason']}")
             else:
-                logger.warning(f"\n❌ {podcast}")
-                logger.warning(f"   Verification failed: {verification.get('reason', 'Unknown error')}")
-                logger.info(f"   Found: {found} episodes (unverified)")
+                logger.warning(f"\n[{self.correlation_id}] ❌ {podcast}")
+                logger.warning(
+                    f"[{self.correlation_id}]    Verification failed: "
+                    f"{verification.get('reason', 'Unknown error')}"
+                )
+                logger.info(f"[{self.correlation_id}]    Found: {found} episodes (unverified)")
         
-        logger.info("\n" + "="*80)
-        logger.info(f"📈 TOTALS:")
-        logger.info(f"   Episodes found: {total_found}")
-        logger.info(f"   Episodes missing: {total_missing}")
+        logger.info(f"\n[{self.correlation_id}] " + "="*80)
+        logger.info(f"[{self.correlation_id}] 📈 TOTALS:")
+        logger.info(f"[{self.correlation_id}]    Episodes found: {total_found}")
+        logger.info(f"[{self.correlation_id}]    Episodes missing: {total_missing}")
         
         if total_found + total_missing > 0:
             success_rate = (total_found / (total_found + total_missing) * 100)
-            logger.info(f"   Success rate: {success_rate:.1f}%")
+            logger.info(f"[{self.correlation_id}]    Success rate: {success_rate:.1f}%")
         
-        logger.info("="*80)
+        logger.info(f"[{self.correlation_id}] " + "="*80)
     
     async def cleanup(self):
         """Clean up resources properly"""
         try:
-            # Clean up episode fetcher session
+            logger.info(f"[{self.correlation_id}] 🧹 Starting cleanup...")
+            
+            # Clean up episode fetcher
             if hasattr(self.episode_fetcher, 'cleanup'):
                 await self.episode_fetcher.cleanup()
+                logger.debug(f"[{self.correlation_id}] ✓ Episode fetcher cleaned up")
             
-            # Clean up transcript finder session
+            # Clean up transcript finder
             if hasattr(self.transcript_finder, 'cleanup'):
                 await self.transcript_finder.cleanup()
+                logger.debug(f"[{self.correlation_id}] ✓ Transcript finder cleaned up")
+            
+            # Clean up transcriber
+            if hasattr(self.transcriber, 'cleanup'):
+                await self.transcriber.cleanup()
+                logger.debug(f"[{self.correlation_id}] ✓ Transcriber cleaned up")
             
             # Clean up any temporary files
             from .config import TEMP_DIR
             if TEMP_DIR.exists():
+                temp_files_cleaned = 0
                 for file in TEMP_DIR.glob("*"):
                     try:
                         file.unlink()
+                        temp_files_cleaned += 1
                     except:
                         pass
+                
+                if temp_files_cleaned > 0:
+                    logger.debug(f"[{self.correlation_id}] ✓ Cleaned up {temp_files_cleaned} temp files")
             
-            logger.info("🧹 Cleanup completed")
+            logger.info(f"[{self.correlation_id}] 🧹 Cleanup completed")
+            
         except Exception as e:
-            logger.warning(f"Cleanup error: {e}")
+            logger.warning(f"[{self.correlation_id}] Cleanup error: {e}")

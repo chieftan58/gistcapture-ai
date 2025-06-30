@@ -12,15 +12,50 @@ from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 import json
 import time
+import hashlib
+import uuid
+from functools import lru_cache
 
 from ..models import Episode
 from ..database import PodcastDatabase
 from ..config import PODCAST_CONFIGS
 from ..utils.logging import get_logger
-from ..utils.helpers import seconds_to_duration
+from ..utils.helpers import seconds_to_duration, CircuitBreaker, ProgressTracker
 from .podcast_index import PodcastIndexClient
 
 logger = get_logger(__name__)
+
+
+class FeedCache:
+    """Cache for feed URLs with TTL"""
+    
+    def __init__(self, ttl_seconds: int = 3600):
+        self.cache = {}
+        self.ttl = ttl_seconds
+    
+    def get(self, key: str) -> Optional[List[str]]:
+        """Get cached feed URLs if not expired"""
+        if key in self.cache:
+            urls, timestamp = self.cache[key]
+            if time.time() - timestamp < self.ttl:
+                return urls
+            else:
+                del self.cache[key]
+        return None
+    
+    def set(self, key: str, urls: List[str]):
+        """Cache feed URLs with timestamp"""
+        self.cache[key] = (urls, time.time())
+    
+    def clear_expired(self):
+        """Remove expired entries"""
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, timestamp) in self.cache.items()
+            if current_time - timestamp >= self.ttl
+        ]
+        for key in expired_keys:
+            del self.cache[key]
 
 
 class ReliableEpisodeFetcher:
@@ -29,17 +64,30 @@ class ReliableEpisodeFetcher:
     def __init__(self, db: PodcastDatabase):
         self.db = db
         self.podcast_index = PodcastIndexClient()
-        self.session = None  # Will be initialized when needed
+        self._http_session = None  # Shared requests session
+        self._aiohttp_session = None  # Shared aiohttp session
         self._session_initialized = False
+        self._correlation_id = str(uuid.uuid4())[:8]
         
         # Cache for feed URLs discovered through various methods
         self.discovered_feeds_cache = {}
+        
+        # Feed URL cache with TTL
+        self.feed_cache = FeedCache(ttl_seconds=3600)  # 1 hour TTL
+        
+        # Circuit breakers for failing feeds
+        self.circuit_breakers = {}  # URL -> CircuitBreaker
+        
+        # Track failed URLs to avoid retrying too often
+        self.failed_urls = {}  # URL -> (failure_count, last_failure_time)
+        self.max_failures = 3
+        self.failure_cooldown = 300  # 5 minutes
     
-    def _get_session(self) -> requests.Session:
-        """Get or create session with proper headers"""
-        if not self._session_initialized:
-            self.session = requests.Session()
-            self.session.headers.update({
+    def _get_http_session(self) -> requests.Session:
+        """Get or create shared HTTP session with proper headers"""
+        if not self._http_session:
+            self._http_session = requests.Session()
+            self._http_session.headers.update({
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
@@ -48,35 +96,140 @@ class ReliableEpisodeFetcher:
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1'
             })
-            self._session_initialized = True
-        return self.session
+            # Connection pooling settings
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=10,
+                pool_maxsize=20,
+                max_retries=requests.adapters.Retry(
+                    total=3,
+                    backoff_factor=0.3,
+                    status_forcelist=[500, 502, 503, 504]
+                )
+            )
+            self._http_session.mount('http://', adapter)
+            self._http_session.mount('https://', adapter)
+            
+        return self._http_session
+    
+    async def _get_aiohttp_session(self) -> aiohttp.ClientSession:
+        """Get or create shared aiohttp session"""
+        if self._aiohttp_session is None or self._aiohttp_session.closed:
+            timeout = aiohttp.ClientTimeout(
+                total=60,
+                connect=10,
+                sock_read=30
+            )
+            connector = aiohttp.TCPConnector(
+                limit=30,
+                limit_per_host=5,
+                force_close=True,
+                enable_cleanup_closed=True
+            )
+            self._aiohttp_session = aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                }
+            )
+        return self._aiohttp_session
     
     async def cleanup(self):
         """Cleanup resources"""
-        if self.session:
-            self.session.close()
-            self._session_initialized = False
+        # Close HTTP session
+        if self._http_session:
+            self._http_session.close()
+            self._http_session = None
+        
+        # Close aiohttp session
+        if self._aiohttp_session and not self._aiohttp_session.closed:
+            await self._aiohttp_session.close()
+            self._aiohttp_session = None
+        
+        # Clear caches
+        self.circuit_breakers.clear()
+        self.failed_urls.clear()
+        self.feed_cache.cache.clear()
+        
+        logger.info(f"[{self._correlation_id}] Episode fetcher cleaned up")
+    
+    def _get_circuit_breaker(self, url: str) -> CircuitBreaker:
+        """Get or create circuit breaker for URL"""
+        if url not in self.circuit_breakers:
+            self.circuit_breakers[url] = CircuitBreaker(
+                failure_threshold=3,
+                recovery_timeout=300,  # 5 minutes
+                correlation_id=self._correlation_id
+            )
+        return self.circuit_breakers[url]
+    
+    def _should_skip_url(self, url: str) -> bool:
+        """Check if URL should be skipped due to recent failures"""
+        if url in self.failed_urls:
+            failure_count, last_failure = self.failed_urls[url]
+            
+            # Check if in cooldown period
+            if time.time() - last_failure < self.failure_cooldown:
+                if failure_count >= self.max_failures:
+                    logger.debug(f"[{self._correlation_id}] Skipping URL due to failures: {url[:50]}...")
+                    return True
+        
+        return False
+    
+    def _record_url_failure(self, url: str):
+        """Record URL failure for tracking"""
+        if url in self.failed_urls:
+            count, _ = self.failed_urls[url]
+            self.failed_urls[url] = (count + 1, time.time())
+        else:
+            self.failed_urls[url] = (1, time.time())
+    
+    def _record_url_success(self, url: str):
+        """Clear URL from failure tracking on success"""
+        if url in self.failed_urls:
+            del self.failed_urls[url]
+    
+    @lru_cache(maxsize=128)
+    def _get_feed_url_hash(self, url: str) -> str:
+        """Get hash of feed URL for caching"""
+        return hashlib.md5(url.encode()).hexdigest()
     
     async def fetch_episodes(self, podcast_config: Dict, days_back: int = 7) -> List[Episode]:
         """Bulletproof episode fetching - ensures we find ALL episodes"""
         podcast_name = podcast_config["name"]
-        logger.info(f"📡 Fetching episodes for {podcast_name}")
+        correlation_id = f"{self._correlation_id}-{podcast_name[:10]}"
+        logger.info(f"[{correlation_id}] 📡 Fetching episodes for {podcast_name}")
+        
+        # Clean up expired cache entries
+        self.feed_cache.clear_expired()
+        
+        # Check feed cache first
+        cache_key = f"{podcast_name}:{days_back}"
+        cached_feed_urls = self.feed_cache.get(cache_key)
         
         # Collect all episodes from all sources
         all_episodes = {}  # Use dict to deduplicate by guid/title
         methods_tried = []
         
-        # Method 1: Try configured RSS feeds
+        # Method 1: Try configured RSS feeds (with cache)
         if "rss_feeds" in podcast_config and podcast_config["rss_feeds"]:
             methods_tried.append("RSS feeds")
-            episodes = await self._try_all_rss_sources(podcast_name, podcast_config, days_back)
+            
+            # Use cached feeds if available
+            feed_urls = cached_feed_urls if cached_feed_urls else podcast_config["rss_feeds"]
+            
+            episodes = await self._try_all_rss_sources(
+                podcast_name, podcast_config, days_back, correlation_id, feed_urls
+            )
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
         # Method 2: Try Apple Podcasts (always try this)
         if "apple_id" in podcast_config and podcast_config["apple_id"]:
             methods_tried.append("Apple Podcasts")
-            episodes = await self._comprehensive_apple_search(podcast_name, podcast_config["apple_id"], days_back)
+            episodes = await self._comprehensive_apple_search(
+                podcast_name, podcast_config["apple_id"], days_back, correlation_id
+            )
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
@@ -84,49 +237,58 @@ class ReliableEpisodeFetcher:
         search_term = podcast_config.get("search_term", podcast_name)
         if search_term and len(all_episodes) == 0:  # Only if we haven't found episodes yet
             methods_tried.append("Enhanced search")
-            logger.info(f"  🔍 Using search term: {search_term}")
+            logger.info(f"[{correlation_id}]   🔍 Using search term: {search_term}")
             # Search Apple with the search term
-            episodes = await self._search_apple_by_term(search_term, days_back)
+            episodes = await self._search_apple_by_term(search_term, days_back, correlation_id)
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
         # Method 4: Search for podcast across multiple platforms
-        methods_tried.append("Multi-platform search")
-        episodes = await self._multi_platform_search(podcast_name, days_back)
-        for ep in episodes:
-            all_episodes[self._episode_key(ep)] = ep
-        
-        # Method 5: Try PodcastIndex
-        methods_tried.append("PodcastIndex")
-        episodes = await self._try_podcast_index(podcast_name, days_back)
-        for ep in episodes:
-            all_episodes[self._episode_key(ep)] = ep
-        
-        # Method 6: Try web scraping (only if website is provided)
-        if podcast_config.get("website"):
-            methods_tried.append("Web scraping")
-            episodes = await self._try_web_scraping(podcast_name, podcast_config["website"], days_back)
+        if len(all_episodes) < 3:  # If we have very few episodes
+            methods_tried.append("Multi-platform search")
+            episodes = await self._multi_platform_search(podcast_name, days_back, correlation_id)
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
         
-        # Method 7: Google search for RSS feeds
-        methods_tried.append("Google RSS search")
-        episodes = await self._google_rss_search(podcast_name, days_back)
-        for ep in episodes:
-            all_episodes[self._episode_key(ep)] = ep
+        # Method 5: Try PodcastIndex
+        if len(all_episodes) < 5:  # Still need more episodes
+            methods_tried.append("PodcastIndex")
+            episodes = await self._try_podcast_index(podcast_name, days_back, correlation_id)
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
+        
+        # Method 6: Try web scraping (only if website is provided)
+        if podcast_config.get("website") and len(all_episodes) < 5:
+            methods_tried.append("Web scraping")
+            episodes = await self._try_web_scraping(
+                podcast_name, podcast_config["website"], days_back, correlation_id
+            )
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
+        
+        # Method 7: Google search for RSS feeds (last resort)
+        if len(all_episodes) == 0:
+            methods_tried.append("Google RSS search")
+            episodes = await self._google_rss_search(podcast_name, days_back, correlation_id)
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
         
         # Convert back to list
         final_episodes = list(all_episodes.values())
         
+        # Cache successful feed URLs
+        if final_episodes and podcast_name in self.discovered_feeds_cache:
+            self.feed_cache.set(cache_key, self.discovered_feeds_cache[podcast_name])
+        
         if final_episodes:
-            logger.info(f"✅ Found {len(final_episodes)} unique episodes via: {', '.join(methods_tried)}")
+            logger.info(f"[{correlation_id}] ✅ Found {len(final_episodes)} unique episodes via: {', '.join(methods_tried)}")
         else:
-            logger.error(f"❌ Could not fetch episodes for {podcast_name} from any source")
-            logger.error(f"   Methods tried: {', '.join(methods_tried)}")
+            logger.error(f"[{correlation_id}] ❌ Could not fetch episodes for {podcast_name} from any source")
+            logger.error(f"[{correlation_id}]    Methods tried: {', '.join(methods_tried)}")
             
             # Last resort: Manual intervention suggestion
-            logger.warning(f"💡 Manual intervention needed for {podcast_name}")
-            logger.warning(f"   Consider checking the Apple ID or adding more identifiers to podcasts.yaml")
+            logger.warning(f"[{correlation_id}] 💡 Manual intervention needed for {podcast_name}")
+            logger.warning(f"[{correlation_id}]    Consider checking the Apple ID or adding more identifiers to podcasts.yaml")
         
         return final_episodes
     
@@ -141,13 +303,15 @@ class ReliableEpisodeFetcher:
         date_str = episode.published.strftime('%Y%m%d')
         return f"{title_clean}_{date_str}"
     
-    async def _try_all_rss_sources(self, podcast_name: str, podcast_config: Dict, days_back: int) -> List[Episode]:
+    async def _try_all_rss_sources(self, podcast_name: str, podcast_config: Dict, 
+                                  days_back: int, correlation_id: str, 
+                                  initial_feed_urls: List[str]) -> List[Episode]:
         """Try all possible RSS sources including discovered ones"""
         all_episodes = []
         tried_urls = set()
         
-        # Start with configured feeds
-        feed_urls = list(podcast_config.get("rss_feeds", []))
+        # Start with provided feeds
+        feed_urls = list(initial_feed_urls)
         
         # Add any cached discovered feeds
         if podcast_name in self.discovered_feeds_cache:
@@ -155,26 +319,66 @@ class ReliableEpisodeFetcher:
         
         # Try to discover more feeds
         if "apple_id" in podcast_config:
-            apple_feed = await self._get_apple_feed_url(podcast_config["apple_id"])
+            apple_feed = await self._get_apple_feed_url(podcast_config["apple_id"], correlation_id)
             if apple_feed:
                 feed_urls.append(apple_feed)
         
         # Deduplicate
         feed_urls = list(set(feed_urls))
         
+        # Progress tracking
+        progress = ProgressTracker(len(feed_urls), correlation_id)
+        
         for url in feed_urls:
             if url in tried_urls:
                 continue
             tried_urls.add(url)
             
-            episodes = await self._try_rss_with_fallbacks(podcast_name, url, days_back)
-            all_episodes.extend(episodes)
+            # Skip if URL has failed recently
+            if self._should_skip_url(url):
+                continue
+            
+            # Get circuit breaker for this URL
+            circuit_breaker = self._get_circuit_breaker(url)
+            
+            try:
+                await progress.start_item(f"RSS: {url[:50]}...")
+                
+                # Try to fetch through circuit breaker
+                async def fetch_rss():
+                    return await self._try_rss_with_fallbacks(
+                        podcast_name, url, days_back, correlation_id
+                    )
+                
+                episodes = await circuit_breaker.call(fetch_rss)
+                all_episodes.extend(episodes)
+                
+                if episodes:
+                    self._record_url_success(url)
+                    await progress.complete_item(True)
+                else:
+                    await progress.complete_item(False)
+                    
+            except Exception as e:
+                logger.debug(f"[{correlation_id}] RSS fetch failed for {url[:50]}...: {e}")
+                self._record_url_failure(url)
+                await progress.complete_item(False)
+        
+        # Log progress summary
+        summary = progress.get_summary()
+        if summary['completed'] > 0:
+            logger.info(
+                f"[{correlation_id}] RSS fetch complete: "
+                f"{summary['completed']}/{summary['total_items']} successful "
+                f"({summary['success_rate']:.0f}% success rate)"
+            )
         
         return all_episodes
     
-    async def _try_rss_with_fallbacks(self, podcast_name: str, feed_url: str, days_back: int) -> List[Episode]:
+    async def _try_rss_with_fallbacks(self, podcast_name: str, feed_url: str, 
+                                     days_back: int, correlation_id: str) -> List[Episode]:
         """Try RSS feed with multiple fallback strategies"""
-        logger.info(f"  Trying RSS: {feed_url}")
+        logger.info(f"[{correlation_id}]   Trying RSS: {feed_url}")
         
         # Try different user agents
         user_agents = [
@@ -185,7 +389,7 @@ class ReliableEpisodeFetcher:
             'Renaissance Weekly Bot/1.0'
         ]
         
-        session = self._get_session()
+        session = self._get_http_session()
         
         for ua in user_agents:
             try:
@@ -193,52 +397,59 @@ class ReliableEpisodeFetcher:
                 response = session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
                 
                 if response.status_code == 200:
-                    return self._parse_rss_feed(response.content, podcast_name, days_back)
+                    episodes = self._parse_rss_feed(response.content, podcast_name, days_back, correlation_id)
+                    if episodes:
+                        # Cache this feed URL as successful
+                        if podcast_name not in self.discovered_feeds_cache:
+                            self.discovered_feeds_cache[podcast_name] = []
+                        if feed_url not in self.discovered_feeds_cache[podcast_name]:
+                            self.discovered_feeds_cache[podcast_name].append(feed_url)
+                    return episodes
                 elif response.status_code == 403:
-                    logger.debug(f"    403 with UA: {ua[:30]}...")
+                    logger.debug(f"[{correlation_id}]     403 with UA: {ua[:30]}...")
                     continue
                 else:
-                    logger.warning(f"    HTTP {response.status_code}")
+                    logger.warning(f"[{correlation_id}]     HTTP {response.status_code}")
                     break
                     
             except requests.Timeout:
-                logger.warning(f"    Timeout with UA: {ua[:30]}...")
+                logger.warning(f"[{correlation_id}]     Timeout with UA: {ua[:30]}...")
                 continue
             except Exception as e:
-                logger.warning(f"    Error with UA {ua[:30]}...: {e}")
+                logger.warning(f"[{correlation_id}]     Error with UA {ua[:30]}...: {e}")
                 continue
         
         return []
     
-    def _parse_rss_feed(self, content: bytes, podcast_name: str, days_back: int) -> List[Episode]:
+    def _parse_rss_feed(self, content: bytes, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Parse RSS feed content into episodes with more robust parsing"""
         try:
             feed = feedparser.parse(content)
             
             if not feed.entries:
-                logger.warning("    No entries in feed")
+                logger.warning(f"[{correlation_id}]     No entries in feed")
                 return []
             
             episodes = []
             cutoff = datetime.now() - timedelta(days=days_back)
             
-            logger.debug(f"    Feed has {len(feed.entries)} entries, checking last {days_back} days")
+            logger.debug(f"[{correlation_id}]     Feed has {len(feed.entries)} entries, checking last {days_back} days")
             
             # Check more entries in case dates are out of order
             for i, entry in enumerate(feed.entries[:100]):  # Increased from 50
                 try:
                     # Log first few entries for debugging
                     if i < 3:
-                        logger.debug(f"    Entry {i}: {entry.get('title', 'No title')[:50]}")
+                        logger.debug(f"[{correlation_id}]     Entry {i}: {entry.get('title', 'No title')[:50]}")
                     
                     pub_date = self._parse_date(entry)
                     if not pub_date:
                         if i < 3:
-                            logger.debug(f"      No valid date found")
+                            logger.debug(f"[{correlation_id}]       No valid date found")
                         continue
                     
                     if i < 3:
-                        logger.debug(f"      Published: {pub_date.strftime('%Y-%m-%d')}")
+                        logger.debug(f"[{correlation_id}]       Published: {pub_date.strftime('%Y-%m-%d')}")
                     
                     # Don't stop on old episodes - some feeds aren't chronological
                     if pub_date < cutoff:
@@ -246,7 +457,7 @@ class ReliableEpisodeFetcher:
                     
                     audio_url = self._extract_audio_url(entry)
                     if not audio_url:
-                        logger.debug(f"      No audio URL for: {entry.get('title', 'Unknown')[:50]}")
+                        logger.debug(f"[{correlation_id}]       No audio URL for: {entry.get('title', 'Unknown')[:50]}")
                         continue
                     
                     episode = Episode(
@@ -261,62 +472,67 @@ class ReliableEpisodeFetcher:
                         guid=entry.get('guid', entry.get('id', ''))
                     )
                     episodes.append(episode)
-                    logger.debug(f"    ✓ Added episode: {episode.title[:50]} ({episode.published.strftime('%Y-%m-%d')})")
+                    logger.debug(f"[{correlation_id}]     ✓ Added episode: {episode.title[:50]} ({episode.published.strftime('%Y-%m-%d')})")
                     
                 except Exception as e:
-                    logger.debug(f"    Error parsing entry {i}: {e}")
+                    logger.debug(f"[{correlation_id}]     Error parsing entry {i}: {e}")
                     continue
             
-            logger.info(f"    Found {len(episodes)} episodes from this feed")
+            logger.info(f"[{correlation_id}]     Found {len(episodes)} episodes from this feed")
             return episodes
             
         except Exception as e:
-            logger.error(f"    Feed parse error: {e}")
+            logger.error(f"[{correlation_id}]     Feed parse error: {e}")
             return []
     
-    async def _comprehensive_apple_search(self, podcast_name: str, apple_id: str, days_back: int) -> List[Episode]:
+    async def _comprehensive_apple_search(self, podcast_name: str, apple_id: str, 
+                                         days_back: int, correlation_id: str) -> List[Episode]:
         """Comprehensive Apple Podcasts search with multiple strategies"""
         episodes = []
-        session = self._get_session()
+        session = self._get_http_session()
         
-        logger.info(f"  🍎 Searching Apple Podcasts (ID: {apple_id})")
+        logger.info(f"[{correlation_id}]   🍎 Searching Apple Podcasts (ID: {apple_id})")
         
         # Strategy 1: Direct lookup API
         try:
             lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
-            logger.debug(f"    Trying Apple lookup: {lookup_url}")
+            logger.debug(f"[{correlation_id}]     Trying Apple lookup: {lookup_url}")
             response = session.get(lookup_url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
-                logger.debug(f"    Apple lookup response: {data.get('resultCount', 0)} results")
+                logger.debug(f"[{correlation_id}]     Apple lookup response: {data.get('resultCount', 0)} results")
                 
                 if data.get("results"):
                     podcast_info = data["results"][0]
                     feed_url = podcast_info.get("feedUrl")
-                    logger.info(f"    Found feed URL: {feed_url}")
+                    logger.info(f"[{correlation_id}]     Found feed URL: {feed_url}")
                     
                     if feed_url:
-                        episodes.extend(await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back))
+                        episodes.extend(
+                            await self._try_rss_with_fallbacks(
+                                podcast_name, feed_url, days_back, correlation_id
+                            )
+                        )
                         
                         # Cache this feed URL
                         if podcast_name not in self.discovered_feeds_cache:
                             self.discovered_feeds_cache[podcast_name] = []
                         self.discovered_feeds_cache[podcast_name].append(feed_url)
                     else:
-                        logger.warning("    No feed URL in Apple data")
+                        logger.warning(f"[{correlation_id}]     No feed URL in Apple data")
                 else:
-                    logger.warning(f"    No results for Apple ID {apple_id}")
+                    logger.warning(f"[{correlation_id}]     No results for Apple ID {apple_id}")
             else:
-                logger.warning(f"    Apple lookup failed with status {response.status_code}")
+                logger.warning(f"[{correlation_id}]     Apple lookup failed with status {response.status_code}")
                 
         except Exception as e:
-            logger.error(f"    Apple lookup error: {e}")
+            logger.error(f"[{correlation_id}]     Apple lookup error: {e}")
         
         # Strategy 2: Search API if no episodes found
         if not episodes:
             try:
-                logger.info("    Trying Apple search API...")
+                logger.info(f"[{correlation_id}]     Trying Apple search API...")
                 search_url = "https://itunes.apple.com/search"
                 
                 # Try searching by podcast name
@@ -330,7 +546,7 @@ class ReliableEpisodeFetcher:
                 response = session.get(search_url, params=params, timeout=10)
                 if response.status_code == 200:
                     data = response.json()
-                    logger.debug(f"    Search found {data.get('resultCount', 0)} podcasts")
+                    logger.debug(f"[{correlation_id}]     Search found {data.get('resultCount', 0)} podcasts")
                     
                     for result in data.get("results", []):
                         # Check if this matches our apple ID or podcast name
@@ -340,8 +556,12 @@ class ReliableEpisodeFetcher:
                         if result_id == apple_id or podcast_name.lower() in result_name:
                             feed_url = result.get("feedUrl")
                             if feed_url:
-                                logger.info(f"    Found matching podcast with feed: {feed_url}")
-                                episodes.extend(await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back))
+                                logger.info(f"[{correlation_id}]     Found matching podcast with feed: {feed_url}")
+                                episodes.extend(
+                                    await self._try_rss_with_fallbacks(
+                                        podcast_name, feed_url, days_back, correlation_id
+                                    )
+                                )
                                 
                                 # Cache the feed
                                 if podcast_name not in self.discovered_feeds_cache:
@@ -349,19 +569,19 @@ class ReliableEpisodeFetcher:
                                 self.discovered_feeds_cache[podcast_name].append(feed_url)
                                 break
             except Exception as e:
-                logger.error(f"    Apple search error: {e}")
+                logger.error(f"[{correlation_id}]     Apple search error: {e}")
         
         # Strategy 3: Try alternative Apple endpoints
         if not episodes:
             try:
                 # Try the lookup with different parameters
                 alt_lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcastEpisode&limit=50"
-                logger.info("    Trying alternative Apple lookup for episodes...")
+                logger.info(f"[{correlation_id}]     Trying alternative Apple lookup for episodes...")
                 response = session.get(alt_lookup_url, timeout=10)
                 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.debug(f"    Alternative lookup found {data.get('resultCount', 0)} items")
+                    logger.debug(f"[{correlation_id}]     Alternative lookup found {data.get('resultCount', 0)} items")
                     
                     # This might return episodes directly
                     cutoff = datetime.now() - timedelta(days=days_back)
@@ -385,20 +605,20 @@ class ReliableEpisodeFetcher:
                                     )
                                     episodes.append(episode)
                             except Exception as e:
-                                logger.debug(f"    Error parsing episode: {e}")
+                                logger.debug(f"[{correlation_id}]     Error parsing episode: {e}")
                                 continue
                                 
             except Exception as e:
-                logger.error(f"    Alternative Apple lookup error: {e}")
+                logger.error(f"[{correlation_id}]     Alternative Apple lookup error: {e}")
         
         if episodes:
-            logger.info(f"  ✅ Found {len(episodes)} episodes from Apple Podcasts")
+            logger.info(f"[{correlation_id}]   ✅ Found {len(episodes)} episodes from Apple Podcasts")
         else:
-            logger.warning(f"  ⚠️ No episodes found from Apple Podcasts ID {apple_id}")
+            logger.warning(f"[{correlation_id}]   ⚠️ No episodes found from Apple Podcasts ID {apple_id}")
         
         return episodes
     
-    async def _multi_platform_search(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _multi_platform_search(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search multiple podcast platforms for episodes"""
         episodes = []
         
@@ -412,24 +632,24 @@ class ReliableEpisodeFetcher:
         
         for platform_name, search_func in platforms:
             try:
-                logger.debug(f"  Searching {platform_name}...")
-                platform_episodes = await search_func(podcast_name, days_back)
+                logger.debug(f"[{correlation_id}]   Searching {platform_name}...")
+                platform_episodes = await search_func(podcast_name, days_back, correlation_id)
                 episodes.extend(platform_episodes)
             except Exception as e:
-                logger.debug(f"  {platform_name} search failed: {e}")
+                logger.debug(f"[{correlation_id}]   {platform_name} search failed: {e}")
         
         return episodes
     
-    async def _search_spotify(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _search_spotify(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search Spotify for podcast (placeholder for future implementation)"""
         # Spotify requires OAuth, so this is a placeholder
         # Could be implemented with Spotify Web API in the future
         return []
     
-    async def _search_google_podcasts(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _search_google_podcasts(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search Google for podcast RSS feeds"""
         try:
-            session = self._get_session()
+            session = self._get_http_session()
             
             # Google search for RSS feeds
             query = f'"{podcast_name}" podcast RSS feed filetype:xml OR filetype:rss'
@@ -456,31 +676,31 @@ class ReliableEpisodeFetcher:
                 # Try each discovered feed
                 episodes = []
                 for feed_url in feed_urls[:5]:  # Limit to first 5
-                    eps = await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back)
+                    eps = await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back, correlation_id)
                     episodes.extend(eps)
                 
                 return episodes
                 
         except Exception as e:
-            logger.debug(f"Google search error: {e}")
+            logger.debug(f"[{correlation_id}] Google search error: {e}")
         
         return []
     
-    async def _search_podcast_addict(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _search_podcast_addict(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search Podcast Addict database (placeholder)"""
         # Would require API access or web scraping
         return []
     
-    async def _search_listen_notes(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _search_listen_notes(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search Listen Notes API (requires API key)"""
         # Listen Notes has a good API but requires registration
         # This is a placeholder for future implementation
         return []
     
-    async def _google_rss_search(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _google_rss_search(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Use Google to find RSS feeds for the podcast"""
         episodes = []
-        session = self._get_session()
+        session = self._get_http_session()
         
         # Various search queries to try
         queries = [
@@ -507,7 +727,7 @@ class ReliableEpisodeFetcher:
                     urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+\.(?:rss|xml)', response.text)
                     
                     for url in set(urls[:3]):  # Try first 3 unique URLs
-                        eps = await self._try_rss_with_fallbacks(podcast_name, url, days_back)
+                        eps = await self._try_rss_with_fallbacks(podcast_name, url, days_back, correlation_id)
                         episodes.extend(eps)
                         
                         if eps:  # Cache successful feed
@@ -516,15 +736,15 @@ class ReliableEpisodeFetcher:
                             self.discovered_feeds_cache[podcast_name].append(url)
                             
             except Exception as e:
-                logger.debug(f"Google RSS search error: {e}")
+                logger.debug(f"[{correlation_id}] Google RSS search error: {e}")
         
         return episodes
     
-    async def _search_apple_by_term(self, search_term: str, days_back: int) -> List[Episode]:
+    async def _search_apple_by_term(self, search_term: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Search Apple Podcasts using a search term"""
         try:
-            session = self._get_session()
-            logger.info(f"    Searching Apple with term: {search_term}")
+            session = self._get_http_session()
+            logger.info(f"[{correlation_id}]     Searching Apple with term: {search_term}")
             search_url = "https://itunes.apple.com/search"
             params = {
                 "term": search_term,
@@ -541,24 +761,25 @@ class ReliableEpisodeFetcher:
                 for result in data.get("results", []):
                     feed_url = result.get("feedUrl")
                     if feed_url:
-                        logger.info(f"    Found podcast: {result.get('trackName')} with feed: {feed_url}")
+                        logger.info(f"[{correlation_id}]     Found podcast: {result.get('trackName')} with feed: {feed_url}")
                         episodes = await self._try_rss_with_fallbacks(
                             result.get('trackName', search_term), 
                             feed_url, 
-                            days_back
+                            days_back,
+                            correlation_id
                         )
                         if episodes:
                             return episodes
                             
         except Exception as e:
-            logger.debug(f"Search by term error: {e}")
+            logger.debug(f"[{correlation_id}] Search by term error: {e}")
         
         return []
     
-    async def _get_apple_feed_url(self, apple_id: str) -> Optional[str]:
+    async def _get_apple_feed_url(self, apple_id: str, correlation_id: str) -> Optional[str]:
         """Get RSS feed URL from Apple Podcasts ID"""
         try:
-            session = self._get_session()
+            session = self._get_http_session()
             lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
             response = session.get(lookup_url, timeout=10)
             
@@ -567,11 +788,11 @@ class ReliableEpisodeFetcher:
                 if data.get("results"):
                     return data["results"][0].get("feedUrl")
         except Exception as e:
-            logger.debug(f"Apple feed lookup error: {e}")
+            logger.debug(f"[{correlation_id}] Apple feed lookup error: {e}")
         
         return None
     
-    async def _try_podcast_index(self, podcast_name: str, days_back: int) -> List[Episode]:
+    async def _try_podcast_index(self, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Try PodcastIndex.org API with better error handling"""
         try:
             # Search for podcast
@@ -608,21 +829,21 @@ class ReliableEpisodeFetcher:
                     )
                     episodes.append(episode)
                 except Exception as e:
-                    logger.debug(f"Error parsing PodcastIndex episode: {e}")
+                    logger.debug(f"[{correlation_id}] Error parsing PodcastIndex episode: {e}")
                     continue
             
             return episodes
             
         except Exception as e:
-            logger.debug(f"PodcastIndex error: {e}")
+            logger.debug(f"[{correlation_id}] PodcastIndex error: {e}")
             return []
     
-    async def _try_web_scraping(self, podcast_name: str, website: str, days_back: int) -> List[Episode]:
+    async def _try_web_scraping(self, podcast_name: str, website: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Enhanced web scraping with multiple strategies"""
         if not website:
             return []
         
-        session = self._get_session()
+        session = await self._get_aiohttp_session()
         
         # Try multiple URL patterns
         url_patterns = [
@@ -636,38 +857,41 @@ class ReliableEpisodeFetcher:
         
         for url in url_patterns:
             try:
-                response = session.get(url, timeout=15)
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    
-                    # Look for RSS feed links in the page
-                    feed_links = soup.find_all('link', {'type': ['application/rss+xml', 'application/atom+xml']})
-                    for link in feed_links:
-                        feed_url = link.get('href')
-                        if feed_url:
-                            if not feed_url.startswith('http'):
-                                feed_url = urljoin(url, feed_url)
-                            
-                            episodes = await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back)
-                            if episodes:
-                                return episodes
-                    
-                    # Try specific scraping strategies based on platform
-                    if 'substack.com' in website:
-                        return await self._scrape_substack(podcast_name, website, days_back)
-                    elif 'transistor.fm' in website:
-                        return await self._scrape_transistor(podcast_name, website, days_back)
-                    # Add more platform-specific scrapers as needed
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status == 200:
+                        html = await response.text()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        
+                        # Look for RSS feed links in the page
+                        feed_links = soup.find_all('link', {'type': ['application/rss+xml', 'application/atom+xml']})
+                        for link in feed_links:
+                            feed_url = link.get('href')
+                            if feed_url:
+                                if not feed_url.startswith('http'):
+                                    feed_url = urljoin(url, feed_url)
+                                
+                                episodes = await self._try_rss_with_fallbacks(
+                                    podcast_name, feed_url, days_back, correlation_id
+                                )
+                                if episodes:
+                                    return episodes
+                        
+                        # Try specific scraping strategies based on platform
+                        if 'substack.com' in website:
+                            return await self._scrape_substack(podcast_name, website, days_back, correlation_id)
+                        elif 'transistor.fm' in website:
+                            return await self._scrape_transistor(podcast_name, website, days_back, correlation_id)
+                        # Add more platform-specific scrapers as needed
                     
             except Exception as e:
-                logger.debug(f"Web scraping error for {url}: {e}")
+                logger.debug(f"[{correlation_id}] Web scraping error for {url}: {e}")
         
         return []
     
-    async def _scrape_substack(self, podcast_name: str, website: str, days_back: int) -> List[Episode]:
+    async def _scrape_substack(self, podcast_name: str, website: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Enhanced Substack scraping"""
         try:
-            session = self._get_session()
+            session = await self._get_aiohttp_session()
             
             # Try multiple Substack URL patterns
             urls_to_try = [
@@ -682,67 +906,69 @@ class ReliableEpisodeFetcher:
             
             for url in urls_to_try:
                 try:
-                    response = session.get(url, timeout=15)
-                    if response.status_code != 200:
-                        continue
-                    
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    
-                    # Look for podcast episodes
-                    for article in soup.find_all(['article', 'div'], class_=['post', 'post-preview', 'portable-archive-list-item']):
-                        # Check if it's a podcast post
-                        audio_indicators = article.find_all(['audio', 'div'], class_=['audio-player', 'podcast-player', 'enclosure'])
-                        if not audio_indicators:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                        if response.status != 200:
                             continue
                         
-                        # Extract episode data
-                        title_elem = article.find(['h1', 'h2', 'h3', 'a'], class_=['post-title', 'portable-archive-list-item-title'])
-                        if not title_elem:
-                            continue
+                        html = await response.text()
+                        soup = BeautifulSoup(html, 'html.parser')
                         
-                        title = title_elem.get_text(strip=True)
-                        
-                        # Get link
-                        link = title_elem.get('href') if title_elem.name == 'a' else article.find('a')['href']
-                        if not link.startswith('http'):
-                            link = urljoin(website, link)
-                        
-                        # Get date
-                        date_elem = article.find(['time', 'div'], class_=['post-date', 'pencraft'])
-                        if date_elem:
-                            pub_date = self._parse_flexible_date(date_elem.get_text(strip=True))
-                            if pub_date and pub_date >= cutoff:
-                                # Get the full post to find audio URL
-                                post_response = session.get(link, timeout=10)
-                                if post_response.status_code == 200:
-                                    post_soup = BeautifulSoup(post_response.content, 'html.parser')
-                                    
-                                    # Find audio URL
-                                    audio_elem = post_soup.find('audio')
-                                    if audio_elem and audio_elem.get('src'):
-                                        audio_url = audio_elem['src']
-                                        
-                                        episode = Episode(
-                                            podcast=podcast_name,
-                                            title=title,
-                                            published=pub_date,
-                                            audio_url=audio_url,
-                                            link=link,
-                                            description=self._extract_description_from_page(post_soup)
-                                        )
-                                        episodes.append(episode)
-                        
+                        # Look for podcast episodes
+                        for article in soup.find_all(['article', 'div'], class_=['post', 'post-preview', 'portable-archive-list-item']):
+                            # Check if it's a podcast post
+                            audio_indicators = article.find_all(['audio', 'div'], class_=['audio-player', 'podcast-player', 'enclosure'])
+                            if not audio_indicators:
+                                continue
+                            
+                            # Extract episode data
+                            title_elem = article.find(['h1', 'h2', 'h3', 'a'], class_=['post-title', 'portable-archive-list-item-title'])
+                            if not title_elem:
+                                continue
+                            
+                            title = title_elem.get_text(strip=True)
+                            
+                            # Get link
+                            link = title_elem.get('href') if title_elem.name == 'a' else article.find('a')['href']
+                            if not link.startswith('http'):
+                                link = urljoin(website, link)
+                            
+                            # Get date
+                            date_elem = article.find(['time', 'div'], class_=['post-date', 'pencraft'])
+                            if date_elem:
+                                pub_date = self._parse_flexible_date(date_elem.get_text(strip=True))
+                                if pub_date and pub_date >= cutoff:
+                                    # Get the full post to find audio URL
+                                    async with session.get(link, timeout=aiohttp.ClientTimeout(total=10)) as post_response:
+                                        if post_response.status == 200:
+                                            post_html = await post_response.text()
+                                            post_soup = BeautifulSoup(post_html, 'html.parser')
+                                            
+                                            # Find audio URL
+                                            audio_elem = post_soup.find('audio')
+                                            if audio_elem and audio_elem.get('src'):
+                                                audio_url = audio_elem['src']
+                                                
+                                                episode = Episode(
+                                                    podcast=podcast_name,
+                                                    title=title,
+                                                    published=pub_date,
+                                                    audio_url=audio_url,
+                                                    link=link,
+                                                    description=self._extract_description_from_page(post_soup)
+                                                )
+                                                episodes.append(episode)
+                    
                 except Exception as e:
-                    logger.debug(f"Substack scraping error for {url}: {e}")
+                    logger.debug(f"[{correlation_id}] Substack scraping error for {url}: {e}")
                     continue
             
             return episodes
             
         except Exception as e:
-            logger.error(f"Substack scraping error: {e}")
+            logger.error(f"[{correlation_id}] Substack scraping error: {e}")
             return []
     
-    async def _scrape_transistor(self, podcast_name: str, website: str, days_back: int) -> List[Episode]:
+    async def _scrape_transistor(self, podcast_name: str, website: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Scrape Transistor.fm hosted podcasts"""
         try:
             # Transistor has a predictable RSS feed pattern
@@ -753,27 +979,32 @@ class ReliableEpisodeFetcher:
                     show_id = show_id_match.group(1)
                     feed_url = f"https://feeds.transistor.fm/{show_id}"
                     
-                    episodes = await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back)
+                    episodes = await self._try_rss_with_fallbacks(
+                        podcast_name, feed_url, days_back, correlation_id
+                    )
                     if episodes:
                         return episodes
             
             # Fallback to generic scraping
-            session = self._get_session()
-            response = session.get(website, timeout=15)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, 'html.parser')
-                
-                # Look for RSS feed link
-                feed_link = soup.find('link', {'type': 'application/rss+xml'})
-                if feed_link and feed_link.get('href'):
-                    feed_url = feed_link['href']
-                    if not feed_url.startswith('http'):
-                        feed_url = urljoin(website, feed_url)
+            session = await self._get_aiohttp_session()
+            async with session.get(website, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
                     
-                    return await self._try_rss_with_fallbacks(podcast_name, feed_url, days_back)
+                    # Look for RSS feed link
+                    feed_link = soup.find('link', {'type': 'application/rss+xml'})
+                    if feed_link and feed_link.get('href'):
+                        feed_url = feed_link['href']
+                        if not feed_url.startswith('http'):
+                            feed_url = urljoin(website, feed_url)
+                        
+                        return await self._try_rss_with_fallbacks(
+                            podcast_name, feed_url, days_back, correlation_id
+                        )
             
         except Exception as e:
-            logger.debug(f"Transistor scraping error: {e}")
+            logger.debug(f"[{correlation_id}] Transistor scraping error: {e}")
         
         return []
     
@@ -978,12 +1209,15 @@ class ReliableEpisodeFetcher:
         if "apple_id" not in podcast_config:
             return {"status": "skipped", "reason": "No Apple ID configured"}
         
+        correlation_id = f"{self._correlation_id}-verify"
+        
         try:
             # Get all episodes from Apple
             apple_episodes = await self._comprehensive_apple_search(
                 podcast_config["name"], 
                 podcast_config["apple_id"], 
-                days_back
+                days_back,
+                correlation_id
             )
             
             # Compare
@@ -1006,13 +1240,13 @@ class ReliableEpisodeFetcher:
                     }
                     for ep in missing_episodes
                 ],
-                "apple_feed_url": await self._get_apple_feed_url(podcast_config["apple_id"])
+                "apple_feed_url": await self._get_apple_feed_url(podcast_config["apple_id"], correlation_id)
             }
             
             return result
             
         except Exception as e:
-            logger.error(f"Apple verification error: {e}")
+            logger.error(f"[{correlation_id}] Apple verification error: {e}")
             return {"status": "error", "reason": str(e)}
     
     async def fetch_missing_from_apple(self, podcast_config: Dict, existing_episodes: List[Episode], verification_result: Dict) -> List[Episode]:
@@ -1020,11 +1254,14 @@ class ReliableEpisodeFetcher:
         if verification_result["status"] != "success" or verification_result["missing_count"] == 0:
             return []
         
+        correlation_id = f"{self._correlation_id}-missing"
+        
         # We should already have these from comprehensive search
         apple_episodes = await self._comprehensive_apple_search(
             podcast_config["name"],
             podcast_config["apple_id"],
-            30  # Look back further
+            30,  # Look back further
+            correlation_id
         )
         
         # Filter to only missing ones
@@ -1035,18 +1272,19 @@ class ReliableEpisodeFetcher:
     
     async def debug_single_podcast(self, podcast_config: Dict, days_back: int = 7):
         """Debug function to check a single podcast in detail"""
-        logger.info(f"\n🔍 DEBUGGING: {podcast_config['name']}")
+        correlation_id = f"{self._correlation_id}-debug"
+        logger.info(f"\n🔍 [{correlation_id}] DEBUGGING: {podcast_config['name']}")
         logger.info("="*80)
         
         # Run the full fetch with detailed logging
-        logger.info("\n🚀 Running bulletproof episode fetch...")
+        logger.info(f"\n🚀 [{correlation_id}] Running bulletproof episode fetch...")
         all_episodes = await self.fetch_episodes(podcast_config, days_back)
         
-        logger.info(f"\n📊 RESULTS:")
+        logger.info(f"\n📊 [{correlation_id}] RESULTS:")
         logger.info(f"Total episodes found: {len(all_episodes)}")
         
         if all_episodes:
-            logger.info("\n📝 Episode Details:")
+            logger.info(f"\n📝 [{correlation_id}] Episode Details:")
             for i, ep in enumerate(all_episodes, 1):
                 logger.info(f"\n{i}. {ep.title}")
                 logger.info(f"   Published: {ep.published.strftime('%Y-%m-%d %H:%M')}")
@@ -1057,8 +1295,14 @@ class ReliableEpisodeFetcher:
         
         # Show discovered feeds
         if podcast_config['name'] in self.discovered_feeds_cache:
-            logger.info(f"\n🔗 Discovered RSS feeds:")
+            logger.info(f"\n🔗 [{correlation_id}] Discovered RSS feeds:")
             for feed in self.discovered_feeds_cache[podcast_config['name']]:
                 logger.info(f"   - {feed}")
+        
+        # Show circuit breaker states
+        logger.info(f"\n⚡ [{correlation_id}] Circuit Breaker States:")
+        for url, breaker in self.circuit_breakers.items():
+            if podcast_config['name'] in url or any(feed in url for feed in podcast_config.get('rss_feeds', [])):
+                logger.info(f"   - {url[:50]}... State: {breaker.state}, Failures: {breaker.failure_count}")
         
         logger.info("\n" + "="*80)

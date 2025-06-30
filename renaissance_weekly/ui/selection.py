@@ -6,6 +6,8 @@ import threading
 import uuid
 import socket
 import time
+import asyncio
+import traceback
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import List, Dict, Tuple, Callable, Optional
 from html import escape
@@ -34,9 +36,14 @@ class EpisodeSelector:
         self._server = None
         self._server_thread = None
         self._fetch_callback = None
+        self._fetch_thread = None
+        self._fetch_exception = None
+        self._correlation_id = str(uuid.uuid4())[:8]
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
+        logger.info(f"[{self._correlation_id}] Starting episode selection UI")
+        
         self._fetch_callback = fetch_callback
         self.configuration = {
             'lookback_days': days_back,
@@ -49,6 +56,7 @@ class EpisodeSelector:
         self.selected_podcasts = []
         self.episode_cache = []
         self._selection_complete.clear()
+        self._fetch_exception = None
         
         # Create and start server
         port = self._find_available_port()
@@ -58,33 +66,38 @@ class EpisodeSelector:
         
         # Open browser once
         url = f'http://localhost:{port}/'
-        logger.info(f"🌐 Opening selection UI at {url}")
+        logger.info(f"[{self._correlation_id}] 🌐 Opening selection UI at {url}")
         try:
             webbrowser.open(url)
         except:
-            logger.warning(f"Please open: {url}")
+            logger.warning(f"[{self._correlation_id}] Please open: {url}")
         
         # Wait for completion
-        logger.info("⏳ Waiting for selection process to complete...")
+        logger.info(f"[{self._correlation_id}] ⏳ Waiting for selection process to complete...")
         if self._selection_complete.wait(timeout=600):  # 10 minute timeout
-            logger.info("✅ Selection event received")
+            logger.info(f"[{self._correlation_id}] ✅ Selection event received")
         else:
-            logger.warning("⏰ Selection timeout")
+            logger.warning(f"[{self._correlation_id}] ⏰ Selection timeout")
+        
+        # Check for fetch exceptions
+        if self._fetch_exception:
+            logger.error(f"[{self._correlation_id}] Fetch thread error: {self._fetch_exception}")
+            raise self._fetch_exception
         
         # Get selected episodes
         selected_episodes = []
         if self._selected_episode_indices:
-            logger.info(f"📋 Processing {len(self._selected_episode_indices)} selected episode indices")
+            logger.info(f"[{self._correlation_id}] 📋 Processing {len(self._selected_episode_indices)} selected episode indices")
             for idx in self._selected_episode_indices:
                 if 0 <= idx < len(self.episode_cache):
                     selected_episodes.append(self.episode_cache[idx])
                 else:
-                    logger.warning(f"Invalid episode index: {idx}")
+                    logger.warning(f"[{self._correlation_id}] Invalid episode index: {idx}")
         
         # Cleanup
         self._shutdown_server()
         
-        logger.info(f"✅ Selection complete: {len(selected_episodes)} episodes")
+        logger.info(f"[{self._correlation_id}] ✅ Selection complete: {len(selected_episodes)} episodes")
         return selected_episodes, self.configuration
     
     def _create_unified_server(self, port: int) -> HTTPServer:
@@ -116,6 +129,15 @@ class EpisodeSelector:
                     self._send_json(response_data)
                 elif self.path == f'/api/status':
                     self._send_json(parent.loading_status)
+                elif self.path == '/api/error':
+                    # Check if there was an error
+                    if parent._fetch_exception:
+                        self._send_json({
+                            'error': True,
+                            'message': str(parent._fetch_exception)
+                        })
+                    else:
+                        self._send_json({'error': False})
                 else:
                     self.send_error(404)
             
@@ -140,7 +162,12 @@ class EpisodeSelector:
                     self._send_json({'status': 'success'})
                     
                     # Start fetching episodes in background
-                    threading.Thread(target=parent._fetch_episodes_background, daemon=True).start()
+                    parent._fetch_thread = threading.Thread(
+                        target=parent._fetch_episodes_background,
+                        daemon=True,
+                        name=f"fetch-{parent._correlation_id}"
+                    )
+                    parent._fetch_thread.start()
                     
                 elif self.path == '/api/select-episodes':
                     try:
@@ -148,15 +175,18 @@ class EpisodeSelector:
                         parent._selected_episode_indices = data.get('selected_episodes', [])
                         parent.state = "complete"
                         
-                        logger.info(f"📥 Received episode selection: {len(parent._selected_episode_indices)} episodes")
+                        logger.info(f"[{parent._correlation_id}] 📥 Received episode selection: {len(parent._selected_episode_indices)} episodes")
                         
                         self._send_json({'status': 'success', 'count': len(parent._selected_episode_indices)})
                         
                         # Signal completion after response is sent
-                        threading.Thread(target=lambda: (time.sleep(0.1), parent._selection_complete.set()), daemon=True).start()
+                        threading.Thread(
+                            target=lambda: (time.sleep(0.1), parent._selection_complete.set()),
+                            daemon=True
+                        ).start()
                         
                     except Exception as e:
-                        logger.error(f"Error in episode selection: {e}", exc_info=True)
+                        logger.error(f"[{parent._correlation_id}] Error in episode selection: {e}", exc_info=True)
                         self._send_json({'status': 'error', 'message': str(e)})
                     
                 else:
@@ -183,18 +213,18 @@ class EpisodeSelector:
     
     def _run_server(self):
         """Run server until completion"""
-        logger.debug("Server thread started")
+        logger.debug(f"[{self._correlation_id}] Server thread started")
         while not self._selection_complete.is_set():
             try:
                 self._server.handle_request()
             except Exception as e:
                 if not self._selection_complete.is_set():
-                    logger.debug(f"Server error: {e}")
-        logger.debug("Server thread ending")
+                    logger.debug(f"[{self._correlation_id}] Server error: {e}")
+        logger.debug(f"[{self._correlation_id}] Server thread ending")
     
     def _shutdown_server(self):
         """Shutdown server cleanly"""
-        logger.debug("Shutting down server...")
+        logger.debug(f"[{self._correlation_id}] Shutting down server...")
         
         # Signal server to stop
         self._selection_complete.set()
@@ -202,23 +232,31 @@ class EpisodeSelector:
         # Wait for server thread to finish
         if self._server_thread and self._server_thread.is_alive():
             self._server_thread.join(timeout=2)
-            logger.debug("Server thread joined")
+            logger.debug(f"[{self._correlation_id}] Server thread joined")
+        
+        # Wait for fetch thread to finish
+        if self._fetch_thread and self._fetch_thread.is_alive():
+            logger.debug(f"[{self._correlation_id}] Waiting for fetch thread...")
+            self._fetch_thread.join(timeout=5)
+            logger.debug(f"[{self._correlation_id}] Fetch thread joined")
         
         # Close server
         if self._server:
             try:
                 self._server.server_close()
-                logger.debug("Server closed")
+                logger.debug(f"[{self._correlation_id}] Server closed")
             except Exception as e:
-                logger.debug(f"Server close error: {e}")
+                logger.debug(f"[{self._correlation_id}] Server close error: {e}")
     
     def _fetch_episodes_background(self):
-        """Fetch episodes in background"""
+        """Fetch episodes in background with proper event loop management"""
+        loop = None
+        
         try:
             if not self._fetch_callback:
                 raise Exception("No fetch callback provided")
             
-            logger.info(f"📡 Background fetch started for {len(self.selected_podcasts)} podcasts")
+            logger.info(f"[{self._correlation_id}] 📡 Background fetch started for {len(self.selected_podcasts)} podcasts")
             
             def progress_callback(podcast_name, index, total):
                 self.loading_status = {
@@ -227,32 +265,74 @@ class EpisodeSelector:
                     'total': total,
                     'current_podcast': podcast_name
                 }
-                logger.debug(f"Progress: {podcast_name} ({index+1}/{total})")
+                logger.debug(f"[{self._correlation_id}] Progress: {podcast_name} ({index+1}/{total})")
             
-            # Call the fetch callback (it handles its own event loop)
-            episodes = self._fetch_callback(
-                self.selected_podcasts,
-                self.configuration['lookback_days'],
-                progress_callback
-            )
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            # Store episodes
-            self.episode_cache = episodes
-            self.state = "episode_selection"
-            self.loading_status = {
-                'status': 'ready',
-                'episode_count': len(episodes)
-            }
-            
-            logger.info(f"✅ Background fetch complete: {len(episodes)} episodes")
+            try:
+                # Call the fetch callback (it handles its own async execution)
+                episodes = self._fetch_callback(
+                    self.selected_podcasts,
+                    self.configuration['lookback_days'],
+                    progress_callback
+                )
+                
+                # Store episodes
+                self.episode_cache = episodes
+                self.state = "episode_selection"
+                self.loading_status = {
+                    'status': 'ready',
+                    'episode_count': len(episodes)
+                }
+                
+                logger.info(f"[{self._correlation_id}] ✅ Background fetch complete: {len(episodes)} episodes")
+                
+            except Exception as e:
+                logger.error(f"[{self._correlation_id}] Error in fetch callback: {e}", exc_info=True)
+                self._fetch_exception = e
+                self.state = "error"
+                self.loading_status = {
+                    'status': 'error',
+                    'error': str(e)
+                }
+                # Signal completion even on error
+                self._selection_complete.set()
+                raise
             
         except Exception as e:
-            logger.error(f"Error fetching episodes: {e}", exc_info=True)
+            logger.error(f"[{self._correlation_id}] Error fetching episodes: {e}", exc_info=True)
+            self._fetch_exception = e
             self.state = "error"
             self.loading_status = {
                 'status': 'error',
                 'error': str(e)
             }
+            # Signal completion even on error
+            self._selection_complete.set()
+            
+        finally:
+            # Clean up event loop
+            if loop:
+                try:
+                    # Cancel any pending tasks
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    
+                    # Wait for cancellation
+                    if pending:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    
+                    # Close the loop
+                    loop.close()
+                    asyncio.set_event_loop(None)
+                    
+                    logger.debug(f"[{self._correlation_id}] Event loop cleaned up in fetch thread")
+                    
+                except Exception as e:
+                    logger.debug(f"[{self._correlation_id}] Error cleaning up event loop: {e}")
     
     def _find_available_port(self, start_port: int = 8888) -> int:
         """Find an available port"""
@@ -289,7 +369,8 @@ class EpisodeSelector:
                 transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
             }},
             episodes: [],
-            statusInterval: null
+            statusInterval: null,
+            errorCheckInterval: null
         }};
         
         // Render functions for each state
@@ -414,6 +495,25 @@ class EpisodeSelector:
                                 </div>
                             `).join('')}}
                         </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderError() {{
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Error</div>
+                </div>
+                
+                <div class="container">
+                    <div class="loading-content" style="margin: 100px auto;">
+                        <div style="font-size: 60px; color: #dc3545; margin-bottom: 20px;">✗</div>
+                        <h2>Something went wrong</h2>
+                        <p style="margin-top: 20px; color: #666;">An error occurred while fetching episodes. Please try again.</p>
+                        <p style="margin-top: 10px; color: #999; font-size: 14px;">${{APP_STATE.loading_status.error || 'Unknown error'}}</p>
+                        <button class="button button-primary" style="margin-top: 30px;" onclick="location.reload()">Try Again</button>
                     </div>
                 </div>
             `;
@@ -640,6 +740,7 @@ class EpisodeSelector:
                 APP_STATE.state = 'loading';
                 render();
                 startStatusPolling();
+                startErrorChecking();
             }}
         }}
         
@@ -672,6 +773,30 @@ class EpisodeSelector:
             }}
         }}
         
+        function startErrorChecking() {{
+            // Check for errors periodically
+            APP_STATE.errorCheckInterval = setInterval(async () => {{
+                try {{
+                    const response = await fetch('/api/error');
+                    const data = await response.json();
+                    
+                    if (data.error) {{
+                        clearInterval(APP_STATE.statusInterval);
+                        clearInterval(APP_STATE.errorCheckInterval);
+                        
+                        APP_STATE.state = 'error';
+                        APP_STATE.loading_status = {{
+                            status: 'error',
+                            error: data.message
+                        }};
+                        render();
+                    }}
+                }} catch (e) {{
+                    console.error('Error check failed:', e);
+                }}
+            }}, 1000);
+        }}
+        
         function startStatusPolling() {{
             APP_STATE.statusInterval = setInterval(async () => {{
                 const response = await fetch('/api/status');
@@ -700,6 +825,7 @@ class EpisodeSelector:
                     }}
                 }} else if (status.status === 'ready') {{
                     clearInterval(APP_STATE.statusInterval);
+                    clearInterval(APP_STATE.errorCheckInterval);
                     
                     // Update all progress items to complete
                     document.querySelectorAll('.progress-item').forEach(item => {{
@@ -721,6 +847,13 @@ class EpisodeSelector:
                             render();
                         }}
                     }}, 1000);
+                }} else if (status.status === 'error') {{
+                    clearInterval(APP_STATE.statusInterval);
+                    clearInterval(APP_STATE.errorCheckInterval);
+                    
+                    APP_STATE.state = 'error';
+                    APP_STATE.loading_status = status;
+                    render();
                 }}
             }}, 1000);
         }}
@@ -742,6 +875,9 @@ class EpisodeSelector:
                 case 'complete':
                     app.innerHTML = renderComplete();
                     break;
+                case 'error':
+                    app.innerHTML = renderError();
+                    break;
             }}
         }}
         
@@ -751,7 +887,7 @@ class EpisodeSelector:
         // Start checking for state updates after a brief delay
         setTimeout(() => {{
             setInterval(async () => {{
-                if (APP_STATE.state !== 'loading' && APP_STATE.state !== 'complete') {{
+                if (APP_STATE.state !== 'loading' && APP_STATE.state !== 'complete' && APP_STATE.state !== 'error') {{
                     const response = await fetch('/api/state');
                     const data = await response.json();
                     if (data.state !== APP_STATE.state || (data.episodes && data.episodes.length > 0 && APP_STATE.episodes.length === 0)) {{

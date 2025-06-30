@@ -11,11 +11,16 @@ import time
 import re
 import shutil
 from urllib.parse import urlparse, parse_qs
+import uuid
+import tempfile
 
 from ..models import Episode
 from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
 from ..utils.logging import get_logger
-from ..utils.helpers import slugify
+from ..utils.helpers import (
+    slugify, validate_audio_file_comprehensive, exponential_backoff_with_jitter,
+    retry_with_backoff, ProgressTracker, calculate_file_hash
+)
 from ..utils.clients import openai_client
 
 logger = get_logger(__name__)
@@ -25,9 +30,14 @@ class AudioTranscriber:
     """Transcribe podcast audio using OpenAI Whisper with robust downloading"""
     
     def __init__(self):
-        self.max_retries = 3
-        self.retry_delay = 5
+        self.max_retries = 5  # Increased from 3
+        self.retry_delay = 1.0
         self.chunk_size = 8192
+        self.validation_interval = 1024 * 1024  # Validate every 1MB during download
+        self.session = None
+        self._session_lock = asyncio.Lock()
+        self.temp_files = set()  # Track temp files for cleanup
+        
         # Enhanced headers for different download scenarios
         self.headers_presets = [
             {
@@ -67,42 +77,104 @@ class AudioTranscriber:
             }
         ]
     
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp session with proper configuration"""
+        async with self._session_lock:
+            if self.session is None or self.session.closed:
+                timeout = aiohttp.ClientTimeout(
+                    total=600,    # 10 minutes total
+                    connect=30,   # 30s connect timeout
+                    sock_read=60  # 60s read timeout
+                )
+                connector = aiohttp.TCPConnector(
+                    limit=10,
+                    limit_per_host=2,
+                    force_close=True,
+                    enable_cleanup_closed=True
+                )
+                self.session = aiohttp.ClientSession(
+                    timeout=timeout,
+                    connector=connector
+                )
+            return self.session
+    
+    async def cleanup(self):
+        """Cleanup resources and temporary files"""
+        try:
+            # Close session
+            if self.session and not self.session.closed:
+                await self.session.close()
+                self.session = None
+            
+            # Clean up temp files
+            for temp_file in self.temp_files:
+                try:
+                    if Path(temp_file).exists():
+                        Path(temp_file).unlink()
+                        logger.debug(f"Cleaned up temp file: {temp_file}")
+                except Exception as e:
+                    logger.debug(f"Failed to clean up {temp_file}: {e}")
+            
+            self.temp_files.clear()
+            
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
+    
     async def transcribe_episode(self, episode: Episode) -> Optional[str]:
         """Download and transcribe episode audio with robust error handling"""
+        correlation_id = str(uuid.uuid4())[:8]
+        logger.info(f"[{correlation_id}] Starting transcription for: {episode.title}")
+        
         if not episode.audio_url:
-            logger.error("No audio URL provided")
+            logger.error(f"[{correlation_id}] No audio URL provided")
             return None
+        
+        audio_file = None
+        temp_files_to_clean = []
         
         try:
             # Download audio file with enhanced error handling
-            audio_file = await self._download_audio_with_fallbacks(episode)
+            audio_file = await self._download_audio_with_fallbacks(episode, correlation_id)
             if not audio_file:
                 return None
             
-            # Validate the audio file
-            if not await self._validate_audio_file(audio_file):
-                logger.error("Downloaded file is not valid audio")
-                if audio_file.exists():
-                    audio_file.unlink()
+            temp_files_to_clean.append(audio_file)
+            
+            # Comprehensive validation
+            if not validate_audio_file_comprehensive(audio_file, correlation_id):
+                logger.error(f"[{correlation_id}] Downloaded file failed comprehensive validation")
                 return None
             
-            # Transcribe with Whisper
-            transcript = await self._transcribe_with_whisper(audio_file)
+            # Additional validation with ffprobe if available
+            if not await self._validate_with_ffprobe(audio_file, correlation_id):
+                logger.warning(f"[{correlation_id}] FFprobe validation failed, but continuing")
             
-            # Cleanup
-            if audio_file.exists():
-                audio_file.unlink()
-                logger.info("🧹 Cleaned up audio file")
+            # Transcribe with Whisper
+            transcript = await self._transcribe_with_whisper(audio_file, correlation_id)
             
             return transcript
             
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
+            logger.error(f"[{correlation_id}] Transcription error: {e}", exc_info=True)
             return None
+            
+        finally:
+            # Cleanup in finally block
+            for file_path in temp_files_to_clean:
+                try:
+                    if file_path and file_path.exists():
+                        file_path.unlink()
+                        logger.debug(f"[{correlation_id}] Cleaned up: {file_path.name}")
+                except Exception as e:
+                    logger.debug(f"[{correlation_id}] Cleanup error: {e}")
+            
+            # Remove from tracked temp files
+            for file_path in temp_files_to_clean:
+                self.temp_files.discard(str(file_path))
     
-    async def _download_audio_with_fallbacks(self, episode: Episode) -> Optional[Path]:
-        """Download audio with multiple fallback strategies"""
-        logger.info("📥 Downloading audio file...")
+    async def _download_audio_with_fallbacks(self, episode: Episode, correlation_id: str) -> Optional[Path]:
+        """Download audio with multiple fallback strategies and exponential backoff"""
+        logger.info(f"[{correlation_id}] 📥 Downloading audio file...")
         
         # Create safe filename
         date_str = episode.published.strftime('%Y%m%d')
@@ -110,24 +182,38 @@ class AudioTranscriber:
         safe_title = slugify(episode.title)[:50]
         audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
         
-        # Check if already exists
-        if audio_file.exists() and audio_file.stat().st_size > 1000000:  # > 1MB
-            logger.info("✅ Using cached audio file")
-            return audio_file
+        # Check if already exists and is valid
+        if audio_file.exists():
+            if validate_audio_file_comprehensive(audio_file, correlation_id):
+                file_hash = calculate_file_hash(audio_file)
+                logger.info(f"[{correlation_id}] ✅ Using cached audio file (hash: {file_hash[:8]}...)")
+                return audio_file
+            else:
+                logger.warning(f"[{correlation_id}] Cached file invalid, re-downloading")
+                audio_file.unlink()
         
         audio_url = episode.audio_url
-        logger.info(f"⬇️ Downloading from: {audio_url[:80]}...")
+        logger.info(f"[{correlation_id}] ⬇️ Downloading from: {audio_url[:80]}...")
+        
+        # Track this file for cleanup
+        self.temp_files.add(str(audio_file))
         
         # Special handling for Substack URLs
         if 'substack.com' in audio_url:
-            success = await self._download_substack_audio(audio_url, audio_file, episode)
-            if success and audio_file.exists() and audio_file.stat().st_size > 1000000:
+            success = await self._download_substack_audio(audio_url, audio_file, episode, correlation_id)
+            if success and audio_file.exists() and validate_audio_file_comprehensive(audio_file, correlation_id):
                 return audio_file
         
-        # Try each header preset for non-Substack URLs
-        for i, headers in enumerate(self.headers_presets):
+        # Try each header preset with exponential backoff
+        for attempt, headers in enumerate(self.headers_presets):
             try:
-                logger.debug(f"Attempt {i+1} with {headers['User-Agent'][:30]}...")
+                # Add exponential backoff delay (except for first attempt)
+                if attempt > 0:
+                    delay = exponential_backoff_with_jitter(attempt - 1, base_delay=2.0, max_delay=30.0)
+                    logger.info(f"[{correlation_id}] Waiting {delay:.1f}s before attempt {attempt + 1}")
+                    await asyncio.sleep(delay)
+                
+                logger.debug(f"[{correlation_id}] Attempt {attempt + 1} with {headers['User-Agent'][:30]}...")
                 
                 # Add referer based on domain
                 domain = urlparse(audio_url).netloc
@@ -135,45 +221,316 @@ class AudioTranscriber:
                     headers = headers.copy()
                     headers['Referer'] = f'https://{domain}/'
                 
-                # Try async download first
-                success = await self._download_with_aiohttp(audio_url, audio_file, headers)
-                if success and audio_file.exists() and audio_file.stat().st_size > 1000000:
+                # Try async download with validation
+                success = await self._download_with_aiohttp_validated(
+                    audio_url, audio_file, headers, correlation_id
+                )
+                if success:
                     return audio_file
                 
-                # If async fails, try requests
+                # If async fails, try requests with validation
                 if not success:
-                    success = await self._download_with_requests(audio_url, audio_file, headers)
-                    if success and audio_file.exists() and audio_file.stat().st_size > 1000000:
+                    success = await self._download_with_requests_validated(
+                        audio_url, audio_file, headers, correlation_id
+                    )
+                    if success:
                         return audio_file
                 
             except Exception as e:
-                logger.debug(f"Download attempt {i+1} failed: {e}")
+                logger.debug(f"[{correlation_id}] Download attempt {attempt + 1} failed: {e}")
                 if audio_file.exists():
                     audio_file.unlink()
                 continue
         
-        # Last resort: try curl/wget with special options
-        logger.warning("All HTTP attempts failed, trying system tools...")
-        success = await self._download_with_system_tool(audio_url, audio_file)
-        if success and audio_file.exists() and audio_file.stat().st_size > 1000000:
+        # Last resort: try system tools with special options
+        logger.warning(f"[{correlation_id}] All HTTP attempts failed, trying system tools...")
+        success = await self._download_with_system_tool(audio_url, audio_file, correlation_id)
+        if success and validate_audio_file_comprehensive(audio_file, correlation_id):
             return audio_file
         
-        logger.error("All download attempts failed")
+        logger.error(f"[{correlation_id}] All download attempts failed")
         return None
     
-    async def _download_substack_audio(self, url: str, output_file: Path, episode: Episode) -> bool:
+    async def _download_with_aiohttp_validated(self, url: str, output_file: Path, headers: dict, correlation_id: str) -> bool:
+        """Download using aiohttp with chunked validation"""
+        temp_file = None
+        
+        try:
+            # Use temporary file during download
+            temp_file = output_file.with_suffix('.tmp')
+            self.temp_files.add(str(temp_file))
+            
+            session = await self._get_session()
+            
+            async with session.get(url, headers=headers, allow_redirects=True, ssl=False) as response:
+                # Check status
+                if response.status == 403:
+                    logger.error(f"[{correlation_id}] Download failed: HTTP 403")
+                    return False
+                elif response.status not in [200, 206]:  # 206 is partial content
+                    logger.error(f"[{correlation_id}] Download failed: HTTP {response.status}")
+                    return False
+                
+                # Check content type
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'text/html' in content_type:
+                    logger.error(f"[{correlation_id}] Received HTML instead of audio")
+                    return False
+                
+                # Get file size
+                total_size = int(response.headers.get('Content-Length', 0))
+                if total_size > 0:
+                    logger.info(f"[{correlation_id}] 📦 Download size: {total_size / 1024 / 1024:.1f} MB")
+                
+                # Download with progress and validation
+                async with aiofiles.open(temp_file, 'wb') as file:
+                    downloaded = 0
+                    last_progress = 0
+                    validation_errors = 0
+                    first_chunk_validated = False
+                    
+                    async for chunk in response.content.iter_chunked(self.chunk_size):
+                        await file.write(chunk)
+                        downloaded += len(chunk)
+                        
+                        # Validate first chunk
+                        if not first_chunk_validated and downloaded >= 16:
+                            await file.flush()
+                            if not await self._validate_first_chunk(temp_file, correlation_id):
+                                logger.error(f"[{correlation_id}] First chunk validation failed")
+                                return False
+                            first_chunk_validated = True
+                        
+                        # Periodic validation every 1MB
+                        if downloaded % self.validation_interval == 0:
+                            await file.flush()
+                            # Quick size check
+                            if temp_file.stat().st_size != downloaded:
+                                validation_errors += 1
+                                logger.warning(f"[{correlation_id}] Size mismatch at {downloaded} bytes")
+                                if validation_errors > 3:
+                                    logger.error(f"[{correlation_id}] Too many validation errors")
+                                    return False
+                        
+                        # Show progress
+                        if total_size > 0:
+                            progress = int((downloaded / total_size) * 100)
+                            if progress >= last_progress + 10:
+                                logger.info(f"[{correlation_id}]    Progress: {progress}%")
+                                last_progress = progress
+                
+                # Final validation
+                if not await self._validate_download_complete(temp_file, downloaded, total_size, correlation_id):
+                    return False
+                
+                # Move to final location
+                shutil.move(str(temp_file), str(output_file))
+                self.temp_files.discard(str(temp_file))
+                
+                logger.info(f"[{correlation_id}] ✅ Download complete: {output_file.name}")
+                logger.info(f"[{correlation_id}] 📊 Audio file size: {output_file.stat().st_size / 1024 / 1024:.1f} MB")
+                return True
+                
+        except asyncio.TimeoutError:
+            logger.error(f"[{correlation_id}] Download timeout")
+            return False
+        except Exception as e:
+            logger.debug(f"[{correlation_id}] aiohttp download error: {e}")
+            return False
+        finally:
+            # Clean up temp file if exists
+            if temp_file and temp_file.exists():
+                try:
+                    temp_file.unlink()
+                    self.temp_files.discard(str(temp_file))
+                except:
+                    pass
+    
+    async def _download_with_requests_validated(self, url: str, output_file: Path, headers: dict, correlation_id: str) -> bool:
+        """Fallback download using requests library with validation"""
+        import requests
+        
+        temp_file = None
+        
+        try:
+            # Use temporary file during download
+            temp_file = output_file.with_suffix('.tmp')
+            self.temp_files.add(str(temp_file))
+            
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            
+            def download():
+                session = requests.Session()
+                session.headers.update(headers)
+                
+                # Add SSL verification bypass for problematic certificates
+                session.verify = False
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                
+                response = session.get(url, stream=True, timeout=60, allow_redirects=True)
+                if response.status_code == 403:
+                    logger.error(f"[{correlation_id}] Download failed: HTTP 403")
+                    return False
+                elif response.status_code not in [200, 206]:
+                    logger.error(f"[{correlation_id}] Download failed: HTTP {response.status_code}")
+                    return False
+                
+                # Check content type
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'text/html' in content_type:
+                    logger.error(f"[{correlation_id}] Received HTML instead of audio")
+                    return False
+                
+                total_size = int(response.headers.get('Content-Length', 0))
+                if total_size > 0:
+                    logger.info(f"[{correlation_id}] 📦 Download size: {total_size / 1024 / 1024:.1f} MB")
+                
+                with open(temp_file, 'wb') as f:
+                    downloaded = 0
+                    last_progress = 0
+                    first_chunk_validated = False
+                    
+                    for chunk in response.iter_content(chunk_size=self.chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            
+                            # Validate first chunk
+                            if not first_chunk_validated and downloaded >= 16:
+                                f.flush()
+                                # Run async validation in sync context
+                                if not self._validate_first_chunk_sync(temp_file, correlation_id):
+                                    logger.error(f"[{correlation_id}] First chunk validation failed")
+                                    return False
+                                first_chunk_validated = True
+                            
+                            if total_size > 0:
+                                progress = int((downloaded / total_size) * 100)
+                                if progress >= last_progress + 10:
+                                    logger.info(f"[{correlation_id}]    Progress: {progress}%")
+                                    last_progress = progress
+                
+                # Final validation
+                if downloaded < 100 * 1024:  # Less than 100KB
+                    logger.error(f"[{correlation_id}] Downloaded file too small: {downloaded} bytes")
+                    return False
+                
+                # Move to final location
+                shutil.move(str(temp_file), str(output_file))
+                
+                logger.info(f"[{correlation_id}] ✅ Download complete: {output_file.name}")
+                return True
+            
+            result = await loop.run_in_executor(None, download)
+            if result:
+                self.temp_files.discard(str(temp_file))
+            return result
+            
+        except Exception as e:
+            logger.debug(f"[{correlation_id}] requests download error: {e}")
+            return False
+        finally:
+            # Clean up temp file if exists
+            if temp_file and temp_file.exists():
+                try:
+                    temp_file.unlink()
+                    self.temp_files.discard(str(temp_file))
+                except:
+                    pass
+    
+    async def _validate_first_chunk(self, file_path: Path, correlation_id: str) -> bool:
+        """Validate the first chunk of downloaded file"""
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(16)
+                
+                # Check for HTML
+                if header.lower().startswith(b'<!doctype') or header.lower().startswith(b'<html'):
+                    logger.error(f"[{correlation_id}] File starts with HTML")
+                    return False
+                
+                # Check for audio signatures
+                audio_signatures = [
+                    b'ID3', b'\xFF\xFB', b'\xFF\xF3', b'\xFF\xF2',
+                    b'OggS', b'RIFF', b'fLaC'
+                ]
+                
+                # Check at offset 4 for MP4
+                if len(header) >= 8 and header[4:8] == b'ftyp':
+                    return True
+                
+                # Check standard signatures
+                for sig in audio_signatures:
+                    if header.startswith(sig):
+                        return True
+                
+                logger.warning(f"[{correlation_id}] No audio signature found in first chunk")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] First chunk validation error: {e}")
+            return False
+    
+    def _validate_first_chunk_sync(self, file_path: Path, correlation_id: str) -> bool:
+        """Synchronous version of first chunk validation"""
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(16)
+                
+                if header.lower().startswith(b'<!doctype') or header.lower().startswith(b'<html'):
+                    return False
+                
+                audio_signatures = [
+                    b'ID3', b'\xFF\xFB', b'\xFF\xF3', b'\xFF\xF2',
+                    b'OggS', b'RIFF', b'fLaC'
+                ]
+                
+                if len(header) >= 8 and header[4:8] == b'ftyp':
+                    return True
+                
+                for sig in audio_signatures:
+                    if header.startswith(sig):
+                        return True
+                
+                return False
+                
+        except:
+            return False
+    
+    async def _validate_download_complete(self, file_path: Path, downloaded: int, expected_size: int, correlation_id: str) -> bool:
+        """Validate completed download"""
+        actual_size = file_path.stat().st_size
+        
+        # Check size
+        if actual_size != downloaded:
+            logger.error(f"[{correlation_id}] Size mismatch: expected {downloaded}, got {actual_size}")
+            return False
+        
+        if expected_size > 0 and abs(actual_size - expected_size) > 1024:  # Allow 1KB difference
+            logger.warning(f"[{correlation_id}] Size differs from Content-Length: {actual_size} vs {expected_size}")
+            # Don't fail, some servers report wrong Content-Length
+        
+        # Minimum size check
+        if actual_size < 100 * 1024:  # 100KB minimum
+            logger.error(f"[{correlation_id}] File too small: {actual_size} bytes")
+            return False
+        
+        return True
+    
+    async def _download_substack_audio(self, url: str, output_file: Path, episode: Episode, correlation_id: str) -> bool:
         """Special handling for Substack audio downloads"""
-        logger.info("🔧 Using Substack-specific download method...")
+        logger.info(f"[{correlation_id}] 🔧 Using Substack-specific download method...")
         
         # Extract the actual MP3 URL from Substack's redirect URL
-        # Substack URLs often have the format: /feed/podcast/{id}/{hash}
         parsed = urlparse(url)
         
         # Try to get the direct MP3 URL
         try:
             # Method 1: Check if it's already a direct MP3 URL
             if url.endswith('.mp3') or 'audio' in url:
-                return await self._download_direct_url(url, output_file)
+                return await self._download_direct_url(url, output_file, correlation_id)
             
             # Method 2: Try to construct direct URL from Substack pattern
             if '/feed/podcast/' in url:
@@ -190,15 +547,15 @@ class AudioTranscriber:
                     ]
                     
                     for direct_url in direct_urls:
-                        logger.debug(f"Trying direct Substack URL: {direct_url}")
-                        if await self._download_direct_url(direct_url, output_file):
+                        logger.debug(f"[{correlation_id}] Trying direct Substack URL: {direct_url}")
+                        if await self._download_direct_url(direct_url, output_file, correlation_id):
                             return True
             
             # Method 3: Use episode link to find audio URL
             if hasattr(episode, 'link') and episode.link:
-                audio_url = await self._find_substack_audio_url(episode.link)
+                audio_url = await self._find_substack_audio_url(episode.link, correlation_id)
                 if audio_url:
-                    return await self._download_direct_url(audio_url, output_file)
+                    return await self._download_direct_url(audio_url, output_file, correlation_id)
             
             # Method 4: Try with special Substack headers
             headers = {
@@ -211,44 +568,44 @@ class AudioTranscriber:
                 'Sec-Fetch-Site': 'same-site'
             }
             
-            return await self._download_with_aiohttp(url, output_file, headers)
+            return await self._download_with_aiohttp_validated(url, output_file, headers, correlation_id)
             
         except Exception as e:
-            logger.error(f"Substack download error: {e}")
+            logger.error(f"[{correlation_id}] Substack download error: {e}")
             return False
     
-    async def _find_substack_audio_url(self, episode_url: str) -> Optional[str]:
+    async def _find_substack_audio_url(self, episode_url: str, correlation_id: str) -> Optional[str]:
         """Find audio URL from Substack episode page"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(episode_url) as response:
-                    if response.status == 200:
-                        html = await response.text()
-                        
-                        # Look for audio URL in the page
-                        patterns = [
-                            r'<audio[^>]+src="([^"]+)"',
-                            r'"audio_url":"([^"]+)"',
-                            r'data-audio-url="([^"]+)"',
-                            r'"url":"(https://[^"]+\.mp3)"'
-                        ]
-                        
-                        for pattern in patterns:
-                            match = re.search(pattern, html)
-                            if match:
-                                audio_url = match.group(1)
-                                if audio_url.startswith('//'):
-                                    audio_url = 'https:' + audio_url
-                                elif audio_url.startswith('/'):
-                                    audio_url = f"https://substack.com{audio_url}"
-                                logger.info(f"Found audio URL in page: {audio_url}")
-                                return audio_url
+            session = await self._get_session()
+            async with session.get(episode_url) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    
+                    # Look for audio URL in the page
+                    patterns = [
+                        r'<audio[^>]+src="([^"]+)"',
+                        r'"audio_url":"([^"]+)"',
+                        r'data-audio-url="([^"]+)"',
+                        r'"url":"(https://[^"]+\.mp3)"'
+                    ]
+                    
+                    for pattern in patterns:
+                        match = re.search(pattern, html)
+                        if match:
+                            audio_url = match.group(1)
+                            if audio_url.startswith('//'):
+                                audio_url = 'https:' + audio_url
+                            elif audio_url.startswith('/'):
+                                audio_url = f"https://substack.com{audio_url}"
+                            logger.info(f"[{correlation_id}] Found audio URL in page: {audio_url}")
+                            return audio_url
         except Exception as e:
-            logger.debug(f"Failed to find audio URL in page: {e}")
+            logger.debug(f"[{correlation_id}] Failed to find audio URL in page: {e}")
         
         return None
     
-    async def _download_direct_url(self, url: str, output_file: Path) -> bool:
+    async def _download_direct_url(self, url: str, output_file: Path, correlation_id: str) -> bool:
         """Download from a direct URL with multiple attempts"""
         headers_list = [
             {
@@ -265,120 +622,29 @@ class AudioTranscriber:
         ]
         
         for headers in headers_list:
-            if await self._download_with_aiohttp(url, output_file, headers):
+            if await self._download_with_aiohttp_validated(url, output_file, headers, correlation_id):
                 return True
-            if await self._download_with_requests(url, output_file, headers):
+            
+            # Small delay between attempts
+            await asyncio.sleep(1)
+            
+            if await self._download_with_requests_validated(url, output_file, headers, correlation_id):
                 return True
         
         return False
     
-    async def _download_with_aiohttp(self, url: str, output_file: Path, headers: dict) -> bool:
-        """Download using aiohttp with progress tracking"""
-        try:
-            timeout = aiohttp.ClientTimeout(total=300, connect=30)
-            connector = aiohttp.TCPConnector(force_close=True)
-            
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                async with session.get(url, headers=headers, allow_redirects=True, ssl=False) as response:
-                    # Check status
-                    if response.status == 403:
-                        logger.error(f"Download failed: HTTP 403")
-                        return False
-                    elif response.status not in [200, 206]:  # 206 is partial content
-                        logger.error(f"Download failed: HTTP {response.status}")
-                        return False
-                    
-                    # Get file size
-                    total_size = int(response.headers.get('Content-Length', 0))
-                    if total_size > 0:
-                        logger.info(f"📦 Download size: {total_size / 1024 / 1024:.1f} MB")
-                    
-                    # Download with progress
-                    async with aiofiles.open(output_file, 'wb') as file:
-                        downloaded = 0
-                        last_progress = 0
-                        
-                        async for chunk in response.content.iter_chunked(self.chunk_size):
-                            await file.write(chunk)
-                            downloaded += len(chunk)
-                            
-                            # Show progress
-                            if total_size > 0:
-                                progress = int((downloaded / total_size) * 100)
-                                if progress >= last_progress + 10:
-                                    logger.info(f"   Progress: {progress}%")
-                                    last_progress = progress
-                    
-                    logger.info(f"✅ Download complete: {output_file.name}")
-                    logger.info(f"📊 Audio file size: {output_file.stat().st_size / 1024 / 1024:.1f} MB")
-                    return True
-                    
-        except asyncio.TimeoutError:
-            logger.error("Download timeout")
-            return False
-        except Exception as e:
-            logger.debug(f"aiohttp download error: {e}")
-            return False
-    
-    async def _download_with_requests(self, url: str, output_file: Path, headers: dict) -> bool:
-        """Fallback download using requests library"""
-        import requests
+    async def _download_with_system_tool(self, url: str, output_file: Path, correlation_id: str) -> bool:
+        """Last resort: use curl or wget with enhanced options"""
+        temp_file = None
         
         try:
-            # Run in executor to avoid blocking
-            loop = asyncio.get_event_loop()
+            # Use temporary file
+            temp_file = output_file.with_suffix('.tmp')
+            self.temp_files.add(str(temp_file))
             
-            def download():
-                session = requests.Session()
-                session.headers.update(headers)
-                
-                # Add SSL verification bypass for problematic certificates
-                session.verify = False
-                import urllib3
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                
-                response = session.get(url, stream=True, timeout=60, allow_redirects=True)
-                if response.status_code == 403:
-                    logger.error(f"Download failed: HTTP 403")
-                    return False
-                elif response.status_code not in [200, 206]:
-                    logger.error(f"Download failed: HTTP {response.status_code}")
-                    return False
-                
-                total_size = int(response.headers.get('Content-Length', 0))
-                if total_size > 0:
-                    logger.info(f"📦 Download size: {total_size / 1024 / 1024:.1f} MB")
-                
-                with open(output_file, 'wb') as f:
-                    downloaded = 0
-                    last_progress = 0
-                    
-                    for chunk in response.iter_content(chunk_size=self.chunk_size):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            
-                            if total_size > 0:
-                                progress = int((downloaded / total_size) * 100)
-                                if progress >= last_progress + 10:
-                                    logger.info(f"   Progress: {progress}%")
-                                    last_progress = progress
-                
-                logger.info(f"✅ Download complete: {output_file.name}")
-                return True
-            
-            return await loop.run_in_executor(None, download)
-            
-        except Exception as e:
-            logger.debug(f"requests download error: {e}")
-            return False
-    
-    async def _download_with_system_tool(self, url: str, output_file: Path) -> bool:
-        """Last resort: use curl or wget with enhanced options"""
-        try:
             # Try yt-dlp first (best for media downloads)
             if shutil.which('yt-dlp'):
-                logger.info("🎯 Trying yt-dlp (most reliable for protected audio)...")
+                logger.info(f"[{correlation_id}] 🎯 Trying yt-dlp (most reliable for protected audio)...")
                 cmd = [
                     'yt-dlp',
                     '--no-check-certificate',
@@ -386,7 +652,7 @@ class AudioTranscriber:
                     '--extract-audio',
                     '--audio-format', 'mp3',
                     '--audio-quality', '128K',
-                    '--output', str(output_file),
+                    '--output', str(temp_file),
                     '--quiet',
                     '--no-warnings',
                     '--no-playlist',
@@ -402,14 +668,23 @@ class AudioTranscriber:
                 
                 stdout, stderr = await process.communicate()
                 
-                if process.returncode == 0 and output_file.exists():
-                    logger.info("✅ Downloaded with yt-dlp")
-                    return True
+                if process.returncode == 0 and temp_file.exists():
+                    # yt-dlp might create file with different extension
+                    # Look for any audio file with the base name
+                    base_name = temp_file.stem
+                    parent_dir = temp_file.parent
+                    
+                    for ext in ['.mp3', '.m4a', '.opus', '.ogg', '.wav']:
+                        possible_file = parent_dir / f"{base_name}{ext}"
+                        if possible_file.exists():
+                            shutil.move(str(possible_file), str(output_file))
+                            logger.info(f"[{correlation_id}] ✅ Downloaded with yt-dlp")
+                            self.temp_files.discard(str(temp_file))
+                            return True
                 else:
-                    logger.debug(f"yt-dlp failed: {stderr.decode()}")
+                    logger.debug(f"[{correlation_id}] yt-dlp failed: {stderr.decode()}")
             else:
-                logger.warning("⚠️ yt-dlp not found - this is the most reliable download method")
-                logger.warning("   Install with: pip install yt-dlp or ./install_deps.sh")
+                logger.warning(f"[{correlation_id}] ⚠️ yt-dlp not found - install with: pip install yt-dlp")
             
             # Try curl with more options
             cmd = [
@@ -420,11 +695,12 @@ class AudioTranscriber:
                 '-H', 'Accept-Language: en-US,en;q=0.9',
                 '-H', 'Cache-Control: no-cache',
                 '--connect-timeout', '30',
-                '--max-time', '300',
-                '--retry', '3',
+                '--max-time', '600',  # 10 minutes
+                '--retry', '5',
                 '--retry-delay', '5',
+                '--retry-max-time', '120',
                 '-k',  # Allow insecure connections
-                '-o', str(output_file),
+                '-o', str(temp_file),
                 url
             ]
             
@@ -441,23 +717,26 @@ class AudioTranscriber:
             
             stdout, stderr = await process.communicate()
             
-            if process.returncode == 0 and output_file.exists():
-                logger.info("✅ Downloaded with curl")
+            if process.returncode == 0 and temp_file.exists() and temp_file.stat().st_size > 100 * 1024:
+                shutil.move(str(temp_file), str(output_file))
+                logger.info(f"[{correlation_id}] ✅ Downloaded with curl")
+                self.temp_files.discard(str(temp_file))
                 return True
             else:
-                logger.debug(f"curl failed: {stderr.decode()}")
+                logger.debug(f"[{correlation_id}] curl failed: {stderr.decode()}")
                 
                 # Try wget as last resort
-                if output_file.exists():
-                    output_file.unlink()
+                if temp_file.exists():
+                    temp_file.unlink()
                 
                 cmd = [
-                    'wget', '-q', '-O', str(output_file),
+                    'wget', '-q', '-O', str(temp_file),
                     '--user-agent=Mozilla/5.0',
                     '--header=Accept: audio/*',
                     '--header=Accept-Language: en-US,en;q=0.9',
                     '--timeout=30',
-                    '--tries=3',
+                    '--tries=5',
+                    '--retry-connrefused',
                     '--no-check-certificate',
                     url
                 ]
@@ -473,72 +752,37 @@ class AudioTranscriber:
                 
                 stdout, stderr = await process.communicate()
                 
-                if process.returncode == 0 and output_file.exists():
-                    logger.info("✅ Downloaded with wget")
+                if process.returncode == 0 and temp_file.exists() and temp_file.stat().st_size > 100 * 1024:
+                    shutil.move(str(temp_file), str(output_file))
+                    logger.info(f"[{correlation_id}] ✅ Downloaded with wget")
+                    self.temp_files.discard(str(temp_file))
                     return True
                 else:
-                    logger.debug(f"wget failed: {stderr.decode()}")
+                    logger.debug(f"[{correlation_id}] wget failed: {stderr.decode()}")
                     
         except Exception as e:
-            logger.debug(f"System tool download error: {e}")
+            logger.debug(f"[{correlation_id}] System tool download error: {e}")
+        finally:
+            # Clean up temp file
+            if temp_file and temp_file.exists():
+                try:
+                    temp_file.unlink()
+                    self.temp_files.discard(str(temp_file))
+                except:
+                    pass
         
         return False
     
-    async def _validate_audio_file(self, audio_file: Path) -> bool:
-        """Validate that the downloaded file is actually audio"""
-        try:
-            # Check file size
-            file_size = audio_file.stat().st_size
-            if file_size < 10000:  # Less than 10KB is suspicious
-                logger.error(f"File too small: {file_size} bytes")
-                return False
-            
-            # Check file header for audio signatures
-            with open(audio_file, 'rb') as f:
-                header = f.read(16)
-            
-            # Common audio file signatures
-            audio_signatures = [
-                b'ID3',       # MP3 with ID3 tag
-                b'\xff\xfb',  # MP3
-                b'\xff\xf3',  # MP3
-                b'\xff\xf2',  # MP3
-                b'RIFF',      # WAV
-                b'ftyp',      # MP4/M4A
-                b'OggS',      # OGG
-            ]
-            
-            if not any(header.startswith(sig) for sig in audio_signatures):
-                # Check if it's HTML (common error response)
-                if header.lower().startswith(b'<!doctype') or header.lower().startswith(b'<html'):
-                    logger.error("Downloaded file is HTML, not audio")
-                    
-                    # Log the content for debugging
-                    with open(audio_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read(1000)
-                        logger.debug(f"HTML content: {content[:200]}...")
-                    
-                    return False
-                
-                # Try to probe with ffprobe
-                return await self._probe_with_ffmpeg(audio_file)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"File validation error: {e}")
-            return False
-    
-    async def _probe_with_ffmpeg(self, audio_file: Path) -> bool:
-        """Use ffprobe to validate audio file"""
+    async def _validate_with_ffprobe(self, audio_file: Path, correlation_id: str) -> bool:
+        """Use ffprobe to validate audio file and get metadata"""
         try:
             import shutil
             if not shutil.which('ffprobe'):
-                logger.debug("ffprobe not available, assuming file is valid")
-                return True
+                logger.debug(f"[{correlation_id}] ffprobe not available")
+                return True  # Don't fail if ffprobe not available
             
             cmd = ['ffprobe', '-v', 'error', '-show_entries', 
-                   'format=format_name,duration', '-of', 'json', str(audio_file)]
+                   'format=format_name,duration,bit_rate', '-of', 'json', str(audio_file)]
             
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -552,44 +796,52 @@ class AudioTranscriber:
                 import json
                 probe_data = json.loads(stdout.decode())
                 if 'format' in probe_data and probe_data['format'].get('format_name'):
-                    logger.info(f"✅ Valid audio format: {probe_data['format']['format_name']}")
+                    format_info = probe_data['format']
+                    logger.info(
+                        f"[{correlation_id}] ✅ Valid audio - "
+                        f"Format: {format_info.get('format_name')} | "
+                        f"Duration: {float(format_info.get('duration', 0))/60:.1f}m | "
+                        f"Bitrate: {int(format_info.get('bit_rate', 0))/1000:.0f}kbps"
+                    )
                     return True
             
-            logger.error(f"ffprobe validation failed: {stderr.decode()}")
+            logger.error(f"[{correlation_id}] ffprobe validation failed: {stderr.decode()}")
             return False
             
         except Exception as e:
-            logger.debug(f"ffprobe error: {e}")
-            # If ffprobe isn't available or fails, assume file is valid
-            return True
+            logger.debug(f"[{correlation_id}] ffprobe error: {e}")
+            return True  # Don't fail on ffprobe errors
     
-    async def _transcribe_with_whisper(self, audio_file: Path) -> Optional[str]:
-        """Transcribe audio using OpenAI Whisper API"""
-        logger.info("🎤 Starting transcription with Whisper...")
+    async def _transcribe_with_whisper(self, audio_file: Path, correlation_id: str) -> Optional[str]:
+        """Transcribe audio using OpenAI Whisper API with enhanced error handling"""
+        logger.info(f"[{correlation_id}] 🎤 Starting transcription with Whisper...")
         
-        # Handle test mode truncation
-        if TESTING_MODE:
-            logger.info(f"🧪 TEST MODE: Limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
-            trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60)
-            if trimmed_file:
-                audio_file = trimmed_file
+        # Track files for cleanup
+        files_to_clean = []
         
-        # Ensure file is under 25MB (Whisper limit)
-        file_size = audio_file.stat().st_size
-        if file_size > 25 * 1024 * 1024:
-            logger.warning(f"File too large ({file_size / 1024 / 1024:.1f} MB), compressing...")
-            compressed_file = await self._compress_audio(audio_file)
-            if compressed_file:
-                audio_file = compressed_file
-            else:
-                logger.error("Failed to compress audio file")
-                return None
-        
-        # Try transcription with retries
-        for attempt in range(self.max_retries):
-            try:
-                logger.info(f"🎯 Calling Whisper API (attempt {attempt + 1}/{self.max_retries})...")
-                
+        try:
+            # Handle test mode truncation
+            if TESTING_MODE:
+                logger.info(f"[{correlation_id}] 🧪 TEST MODE: Limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60, correlation_id)
+                if trimmed_file:
+                    audio_file = trimmed_file
+                    files_to_clean.append(trimmed_file)
+            
+            # Ensure file is under 25MB (Whisper limit)
+            file_size = audio_file.stat().st_size
+            if file_size > 25 * 1024 * 1024:
+                logger.warning(f"[{correlation_id}] File too large ({file_size / 1024 / 1024:.1f} MB), compressing...")
+                compressed_file = await self._compress_audio(audio_file, correlation_id)
+                if compressed_file:
+                    audio_file = compressed_file
+                    files_to_clean.append(compressed_file)
+                else:
+                    logger.error(f"[{correlation_id}] Failed to compress audio file")
+                    return None
+            
+            # Define the transcription function for retry
+            async def transcribe():
                 with open(audio_file, 'rb') as f:
                     # Run in executor to avoid blocking
                     loop = asyncio.get_event_loop()
@@ -602,37 +854,71 @@ class AudioTranscriber:
                             language="en"  # Assuming English, adjust if needed
                         )
                     
-                    transcript = await loop.run_in_executor(None, api_call)
+                    return await loop.run_in_executor(None, api_call)
+            
+            # Try transcription with exponential backoff
+            try:
+                transcript = await retry_with_backoff(
+                    transcribe,
+                    max_attempts=self.max_retries,
+                    base_delay=2.0,
+                    max_delay=60.0,
+                    exceptions=(Exception,),
+                    correlation_id=correlation_id
+                )
                 
                 if transcript and len(transcript.strip()) > 100:
-                    logger.info(f"✅ Transcription complete: {len(transcript)} characters")
+                    logger.info(f"[{correlation_id}] ✅ Transcription complete: {len(transcript)} characters")
                     return transcript.strip()
                 else:
-                    logger.error("Transcription returned empty result")
+                    logger.error(f"[{correlation_id}] Transcription returned empty or too short result")
+                    return None
                     
             except Exception as e:
-                logger.error(f"Whisper API error: {e}")
-                if "format is not supported" in str(e):
-                    # Try to convert the audio file
-                    converted_file = await self._convert_audio_format(audio_file)
-                    if converted_file:
-                        audio_file = converted_file
-                        continue
+                error_msg = str(e)
                 
-                if attempt < self.max_retries - 1:
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                else:
-                    logger.error("All transcription attempts failed")
-        
-        return None
+                # Handle specific Whisper errors
+                if "format is not supported" in error_msg:
+                    logger.warning(f"[{correlation_id}] Audio format not supported, converting...")
+                    converted_file = await self._convert_audio_format(audio_file, correlation_id)
+                    if converted_file:
+                        files_to_clean.append(converted_file)
+                        # Retry with converted file
+                        audio_file = converted_file
+                        return await self._transcribe_with_whisper(audio_file, correlation_id)
+                
+                elif "file size" in error_msg.lower():
+                    logger.error(f"[{correlation_id}] File size issue after compression")
+                
+                elif "invalid" in error_msg.lower():
+                    logger.error(f"[{correlation_id}] Invalid audio file")
+                
+                logger.error(f"[{correlation_id}] Whisper API error: {error_msg}")
+                raise
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Transcription failed: {e}", exc_info=True)
+            return None
+            
+        finally:
+            # Clean up temporary files
+            for file_path in files_to_clean:
+                try:
+                    if file_path.exists():
+                        file_path.unlink()
+                        logger.debug(f"[{correlation_id}] Cleaned up: {file_path.name}")
+                        self.temp_files.discard(str(file_path))
+                except Exception as e:
+                    logger.debug(f"[{correlation_id}] Failed to clean up {file_path}: {e}")
     
-    async def _trim_audio(self, audio_file: Path, max_seconds: int) -> Optional[Path]:
+    async def _trim_audio(self, audio_file: Path, max_seconds: int, correlation_id: str) -> Optional[Path]:
         """Trim audio file to specified duration"""
         try:
-            logger.info(f"✂️ Trimming audio to {max_seconds} seconds...")
+            logger.info(f"[{correlation_id}] ✂️ Trimming audio to {max_seconds} seconds...")
             
             # Create output file
             trimmed_file = TEMP_DIR / f"trimmed_{audio_file.name}"
+            self.temp_files.add(str(trimmed_file))
             
             # Check if ffmpeg is available
             import shutil
@@ -655,25 +941,25 @@ class AudioTranscriber:
                 stdout, stderr = await process.communicate()
                 
                 if process.returncode == 0 and trimmed_file.exists():
-                    logger.info("✅ Audio trimmed successfully")
+                    logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully")
                     return trimmed_file
                 else:
-                    logger.error(f"ffmpeg trim failed: {stderr.decode()}")
+                    logger.error(f"[{correlation_id}] ffmpeg trim failed: {stderr.decode()}")
             
             # Fallback: use pydub
-            return await self._trim_with_pydub(audio_file, max_seconds)
+            return await self._trim_with_pydub(audio_file, max_seconds, correlation_id)
                 
         except Exception as e:
-            logger.error(f"Audio trim error: {e}")
-            # Fallback: use pydub
-            return await self._trim_with_pydub(audio_file, max_seconds)
+            logger.error(f"[{correlation_id}] Audio trim error: {e}")
+            # If trimming fails, return original file
+            return audio_file
     
-    async def _trim_with_pydub(self, audio_file: Path, max_seconds: int) -> Optional[Path]:
+    async def _trim_with_pydub(self, audio_file: Path, max_seconds: int, correlation_id: str) -> Optional[Path]:
         """Fallback: trim audio using pydub"""
         try:
             from pydub import AudioSegment
             
-            logger.info("Using pydub for trimming...")
+            logger.info(f"[{correlation_id}] Using pydub for trimming...")
             
             # Load audio
             audio = AudioSegment.from_file(str(audio_file))
@@ -683,20 +969,22 @@ class AudioTranscriber:
             
             # Export
             trimmed_file = TEMP_DIR / f"trimmed_{audio_file.name}"
+            self.temp_files.add(str(trimmed_file))
             trimmed.export(str(trimmed_file), format="mp3")
             
-            logger.info("✅ Audio trimmed successfully")
+            logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully")
             return trimmed_file
             
         except Exception as e:
-            logger.error(f"Pydub trim error: {e}")
+            logger.error(f"[{correlation_id}] Pydub trim error: {e}")
             # If trimming fails, return original file
             return audio_file
     
-    async def _compress_audio(self, audio_file: Path) -> Optional[Path]:
+    async def _compress_audio(self, audio_file: Path, correlation_id: str) -> Optional[Path]:
         """Compress audio file to reduce size"""
         try:
             compressed_file = TEMP_DIR / f"compressed_{audio_file.name}"
+            self.temp_files.add(str(compressed_file))
             
             import shutil
             if shutil.which('ffmpeg'):
@@ -720,7 +1008,7 @@ class AudioTranscriber:
                 
                 if process.returncode == 0 and compressed_file.exists():
                     new_size = compressed_file.stat().st_size
-                    logger.info(f"✅ Compressed to {new_size / 1024 / 1024:.1f} MB")
+                    logger.info(f"[{correlation_id}] ✅ Compressed to {new_size / 1024 / 1024:.1f} MB")
                     return compressed_file
             else:
                 # Try pydub compression
@@ -728,20 +1016,21 @@ class AudioTranscriber:
                 audio = AudioSegment.from_file(str(audio_file))
                 audio = audio.set_frame_rate(16000).set_channels(1)
                 audio.export(str(compressed_file), format="mp3", bitrate="64k")
-                logger.info(f"✅ Compressed with pydub")
+                logger.info(f"[{correlation_id}] ✅ Compressed with pydub")
                 return compressed_file
                 
         except Exception as e:
-            logger.error(f"Compression error: {e}")
+            logger.error(f"[{correlation_id}] Compression error: {e}")
         
         return None
     
-    async def _convert_audio_format(self, audio_file: Path) -> Optional[Path]:
+    async def _convert_audio_format(self, audio_file: Path, correlation_id: str) -> Optional[Path]:
         """Convert audio to a format Whisper can handle"""
         try:
-            logger.info("🔄 Converting audio format...")
+            logger.info(f"[{correlation_id}] 🔄 Converting audio format...")
             
             converted_file = TEMP_DIR / f"converted_{audio_file.stem}.mp3"
+            self.temp_files.add(str(converted_file))
             
             import shutil
             if shutil.which('ffmpeg'):
@@ -764,19 +1053,19 @@ class AudioTranscriber:
                 stdout, stderr = await process.communicate()
                 
                 if process.returncode == 0 and converted_file.exists():
-                    logger.info("✅ Audio converted successfully")
+                    logger.info(f"[{correlation_id}] ✅ Audio converted successfully")
                     return converted_file
                 else:
-                    logger.error(f"ffmpeg conversion failed: {stderr.decode()}")
+                    logger.error(f"[{correlation_id}] ffmpeg conversion failed: {stderr.decode()}")
             else:
                 # Try pydub conversion
                 from pydub import AudioSegment
                 audio = AudioSegment.from_file(str(audio_file))
                 audio.export(str(converted_file), format="mp3", bitrate="128k")
-                logger.info("✅ Audio converted with pydub")
+                logger.info(f"[{correlation_id}] ✅ Audio converted with pydub")
                 return converted_file
                 
         except Exception as e:
-            logger.error(f"Audio conversion error: {e}")
+            logger.error(f"[{correlation_id}] Audio conversion error: {e}")
         
         return None
