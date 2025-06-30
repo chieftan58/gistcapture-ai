@@ -22,13 +22,7 @@ audio/
 *.m4a
 
 # Transcript files (contain copyrighted content)
-# Transcript data files only
-transcripts/*.txt
-transcripts/*.json
-transcripts/*.srt
-# Allow Python files
-!transcripts/*.py
-!transcripts/__init__.py
+transcripts/
 *.txt
 
 # Summary files (you might want to keep these)
@@ -67,7 +61,9 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
-*.eggpodcast_data.db
-*.db
+*.egg
+
+# Database
+podcast_data.db
 *.db
 *.db-journal
