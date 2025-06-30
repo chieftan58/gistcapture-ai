@@ -1,40 +1,80 @@
+# Renaissance Weekly - Git Ignore File
+# =====================================
+
 # Environment variables - NEVER commit these!
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 .env.production
 .env.development
 
 # Python
+# ------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual Environments
+# -------------------
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
 .venv/
-pip-log.txt
-pip-delete-this-directory.txt
+pyvenv.cfg
+.python-version
+
+# Testing & Coverage
+# -----------------
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
 .hypothesis/
 .pytest_cache/
+cover/
+htmlcov/
+
+# Type Checking
+# ------------
 .mypy_cache/
 .dmypy.json
 dmypy.json
 .pyre/
 .pytype/
+cython_debug/
 
-# Audio files (these can be large)
+# Audio Files (these can be large)
+# --------------------------------
 audio/
 *.mp3
 *.wav
@@ -44,58 +84,228 @@ audio/
 *.opus
 *.flac
 *.wma
+*.webm
 
-# Transcript files (contain copyrighted content)
-# Be specific about transcript files instead of all .txt files
+# Transcript Files (contain copyrighted content)
+# ---------------------------------------------
 transcripts/
 *_transcript.txt
 *_transcription.txt
+*.vtt
+*.srt
 
-# Summary files (you might want to keep these)
-# Comment out the next line if you want to track summaries
+# Summary Files (optional - uncomment if you want to track these)
+# --------------------------------------------------------------
 summaries/
+*_summary.md
+*_summary.txt
 
-# Cache directories
+# Reports and Verification Results
+# -------------------------------
+reports/
+feed_verification_results.json
+verification_report.json
+*_verification_results.json
+*_report.json
+*_report_*.json
+
+# Database Files
+# -------------
+*.db
+*.sqlite
+*.sqlite3
+podcast_data.db
+*.db-journal
+*.db-wal
+
+# Cache and Temporary Directories
+# ------------------------------
 cache/
 .cache/
 temp/
 .temp/
 tmp/
 .tmp/
-
-# IDE files
-.vscode/
-*.code-workspace
-.idea/
-*.sublime-project
-*.sublime-workspace
-*.swp
-*.swo
-*~
-.project
-.pydevproject
-.settings/
-.atom/
-
-# OS files
-.DS_Store
-.DS_Store?
-._*
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-.Spotlight-V100
-.Trashes
-
-# Temporary files
 *.tmp
 *.temp
 *_progress.json
+
+# Log Files
+# ---------
+*.log
+logs/
+renaissance_weekly.log
+*.log.*
+*.log-*
+
+# Backup Files
+# -----------
 *.bak
 *.backup
 *.old
+*.orig
+*~
+.*.swp
+.*.swo
 
-# Log files
-*.log
-logs/
-*.
+# IDE and Editor Files
+# -------------------
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# Atom
+.atom/
+
+# Emacs
+*~
+\#*\#
+.\#*
+.emacs.desktop
+.emacs.desktop.lock
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+tags
+[._]*.un~
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# Operating System Files
+# ---------------------
+# macOS
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Jupyter Notebooks (if you use them for analysis)
+# -----------------------------------------------
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# Node.js (if you have any JS/frontend components)
+# -----------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Renaissance Weekly Specific
+# --------------------------
+# Download progress files
+*_download_progress.json
+*_processing_status.json
+
+# Email drafts
+email_drafts/
+*.eml
+
+# Test outputs
+test_outputs/
+test_summaries/
+
+# Configuration overrides (but keep the example)
+config.override.yaml
+podcasts.override.yaml
+
+# Sensitive data patterns
+# ----------------------
+*api_key*
+*secret*
+*token*
+*password*
+!*example*
+!*template*
+
+# Large data files
+# ---------------
+*.csv
+*.xlsx
+*.xls
+!examples/*.csv
+!templates/*.xlsx
+
+# Compressed files (unless in specific directories)
+# -----------------------------------------------
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+!releases/*.zip
+!assets/*.zip
+
+# Keep these files/patterns
+# ------------------------
+!.gitignore
+!.gitkeep
+!requirements.txt
+!setup.py
+!README.md
+!LICENSE
+!podcasts.yaml
+!prompts/*.txt
