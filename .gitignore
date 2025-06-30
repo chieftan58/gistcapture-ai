@@ -22,7 +22,13 @@ audio/
 *.m4a
 
 # Transcript files (contain copyrighted content)
-transcripts/
+# Transcript data files only
+transcripts/*.txt
+transcripts/*.json
+transcripts/*.srt
+# Allow Python files
+!transcripts/*.py
+!transcripts/__init__.py
 *.txt
 
 # Summary files (you might want to keep these)
