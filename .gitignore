@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 
 # Python
 __pycache__/
@@ -14,56 +16,86 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
 
 # Audio files (these can be large)
 audio/
 *.mp3
 *.wav
 *.m4a
+*.aac
+*.ogg
+*.opus
+*.flac
+*.wma
 
 # Transcript files (contain copyrighted content)
+# Be specific about transcript files instead of all .txt files
 transcripts/
-*.txt
+*_transcript.txt
+*_transcription.txt
 
 # Summary files (you might want to keep these)
 # Comment out the next line if you want to track summaries
 summaries/
 
-# VS Code
+# Cache directories
+cache/
+.cache/
+temp/
+.temp/
+tmp/
+.tmp/
+
+# IDE files
 .vscode/
 *.code-workspace
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+.atom/
 
 # OS files
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+.Spotlight-V100
+.Trashes
 
 # Temporary files
 *.tmp
 *.temp
 *_progress.json
+*.bak
+*.backup
+*.old
 
 # Log files
 *.log
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Database
-podcast_data.db
-*.db
-*.db-journal
+logs/
+*.
