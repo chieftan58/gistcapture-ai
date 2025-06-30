@@ -6,10 +6,12 @@ import time
 import random
 import hashlib
 import asyncio
-from typing import List, Optional, Callable, Any
+from typing import List, Optional, Callable, Any, Dict
 from pathlib import Path
 from datetime import datetime
 import uuid
+from collections import deque
+import threading
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -130,24 +132,91 @@ def exponential_backoff_with_jitter(attempt: int, base_delay: float = 1.0, max_d
     return max(0, delay_with_jitter)
 
 
+class RateLimiter:
+    """Rate limiter with sliding window for API calls"""
+    
+    def __init__(self, max_requests_per_minute: int = 50, buffer_percentage: float = 0.1):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            max_requests_per_minute: Maximum requests allowed per minute
+            buffer_percentage: Reserve buffer (0.1 = 10% buffer)
+        """
+        self.max_rpm = int(max_requests_per_minute * (1 - buffer_percentage))
+        self.window_size = 60  # seconds
+        self.requests = deque()
+        self._lock = threading.Lock()
+        
+        logger.info(f"Rate limiter initialized: {self.max_rpm} requests/minute (with {buffer_percentage*100}% buffer)")
+    
+    def _cleanup_old_requests(self):
+        """Remove requests older than the window size"""
+        current_time = time.time()
+        cutoff_time = current_time - self.window_size
+        
+        while self.requests and self.requests[0] < cutoff_time:
+            self.requests.popleft()
+    
+    async def acquire(self, correlation_id: Optional[str] = None) -> float:
+        """
+        Acquire permission to make a request.
+        
+        Returns:
+            Wait time in seconds (0 if request can proceed immediately)
+        """
+        cid = correlation_id or str(uuid.uuid4())[:8]
+        
+        with self._lock:
+            self._cleanup_old_requests()
+            current_time = time.time()
+            
+            if len(self.requests) >= self.max_rpm:
+                # Calculate wait time until oldest request expires
+                oldest_request = self.requests[0]
+                wait_time = (oldest_request + self.window_size) - current_time + 0.1
+                logger.info(f"[{cid}] Rate limit reached. Waiting {wait_time:.1f}s")
+                return wait_time
+            else:
+                # Add current request
+                self.requests.append(current_time)
+                remaining = self.max_rpm - len(self.requests)
+                logger.debug(f"[{cid}] Rate limit: {len(self.requests)}/{self.max_rpm} used, {remaining} remaining")
+                return 0
+    
+    def get_current_usage(self) -> Dict[str, Any]:
+        """Get current rate limiter usage statistics"""
+        with self._lock:
+            self._cleanup_old_requests()
+            return {
+                'current_requests': len(self.requests),
+                'max_requests': self.max_rpm,
+                'utilization': len(self.requests) / self.max_rpm * 100,
+                'remaining': max(0, self.max_rpm - len(self.requests))
+            }
+
+
 async def retry_with_backoff(
     func: Callable,
     max_attempts: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
     exceptions: tuple = (Exception,),
-    correlation_id: Optional[str] = None
+    correlation_id: Optional[str] = None,
+    handle_rate_limit: bool = False
 ) -> Any:
     """
     Retry a function with exponential backoff and jitter.
+    Enhanced with special handling for HTTP 429 rate limit errors.
     
     Args:
         func: Async function to retry
-        max_attempts: Maximum number of attempts
+        max_attempts: Maximum number of attempts (5 for rate limits, 3 for others)
         base_delay: Base delay between retries
         max_delay: Maximum delay between retries
         exceptions: Tuple of exceptions to catch and retry
         correlation_id: Optional correlation ID for logging
+        handle_rate_limit: Enable special handling for HTTP 429 errors
         
     Returns:
         Result from successful function call
@@ -157,6 +226,10 @@ async def retry_with_backoff(
     """
     cid = correlation_id or str(uuid.uuid4())[:8]
     last_exception = None
+    
+    # Adjust max attempts for rate limit errors
+    if handle_rate_limit:
+        max_attempts = max(max_attempts, 5)
     
     for attempt in range(max_attempts):
         try:
@@ -168,9 +241,32 @@ async def retry_with_backoff(
             
         except exceptions as e:
             last_exception = e
-            if attempt < max_attempts - 1:
+            error_msg = str(e)
+            
+            # Special handling for rate limit errors
+            if handle_rate_limit and "429" in error_msg:
+                # Extract retry-after header if available
+                retry_after = None
+                if hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                    retry_after = e.response.headers.get('Retry-After')
+                
+                if retry_after:
+                    try:
+                        delay = float(retry_after)
+                        logger.warning(f"[{cid}] Rate limited. Server says retry after {delay}s")
+                    except:
+                        delay = exponential_backoff_with_jitter(attempt, base_delay=60.0, max_delay=300.0)
+                else:
+                    # Use longer backoff for rate limits
+                    delay = exponential_backoff_with_jitter(attempt, base_delay=60.0, max_delay=300.0)
+                
+                logger.warning(f"[{cid}] HTTP 429 rate limit on attempt {attempt + 1}. Waiting {delay:.1f}s...")
+            else:
+                # Standard exponential backoff for other errors
                 delay = exponential_backoff_with_jitter(attempt, base_delay, max_delay)
                 logger.warning(f"[{cid}] Attempt {attempt + 1} failed: {str(e)[:100]}. Retrying in {delay:.1f}s...")
+            
+            if attempt < max_attempts - 1:
                 await asyncio.sleep(delay)
             else:
                 logger.error(f"[{cid}] All {max_attempts} attempts failed for {func.__name__}")
@@ -364,10 +460,25 @@ class ProgressTracker:
 class CircuitBreaker:
     """Circuit breaker pattern for handling failing services"""
     
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0, correlation_id: Optional[str] = None):
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0, 
+                 correlation_id: Optional[str] = None, rate_limit_threshold: int = 3,
+                 rate_limit_recovery: float = 300.0):
+        """
+        Initialize circuit breaker with enhanced rate limit handling.
+        
+        Args:
+            failure_threshold: Failures before opening circuit
+            recovery_timeout: Time before attempting recovery
+            correlation_id: Correlation ID for logging
+            rate_limit_threshold: Consecutive 429 errors before opening
+            rate_limit_recovery: Recovery time for rate limit errors (5 minutes)
+        """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
+        self.rate_limit_threshold = rate_limit_threshold
+        self.rate_limit_recovery = rate_limit_recovery
         self.failure_count = 0
+        self.rate_limit_count = 0
         self.last_failure_time = None
         self.state = "closed"  # closed, open, half-open
         self.correlation_id = correlation_id or str(uuid.uuid4())[:8]
@@ -377,11 +488,13 @@ class CircuitBreaker:
         """Execute function through circuit breaker"""
         async with self._lock:
             if self.state == "open":
-                if time.time() - self.last_failure_time > self.recovery_timeout:
+                recovery_time = self.rate_limit_recovery if self.rate_limit_count >= self.rate_limit_threshold else self.recovery_timeout
+                if time.time() - self.last_failure_time > recovery_time:
                     logger.info(f"[{self.correlation_id}] Circuit breaker moving to half-open state")
                     self.state = "half-open"
                 else:
-                    raise Exception(f"Circuit breaker is open (failures: {self.failure_count})")
+                    time_remaining = recovery_time - (time.time() - self.last_failure_time)
+                    raise Exception(f"Circuit breaker is open (failures: {self.failure_count}, rate limits: {self.rate_limit_count}). Retry in {time_remaining:.0f}s")
         
         try:
             result = await func(*args, **kwargs)
@@ -391,6 +504,7 @@ class CircuitBreaker:
                     logger.info(f"[{self.correlation_id}] Circuit breaker recovered, closing")
                     self.state = "closed"
                     self.failure_count = 0
+                    self.rate_limit_count = 0
             
             return result
             
@@ -398,6 +512,21 @@ class CircuitBreaker:
             async with self._lock:
                 self.failure_count += 1
                 self.last_failure_time = time.time()
+                
+                # Track rate limit errors separately
+                if "429" in str(e):
+                    self.rate_limit_count += 1
+                    logger.warning(f"[{self.correlation_id}] Rate limit error {self.rate_limit_count}/{self.rate_limit_threshold}")
+                    
+                    if self.rate_limit_count >= self.rate_limit_threshold:
+                        logger.warning(
+                            f"[{self.correlation_id}] Circuit breaker opening due to rate limits. "
+                            f"Recovery in {self.rate_limit_recovery/60:.1f} minutes"
+                        )
+                        self.state = "open"
+                else:
+                    # Reset rate limit count on other errors
+                    self.rate_limit_count = 0
                 
                 if self.failure_count >= self.failure_threshold:
                     logger.warning(

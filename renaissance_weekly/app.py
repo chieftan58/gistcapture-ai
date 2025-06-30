@@ -28,6 +28,7 @@ from .utils.helpers import (
     validate_env_vars, get_available_memory, get_cpu_count,
     ProgressTracker, exponential_backoff_with_jitter
 )
+from .utils.clients import openai_rate_limiter
 
 logger = get_logger(__name__)
 
@@ -42,8 +43,8 @@ class ResourceAwareConcurrencyManager:
         self.min_memory_per_task = 500  # MB
         self.cpu_multiplier = 1.5
         
-    def get_optimal_concurrency(self) -> int:
-        """Calculate optimal concurrency based on system resources"""
+    def get_optimal_concurrency(self, openai_limit: int = 3) -> int:
+        """Calculate optimal concurrency based on system resources with OpenAI limit"""
         try:
             # Get available resources
             available_memory = get_available_memory()
@@ -55,24 +56,26 @@ class ResourceAwareConcurrencyManager:
             # Calculate CPU-based limit
             cpu_limit = int(cpu_count * self.cpu_multiplier)
             
-            # Take the minimum of all limits
+            # Take the minimum of all limits including OpenAI
             optimal = min(
                 max(self.base_concurrency, memory_limit),
                 cpu_limit,
-                self.max_concurrency
+                self.max_concurrency,
+                openai_limit  # Hard limit for OpenAI operations
             )
             
             logger.info(
                 f"[{self.correlation_id}] Resource-aware concurrency: {optimal} "
                 f"(Memory: {available_memory:.0f}MB allows {memory_limit}, "
-                f"CPU: {cpu_count} cores allows {cpu_limit})"
+                f"CPU: {cpu_count} cores allows {cpu_limit}, "
+                f"OpenAI limit: {openai_limit})"
             )
             
             return optimal
             
         except Exception as e:
             logger.warning(f"[{self.correlation_id}] Could not determine optimal concurrency: {e}")
-            return self.base_concurrency
+            return min(self.base_concurrency, openai_limit)
 
 
 class ExceptionAggregator:
@@ -147,6 +150,16 @@ class RenaissanceWeekly:
             # Resource management
             self.concurrency_manager = ResourceAwareConcurrencyManager(self.correlation_id)
             self.exception_aggregator = ExceptionAggregator(self.correlation_id)
+            
+            # Initialize global rate limiter info
+            logger.info(f"[{self.correlation_id}] 🔧 OpenAI rate limiter configured: 45 requests/minute (with 10% buffer)")
+            
+            # Log current API usage
+            usage = openai_rate_limiter.get_current_usage()
+            logger.info(
+                f"[{self.correlation_id}] 📊 Initial OpenAI API usage: "
+                f"{usage['current_requests']}/{usage['max_requests']} requests"
+            )
             
             logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly initialized successfully")
             
@@ -229,6 +242,14 @@ class RenaissanceWeekly:
             
             # Log exception summary if any
             self.exception_aggregator.log_summary()
+            
+            # Log final API usage
+            final_usage = openai_rate_limiter.get_current_usage()
+            logger.info(
+                f"[{self.correlation_id}] 📊 Final OpenAI API usage: "
+                f"{final_usage['current_requests']}/{final_usage['max_requests']} requests "
+                f"({final_usage['utilization']:.1f}% utilization)"
+            )
             
             await pipeline_progress.complete_item(len(summaries) > 0)
             
@@ -333,14 +354,15 @@ class RenaissanceWeekly:
         return all_episodes
     
     async def _process_episodes_with_resource_management(self, selected_episodes: List[Episode]) -> List[Dict]:
-        """Process episodes with dynamic concurrency based on system resources"""
+        """Process episodes with dynamic concurrency based on system resources and OpenAI limits"""
         summaries = []
         
-        # Get optimal concurrency
-        max_concurrent = self.concurrency_manager.get_optimal_concurrency()
+        # Get optimal concurrency with OpenAI limit
+        openai_concurrency_limit = 3  # Max 3 concurrent OpenAI operations
+        max_concurrent = self.concurrency_manager.get_optimal_concurrency(openai_concurrency_limit)
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {max_concurrent} (based on system resources)")
+        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {max_concurrent} (OpenAI limit: {openai_concurrency_limit})")
         
         # Progress tracker for processing
         process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
@@ -459,6 +481,14 @@ class RenaissanceWeekly:
                     logger.warning(
                         f"[{self.correlation_id}] ⚠️  Low memory warning: {available_memory:.0f}MB available. "
                         f"Consider reducing concurrency from {initial_concurrency}."
+                    )
+                
+                # Log API rate limiter status
+                api_usage = openai_rate_limiter.get_current_usage()
+                if api_usage['utilization'] > 80:
+                    logger.warning(
+                        f"[{self.correlation_id}] ⚠️  High API usage: {api_usage['utilization']:.1f}% "
+                        f"({api_usage['current_requests']}/{api_usage['max_requests']} requests)"
                     )
                 
             except asyncio.CancelledError:
@@ -642,7 +672,8 @@ class RenaissanceWeekly:
                     "episodes_missing": total_missing
                 },
                 "details": report_data,
-                "exceptions": self.exception_aggregator.get_summary()
+                "exceptions": self.exception_aggregator.get_summary(),
+                "api_usage": openai_rate_limiter.get_current_usage()
             }, f, indent=2, default=str)
         logger.info(f"\n[{self.correlation_id}] 💾 Detailed report saved to: {report_file}")
         
@@ -747,6 +778,13 @@ class RenaissanceWeekly:
                 
                 if temp_files_cleaned > 0:
                     logger.debug(f"[{self.correlation_id}] ✓ Cleaned up {temp_files_cleaned} temp files")
+            
+            # Log final API usage stats
+            final_usage = openai_rate_limiter.get_current_usage()
+            logger.info(
+                f"[{self.correlation_id}] 📊 Final API usage: "
+                f"{final_usage['current_requests']}/{final_usage['max_requests']} requests used"
+            )
             
             logger.info(f"[{self.correlation_id}] 🧹 Cleanup completed")
             

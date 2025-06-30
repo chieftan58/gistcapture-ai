@@ -19,9 +19,9 @@ from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTE
 from ..utils.logging import get_logger
 from ..utils.helpers import (
     slugify, validate_audio_file_comprehensive, exponential_backoff_with_jitter,
-    retry_with_backoff, ProgressTracker, calculate_file_hash
+    retry_with_backoff, ProgressTracker, calculate_file_hash, CircuitBreaker
 )
-from ..utils.clients import openai_client
+from ..utils.clients import openai_client, openai_rate_limiter
 
 logger = get_logger(__name__)
 
@@ -37,6 +37,15 @@ class AudioTranscriber:
         self.session = None
         self._session_lock = asyncio.Lock()
         self.temp_files = set()  # Track temp files for cleanup
+        
+        # Circuit breaker for OpenAI API with special rate limit handling
+        self.openai_circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+            rate_limit_threshold=3,
+            rate_limit_recovery=300.0,  # 5 minutes for rate limits
+            correlation_id="openai-whisper"
+        )
         
         # Enhanced headers for different download scenarios
         self.headers_presets = [
@@ -813,7 +822,7 @@ class AudioTranscriber:
             return True  # Don't fail on ffprobe errors
     
     async def _transcribe_with_whisper(self, audio_file: Path, correlation_id: str) -> Optional[str]:
-        """Transcribe audio using OpenAI Whisper API with enhanced error handling"""
+        """Transcribe audio using OpenAI Whisper API with enhanced error handling and rate limiting"""
         logger.info(f"[{correlation_id}] 🎤 Starting transcription with Whisper...")
         
         # Track files for cleanup
@@ -840,32 +849,59 @@ class AudioTranscriber:
                     logger.error(f"[{correlation_id}] Failed to compress audio file")
                     return None
             
-            # Define the transcription function for retry
+            # Wait for rate limiter before making API call
+            wait_time = await openai_rate_limiter.acquire(correlation_id)
+            if wait_time > 0:
+                logger.info(f"[{correlation_id}] Rate limiting: waiting {wait_time:.1f}s before API call")
+                await asyncio.sleep(wait_time)
+            
+            # Log current rate limiter usage
+            usage = openai_rate_limiter.get_current_usage()
+            logger.info(f"[{correlation_id}] OpenAI rate limit usage: {usage['current_requests']}/{usage['max_requests']} ({usage['utilization']:.1f}%)")
+            
+            # Define the transcription function for retry and circuit breaker
             async def transcribe():
                 with open(audio_file, 'rb') as f:
                     # Run in executor to avoid blocking
                     loop = asyncio.get_event_loop()
                     
                     def api_call():
-                        return openai_client.audio.transcriptions.create(
-                            model="whisper-1",
-                            file=f,
-                            response_format="text",
-                            language="en"  # Assuming English, adjust if needed
-                        )
+                        try:
+                            return openai_client.audio.transcriptions.create(
+                                model="whisper-1",
+                                file=f,
+                                response_format="text",
+                                language="en"  # Assuming English, adjust if needed
+                            )
+                        except Exception as e:
+                            # Wrap the exception to preserve response information
+                            if hasattr(e, 'response'):
+                                raise e
+                            else:
+                                # Create a wrapper exception that includes the error message
+                                class APIError(Exception):
+                                    def __init__(self, message):
+                                        super().__init__(message)
+                                        self.response = None
+                                
+                                raise APIError(str(e))
                     
                     return await loop.run_in_executor(None, api_call)
             
-            # Try transcription with exponential backoff
+            # Try transcription with circuit breaker and enhanced retry logic
             try:
-                transcript = await retry_with_backoff(
-                    transcribe,
-                    max_attempts=self.max_retries,
-                    base_delay=2.0,
-                    max_delay=60.0,
-                    exceptions=(Exception,),
-                    correlation_id=correlation_id
-                )
+                async def circuit_breaker_call():
+                    return await retry_with_backoff(
+                        transcribe,
+                        max_attempts=5,  # Increased for rate limits
+                        base_delay=2.0,
+                        max_delay=300.0,  # 5 minutes max
+                        exceptions=(Exception,),
+                        correlation_id=correlation_id,
+                        handle_rate_limit=True  # Enable special rate limit handling
+                    )
+                
+                transcript = await self.openai_circuit_breaker.call(circuit_breaker_call)
                 
                 if transcript and len(transcript.strip()) > 100:
                     logger.info(f"[{correlation_id}] ✅ Transcription complete: {len(transcript)} characters")
@@ -892,6 +928,9 @@ class AudioTranscriber:
                 
                 elif "invalid" in error_msg.lower():
                     logger.error(f"[{correlation_id}] Invalid audio file")
+                
+                elif "circuit breaker is open" in error_msg.lower():
+                    logger.error(f"[{correlation_id}] Circuit breaker is open - too many failures")
                 
                 logger.error(f"[{correlation_id}] Whisper API error: {error_msg}")
                 raise

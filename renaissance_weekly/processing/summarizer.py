@@ -7,8 +7,8 @@ from typing import Optional
 from ..models import Episode, TranscriptSource
 from ..config import SUMMARY_DIR, BASE_DIR
 from ..utils.logging import get_logger
-from ..utils.helpers import slugify
-from ..utils.clients import openai_client
+from ..utils.helpers import slugify, retry_with_backoff, CircuitBreaker
+from ..utils.clients import openai_client, openai_rate_limiter
 
 logger = get_logger(__name__)
 
@@ -25,6 +25,15 @@ class Summarizer:
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "4000"))
+        
+        # Circuit breaker for OpenAI API
+        self.openai_circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+            rate_limit_threshold=3,
+            rate_limit_recovery=300.0,  # 5 minutes for rate limits
+            correlation_id="openai-chat"
+        )
         
         logger.info(f"📝 Summarizer initialized with model: {self.model}")
     
@@ -77,7 +86,7 @@ class Summarizer:
             
             logger.info(f"🤖 Generating summary with {self.model}...")
             
-            # Call OpenAI API
+            # Call OpenAI API with rate limiting and circuit breaker
             response = await self._call_openai_api(prompt)
             
             if not response:
@@ -123,18 +132,29 @@ class Summarizer:
         return prompt
     
     async def _call_openai_api(self, prompt: str) -> Optional[str]:
-        """Call OpenAI API with retry logic"""
+        """Call OpenAI API with enhanced retry logic and rate limiting"""
         import asyncio
+        import uuid
         
-        max_retries = 3
-        retry_delay = 5
+        correlation_id = str(uuid.uuid4())[:8]
         
-        for attempt in range(max_retries):
-            try:
-                # Use async executor to avoid blocking
-                loop = asyncio.get_event_loop()
-                
-                def api_call():
+        # Wait for rate limiter before making API call
+        wait_time = await openai_rate_limiter.acquire(correlation_id)
+        if wait_time > 0:
+            logger.info(f"[{correlation_id}] Rate limiting: waiting {wait_time:.1f}s before API call")
+            await asyncio.sleep(wait_time)
+        
+        # Log current rate limiter usage
+        usage = openai_rate_limiter.get_current_usage()
+        logger.info(f"[{correlation_id}] OpenAI rate limit usage: {usage['current_requests']}/{usage['max_requests']} ({usage['utilization']:.1f}%)")
+        
+        # Define the API call function for retry and circuit breaker
+        async def api_call():
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            
+            def sync_api_call():
+                try:
                     return openai_client.chat.completions.create(
                         model=self.model,
                         messages=[
@@ -144,25 +164,55 @@ class Summarizer:
                         max_tokens=self.max_tokens,
                         temperature=self.temperature
                     )
-                
-                response = await loop.run_in_executor(None, api_call)
-                
-                if response and response.choices:
-                    content = response.choices[0].message.content
-                    if content:
-                        logger.info(f"✅ Summary generated: {len(content)} characters")
-                        return content
+                except Exception as e:
+                    # Wrap the exception to preserve response information
+                    if hasattr(e, 'response'):
+                        raise e
                     else:
-                        logger.warning("Empty response from API")
+                        # Create a wrapper exception
+                        class APIError(Exception):
+                            def __init__(self, message):
+                                super().__init__(message)
+                                self.response = None
                         
-            except Exception as e:
-                logger.error(f"API call attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2
+                        raise APIError(str(e))
+            
+            return await loop.run_in_executor(None, sync_api_call)
+        
+        try:
+            # Call with circuit breaker and enhanced retry
+            async def circuit_breaker_call():
+                return await retry_with_backoff(
+                    api_call,
+                    max_attempts=5,  # Increased for rate limits
+                    base_delay=2.0,
+                    max_delay=300.0,  # 5 minutes max
+                    exceptions=(Exception,),
+                    correlation_id=correlation_id,
+                    handle_rate_limit=True  # Enable special rate limit handling
+                )
+            
+            response = await self.openai_circuit_breaker.call(circuit_breaker_call)
+            
+            if response and response.choices:
+                content = response.choices[0].message.content
+                if content:
+                    logger.info(f"[{correlation_id}] ✅ Summary generated: {len(content)} characters")
+                    return content
                 else:
-                    logger.error("All retry attempts failed")
-                    raise
+                    logger.warning(f"[{correlation_id}] Empty response from API")
+            
+        except Exception as e:
+            error_msg = str(e)
+            
+            if "circuit breaker is open" in error_msg.lower():
+                logger.error(f"[{correlation_id}] Circuit breaker is open - too many failures")
+            elif "429" in error_msg:
+                logger.error(f"[{correlation_id}] Rate limit error despite retry attempts")
+            else:
+                logger.error(f"[{correlation_id}] API call failed: {error_msg}")
+            
+            raise
         
         return None
     
