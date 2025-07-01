@@ -17,6 +17,7 @@ import tempfile
 from ..models import Episode
 from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
 from ..utils.logging import get_logger
+from ..fetchers.audio_sources import AudioSourceFinder
 from ..utils.helpers import (
     slugify, validate_audio_file_comprehensive, exponential_backoff_with_jitter,
     retry_with_backoff, ProgressTracker, calculate_file_hash, CircuitBreaker

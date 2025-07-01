@@ -10,6 +10,7 @@ import time
 import subprocess
 
 from ..utils.logging import get_logger
+from ..monitoring import monitor
 
 logger = get_logger(__name__)
 
@@ -75,9 +76,12 @@ class PlatformAudioDownloader:
                     # Validate the downloaded file
                     if self._validate_audio_file(output_path):
                         logger.info(f"✅ Successfully downloaded: {output_path.stat().st_size / 1_000_000:.1f}MB")
+                        monitor.record_success('audio_download', podcast_name or 'Unknown')
                         return True
                     else:
                         logger.warning(f"Downloaded file failed validation, removing: {output_path}")
+                        monitor.record_failure('audio_download', podcast_name or 'Unknown', url[:80],
+                                             'ValidationFailed', 'Downloaded file failed validation')
                         if output_path.exists():
                             output_path.unlink()
         
@@ -86,13 +90,26 @@ class PlatformAudioDownloader:
         if self._download_generic(url, output_path):
             if self._validate_audio_file(output_path):
                 logger.info(f"✅ Successfully downloaded: {output_path.stat().st_size / 1_000_000:.1f}MB")
+                monitor.record_success('audio_download', podcast_name or 'Unknown')
                 return True
             else:
                 logger.warning(f"Downloaded file failed validation, removing: {output_path}")
+                monitor.record_failure('audio_download', podcast_name or 'Unknown', url[:80],
+                                     'ValidationFailed', 'Downloaded file failed validation')
                 if output_path.exists():
                     output_path.unlink()
         
+        # Ultimate fallback: yt-dlp
+        logger.info("🎥 Trying yt-dlp as final fallback...")
+        if self._download_with_ytdlp(url, str(output_path)):
+            if self._validate_audio_file(output_path):
+                logger.info(f"✅ yt-dlp download successful: {output_path.stat().st_size / 1_000_000:.1f}MB")
+                monitor.record_success('audio_download', podcast_name or 'Unknown')
+                return True
+        
         logger.error(f"❌ All download strategies failed for: {url[:80]}...")
+        monitor.record_failure('audio_download', podcast_name or 'Unknown', url[:80],
+                             'AllStrategiesFailed', 'All download strategies failed')
         return False
     
     def _validate_audio_file(self, file_path: Path) -> bool:
@@ -573,4 +590,78 @@ class PlatformAudioDownloader:
                 logger.debug(f"Generic download with UA '{ua}' failed: {e}")
                 continue
         
+        return False
+    
+    def _download_with_ytdlp(self, url: str, output_path: str) -> bool:
+        """Download using yt-dlp as ultimate fallback."""
+        try:
+            import yt_dlp
+        except ImportError:
+            logger.warning("yt-dlp not installed. Install with: pip install yt-dlp")
+            return False
+            
+        # Try different browsers for cookie extraction
+        browsers = ['chrome', 'firefox', 'safari', 'edge']
+        
+        for browser in browsers:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': output_path,
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'retries': 3,
+                'fragment_retries': 3,
+                'ignoreerrors': False,
+                'cookiesfrombrowser': (browser,),  # Try to use browser cookies
+                'user_agent': self.user_agents.get(browser, self.user_agents['chrome']),
+                'headers': {
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'DNT': '1',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Referer': 'https://substack.com/',
+                },
+                'http_chunk_size': 10485760,  # 10MB chunks
+                'concurrent_fragment_downloads': 5,
+                'extractor_args': {'generic': ['impersonate']},  # Try to bypass Cloudflare
+                'nocheckcertificate': True,  # Sometimes helps with SSL issues
+            }
+        
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    logger.info(f"Attempting yt-dlp download with {browser} cookies for: {url}")
+                    ydl.download([url])
+                    
+                if self._validate_audio_file(Path(output_path)):
+                    logger.info(f"✅ yt-dlp download successful with {browser} cookies")
+                    return True
+                else:
+                    logger.debug(f"yt-dlp download with {browser} failed validation")
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                    continue
+                    
+            except Exception as e:
+                logger.debug(f"yt-dlp with {browser} cookies failed: {e}")
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                # Try next browser
+                continue
+        
+        # If all browsers fail, try without cookies
+        logger.info("Trying yt-dlp without browser cookies...")
+        ydl_opts['cookiesfrombrowser'] = None
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+                
+            if self._validate_audio_file(Path(output_path)):
+                logger.info("✅ yt-dlp download successful without cookies")
+                return True
+        except Exception as e:
+            logger.error(f"yt-dlp final attempt failed: {e}")
+            
         return False

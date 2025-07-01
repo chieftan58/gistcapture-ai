@@ -24,6 +24,7 @@ from .processing.summarizer import Summarizer
 from .ui.selection import EpisodeSelector
 from .email.digest import EmailDigest
 from .utils.logging import get_logger
+from .monitoring import monitor
 from .utils.helpers import (
     validate_env_vars, get_available_memory, get_cpu_count,
     ProgressTracker, exponential_backoff_with_jitter, slugify
@@ -539,6 +540,8 @@ class RenaissanceWeekly:
             
             # Step 2: If no transcript found, transcribe from audio
             if not transcript_text:
+                monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
+                                     'NotFound', 'No transcript found from any source')
                 logger.info(f"\n[{episode_id}] 🎵 Step 2: No transcript found - transcribing from audio...")
                 
                 # Check if we have audio URL
@@ -553,12 +556,16 @@ class RenaissanceWeekly:
                     transcript_source = TranscriptSource.GENERATED
                     logger.info(f"[{episode_id}] ✅ Audio transcribed successfully")
                     logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                    monitor.record_success('audio_transcription', episode.podcast)
                 else:
                     logger.error(f"[{episode_id}] ❌ Failed to transcribe audio")
+                    monitor.record_failure('audio_transcription', episode.podcast, episode.title,
+                                         'TranscriptionFailed', 'Failed to transcribe audio')
                     return None
             else:
                 logger.info(f"[{episode_id}] ✅ Found existing transcript (source: {transcript_source.value})")
                 logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                monitor.record_success('transcript_fetch', episode.podcast)
             
             # Save transcript to database
             try:
@@ -574,6 +581,7 @@ class RenaissanceWeekly:
             if summary:
                 logger.info(f"[{episode_id}] ✅ Summary generated successfully!")
                 logger.info(f"[{episode_id}] 📏 Summary length: {len(summary)} characters")
+                monitor.record_success('summarization', episode.podcast)
                 # Save summary to database
                 try:
                     self.db.save_episode(episode, transcript_text, transcript_source, summary)
@@ -582,11 +590,15 @@ class RenaissanceWeekly:
                     logger.warning(f"[{episode_id}] Failed to save summary to database: {e}")
             else:
                 logger.error(f"[{episode_id}] ❌ Failed to generate summary")
+                monitor.record_failure('summarization', episode.podcast, episode.title,
+                                     'SummarizationFailed', 'Failed to generate summary')
             
             return summary
             
         except Exception as e:
             logger.error(f"[{episode_id}] ❌ Error processing episode: {e}", exc_info=True)
+            monitor.record_failure('episode_processing', episode.podcast, episode.title,
+                                 type(e).__name__, str(e))
             raise
         finally:
             logger.info(f"[{episode_id}] {'='*60}\n")

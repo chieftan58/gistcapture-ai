@@ -87,7 +87,7 @@ class Summarizer:
             logger.info(f"🤖 Generating summary with {self.model}...")
             
             # Call OpenAI API with rate limiting and circuit breaker
-            response = await self._call_openai_api(prompt, transcript)
+            response = await self._call_openai_api(prompt)
             
             if not response:
                 logger.error("❌ Failed to generate summary")

@@ -124,3 +124,34 @@ Set `TESTING_MODE=true` to limit audio transcription to 5 minutes for faster tes
 - Summary caching: Summaries are cached to disk. If you update `prompts/summary_prompt.txt`, use `python main.py regenerate-summaries` to force regeneration.
 - Audio downloads may fail with 403 errors on some platforms. The system has multiple fallback strategies including platform-specific headers and yt-dlp.
 - Test datasets can be saved/loaded to speed up development cycles without re-downloading content.
+
+## Enhanced Reliability Features
+
+### Multi-Layer Transcript Finding
+The system now searches for transcripts in this order:
+1. Database cache
+2. RSS feed transcript URLs
+3. Podcast Index API
+4. Podcast-specific scrapers (Tim Ferriss blog, Substack)
+5. YouTube transcripts
+6. Web page scraping
+7. Audio transcription (last resort)
+
+### Robust Audio Download
+- Platform-specific strategies for major podcast hosts
+- yt-dlp integration with browser cookie extraction (Chrome, Firefox, Safari, Edge)
+- Multiple retry strategies with exponential backoff
+- Comprehensive file validation
+
+### System Monitoring
+- Run `python main.py health` to see system health report
+- Tracks success/failure rates by component and podcast
+- Identifies problematic podcasts
+- Persistent monitoring data between runs
+
+### API Integrations
+- **YouTube API**: Set `YOUTUBE_API_KEY` in .env for better YouTube search
+- **Podcast Index API**: Set `PODCASTINDEX_API_KEY` and `PODCASTINDEX_API_SECRET` for transcript discovery
+- Get free API keys at:
+  - YouTube: https://console.cloud.google.com/
+  - Podcast Index: https://api.podcastindex.org/

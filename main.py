@@ -69,6 +69,54 @@ def print_help():
     print("  python main.py verify              # Run verification report")
     print("  python main.py check \"Tim Ferriss\" # Debug Tim Ferriss podcast")
     print("  python main.py test                # Run system diagnostics")
+    print("  python main.py health              # Show system health report")
+
+
+def show_health_report():
+    """Display system health monitoring report"""
+    from renaissance_weekly.monitoring import monitor
+    
+    logger.info("\n🏥 SYSTEM HEALTH REPORT")
+    logger.info("=" * 60)
+    
+    summary = monitor.get_failure_summary()
+    
+    # Overall health
+    logger.info(f"\n📊 Overall Health: {summary['overall_health']}")
+    logger.info(f"⚠️  Total failures (24h): {summary['total_failures_24h']}")
+    
+    # Component statistics
+    if summary['component_stats']:
+        logger.info("\n📈 Component Statistics:")
+        for component, stats in summary['component_stats'].items():
+            logger.info(f"\n  {component}:")
+            logger.info(f"    Success rate: {stats['success_rate']}")
+            logger.info(f"    Total attempts: {stats['total_attempts']}")
+            if stats['consecutive_failures'] > 0:
+                logger.warning(f"    ⚠️  Consecutive failures: {stats['consecutive_failures']}")
+            if stats['last_failure']:
+                logger.info(f"    Last failure: {stats['last_failure']}")
+    
+    # Problematic podcasts
+    if summary['problematic_podcasts']:
+        logger.warning("\n⚠️  Problematic Podcasts:")
+        for podcast_info in summary['problematic_podcasts']:
+            logger.warning(f"  - {podcast_info['podcast']}: {podcast_info['total_failures']} failures")
+            logger.warning(f"    Components: {', '.join(podcast_info['components'])}")
+    
+    # Recent errors
+    if summary['recent_errors']:
+        logger.info("\n🚨 Recent Errors (last 5):")
+        for error in summary['recent_errors']:
+            logger.error(f"  [{error['timestamp']}] {error['component']} - {error['podcast']}")
+            logger.error(f"    {error['error']}")
+    
+    logger.info("\n" + "=" * 60)
+    logger.info("💡 Tips for improving reliability:")
+    logger.info("  1. Install yt-dlp: pip install yt-dlp")
+    logger.info("  2. Check podcast RSS feeds are accessible")
+    logger.info("  3. Verify OpenAI API rate limits")
+    logger.info("  4. Run 'python main.py test' for diagnostics")
 
 
 def run_system_diagnostics():
@@ -214,6 +262,8 @@ def parse_arguments():
                 days_back = int(sys.argv[2])
         elif sys.argv[1] == "test":
             mode = "test"
+        elif sys.argv[1] == "health":
+            mode = "health"
         elif sys.argv[1] == "--test-fetch":
             mode = "test-fetch"
             if len(sys.argv) > 2 and sys.argv[2].isdigit():
@@ -311,6 +361,8 @@ async def main():
             await app_instance.save_test_dataset(extra_args['dataset_name'])
         elif mode == "load-dataset":
             await app_instance.load_test_dataset(extra_args['dataset_name'])
+        elif mode == "health":
+            show_health_report()
         else:
             await app_instance.run(days_back)
         
