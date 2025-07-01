@@ -222,26 +222,305 @@ class AudioSourceFinder:
     async def _find_youtube_version(self, episode: Episode) -> Optional[str]:
         """Find YouTube version of the episode"""
         try:
+            import os
+            
             # Search YouTube for the episode
             search_query = f"{episode.podcast} {episode.title}"
             # Clean up the query
             search_query = re.sub(r'[#\-–—:]', ' ', search_query)
             search_query = re.sub(r'\s+', ' ', search_query).strip()[:100]
             
-            # Note: This would use YouTube search API or web scraping
-            # For now, return None as placeholder
-            # In production, this would return the YouTube URL if found
+            # Check if YouTube API key is available
+            youtube_api_key = os.getenv('YOUTUBE_API_KEY')
+            if youtube_api_key:
+                return await self._search_youtube_api(search_query, episode, youtube_api_key)
+            else:
+                # Fall back to web scraping
+                return await self._search_youtube_web(search_query, episode)
             
         except Exception as e:
             logger.debug(f"Error finding YouTube version: {e}")
         
         return None
     
-    async def _find_spotify_url(self, episode: Episode) -> Optional[str]:
-        """Find Spotify URL for episode"""
-        # This would search Spotify's API or web
-        # Placeholder for now
+    async def _search_youtube_api(self, query: str, episode: Episode, api_key: str) -> Optional[str]:
+        """Search YouTube using official API"""
+        try:
+            session = await self._get_session()
+            
+            # YouTube Data API v3 search endpoint
+            search_url = "https://www.googleapis.com/youtube/v3/search"
+            params = {
+                'part': 'snippet',
+                'q': query,
+                'type': 'video',
+                'maxResults': 10,
+                'order': 'relevance',
+                'videoDuration': 'long',  # Prefer longer videos (podcasts)
+                'key': api_key
+            }
+            
+            async with session.get(search_url, params=params) as response:
+                if response.status != 200:
+                    logger.warning(f"YouTube API error: {response.status}")
+                    return None
+                
+                data = await response.json()
+                
+                if 'items' not in data or not data['items']:
+                    return None
+                
+                # Try to find best match
+                episode_date = episode.published
+                episode_title_lower = episode.title.lower()
+                
+                for item in data['items']:
+                    snippet = item.get('snippet', {})
+                    video_id = item.get('id', {}).get('videoId')
+                    
+                    if not video_id:
+                        continue
+                    
+                    # Check title similarity
+                    video_title = snippet.get('title', '').lower()
+                    channel_title = snippet.get('channelTitle', '').lower()
+                    
+                    # Score based on title match
+                    title_match_score = 0
+                    if episode.podcast.lower() in channel_title:
+                        title_match_score += 2
+                    
+                    # Check for key words from episode title
+                    title_words = set(episode_title_lower.split())
+                    video_words = set(video_title.split())
+                    common_words = title_words & video_words
+                    
+                    if len(common_words) >= min(3, len(title_words) * 0.5):
+                        title_match_score += len(common_words)
+                    
+                    # Check publish date proximity
+                    if 'publishedAt' in snippet:
+                        import datetime
+                        video_date = datetime.datetime.fromisoformat(
+                            snippet['publishedAt'].replace('Z', '+00:00')
+                        ).replace(tzinfo=None)
+                        
+                        days_diff = abs((video_date - episode_date).days)
+                        if days_diff <= 7:  # Within a week
+                            title_match_score += 3
+                    
+                    # If good match, return YouTube URL
+                    if title_match_score >= 4:
+                        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+                        logger.info(f"✅ Found YouTube version: {youtube_url}")
+                        return youtube_url
+                
+        except Exception as e:
+            logger.error(f"YouTube API search error: {e}")
+        
         return None
+    
+    async def _search_youtube_web(self, query: str, episode: Episode) -> Optional[str]:
+        """Search YouTube via web scraping (fallback)"""
+        try:
+            session = await self._get_session()
+            
+            # Use YouTube search URL
+            search_url = "https://www.youtube.com/results"
+            params = {'search_query': query}
+            
+            async with session.get(search_url, params=params) as response:
+                if response.status != 200:
+                    return None
+                
+                html = await response.text()
+                
+                # Look for video IDs in the response
+                # YouTube embeds video IDs in various places
+                import json
+                
+                # Try to find ytInitialData
+                match = re.search(r'var ytInitialData = ({.*?});', html)
+                if match:
+                    try:
+                        data = json.loads(match.group(1))
+                        
+                        # Navigate through the data structure to find videos
+                        contents = (data.get('contents', {})
+                                      .get('twoColumnSearchResultsRenderer', {})
+                                      .get('primaryContents', {})
+                                      .get('sectionListRenderer', {})
+                                      .get('contents', []))
+                        
+                        for section in contents:
+                            items = (section.get('itemSectionRenderer', {})
+                                          .get('contents', []))
+                            
+                            for item in items[:5]:  # Check first 5 results
+                                video = item.get('videoRenderer', {})
+                                if not video:
+                                    continue
+                                
+                                video_id = video.get('videoId')
+                                if not video_id:
+                                    continue
+                                
+                                # Check title
+                                title_runs = video.get('title', {}).get('runs', [])
+                                if title_runs:
+                                    video_title = ' '.join(run.get('text', '') for run in title_runs).lower()
+                                    
+                                    # Simple matching
+                                    if (episode.podcast.lower() in video_title or 
+                                        any(word in video_title for word in episode.title.lower().split()[:3])):
+                                        
+                                        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+                                        logger.info(f"✅ Found YouTube version via web: {youtube_url}")
+                                        return youtube_url
+                    
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Fallback: regex search for video IDs
+                video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
+                if video_ids:
+                    # Return the first one as a guess
+                    youtube_url = f"https://www.youtube.com/watch?v={video_ids[0]}"
+                    logger.info(f"✅ Found potential YouTube version: {youtube_url}")
+                    return youtube_url
+                    
+        except Exception as e:
+            logger.debug(f"YouTube web search error: {e}")
+        
+        return None
+    
+    async def _find_spotify_url(self, episode: Episode) -> Optional[str]:
+        """Find Spotify URL for episode using Web API"""
+        try:
+            import os
+            import base64
+            
+            # Check for Spotify API credentials
+            client_id = os.getenv('SPOTIFY_CLIENT_ID')
+            client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+            
+            if not client_id or not client_secret:
+                # Try web scraping approach
+                return await self._search_spotify_web(episode)
+            
+            # Get access token
+            token = await self._get_spotify_token(client_id, client_secret)
+            if not token:
+                return None
+                
+            session = await self._get_session()
+            
+            # Search for the episode
+            search_query = f"{episode.podcast} {episode.title}"
+            search_query = re.sub(r'[#\-–—:]', ' ', search_query)
+            search_query = re.sub(r'\s+', ' ', search_query).strip()[:100]
+            
+            search_url = "https://api.spotify.com/v1/search"
+            params = {
+                'q': search_query,
+                'type': 'episode',
+                'limit': 10
+            }
+            headers = {
+                'Authorization': f'Bearer {token}'
+            }
+            
+            async with session.get(search_url, params=params, headers=headers) as response:
+                if response.status != 200:
+                    logger.warning(f"Spotify API error: {response.status}")
+                    return None
+                    
+                data = await response.json()
+                
+                if not data.get('episodes', {}).get('items'):
+                    return None
+                
+                # Find best match
+                episode_title_lower = episode.title.lower()
+                
+                for item in data['episodes']['items']:
+                    # Check title match
+                    spotify_title = item.get('name', '').lower()
+                    show_name = item.get('show', {}).get('name', '').lower()
+                    
+                    # Score matching
+                    if (episode.podcast.lower() in show_name and
+                        (episode_title_lower in spotify_title or
+                         self._title_similarity(episode_title_lower, spotify_title) > 0.7)):
+                        
+                        # Get audio preview or episode URL
+                        audio_preview = item.get('audio_preview_url')
+                        episode_uri = item.get('uri')
+                        
+                        if audio_preview:
+                            logger.info(f"✅ Found Spotify audio preview: {audio_preview}")
+                            return audio_preview
+                        elif episode_uri:
+                            # Convert URI to web URL
+                            episode_id = episode_uri.split(':')[-1]
+                            web_url = f"https://open.spotify.com/episode/{episode_id}"
+                            logger.info(f"✅ Found Spotify episode: {web_url}")
+                            # Note: This returns the web URL, not direct audio
+                            # Would need additional processing to get audio
+                            return None
+                
+        except Exception as e:
+            logger.error(f"Spotify API error: {e}")
+            
+        return None
+    
+    async def _get_spotify_token(self, client_id: str, client_secret: str) -> Optional[str]:
+        """Get Spotify access token"""
+        try:
+            session = await self._get_session()
+            
+            # Encode credentials
+            credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            
+            token_url = "https://accounts.spotify.com/api/token"
+            headers = {
+                'Authorization': f'Basic {credentials}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            data = {
+                'grant_type': 'client_credentials'
+            }
+            
+            async with session.post(token_url, headers=headers, data=data) as response:
+                if response.status == 200:
+                    token_data = await response.json()
+                    return token_data.get('access_token')
+                    
+        except Exception as e:
+            logger.error(f"Spotify token error: {e}")
+            
+        return None
+    
+    async def _search_spotify_web(self, episode: Episode) -> Optional[str]:
+        """Search Spotify via web (fallback)"""
+        # Note: Spotify web search is complex due to dynamic content
+        # This is a placeholder for now
+        logger.debug("Spotify web search not implemented")
+        return None
+    
+    def _title_similarity(self, title1: str, title2: str) -> float:
+        """Calculate title similarity score"""
+        # Simple word overlap similarity
+        words1 = set(title1.lower().split())
+        words2 = set(title2.lower().split())
+        
+        if not words1 or not words2:
+            return 0.0
+            
+        intersection = words1 & words2
+        union = words1 | words2
+        
+        return len(intersection) / len(union)
     
     async def _find_apple_podcasts_url(self, episode: Episode, podcast_config: Optional[Dict] = None) -> Optional[str]:
         """Find Apple Podcasts URL for episode using iTunes Search API"""

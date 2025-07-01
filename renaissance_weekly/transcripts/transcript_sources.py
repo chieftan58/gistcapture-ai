@@ -85,6 +85,18 @@ class ComprehensiveTranscriptFinder:
     
     async def _check_transcript_aggregators(self, episode: Episode) -> Optional[str]:
         """Check transcript aggregator services"""
+        # First try our official API aggregator
+        try:
+            from .transcript_apis import TranscriptAPIAggregator
+            api_aggregator = TranscriptAPIAggregator()
+            transcript = await api_aggregator.find_transcript(episode)
+            if transcript:
+                logger.info("Found transcript from official APIs")
+                return transcript
+        except Exception as e:
+            logger.debug(f"API aggregator error: {e}")
+        
+        # Then try other aggregators
         aggregators = [
             self._check_happyscribe,
             self._check_sonix,

@@ -13,6 +13,10 @@ class TranscriptSource(Enum):
     GENERATED = "generated"
     API = "api"
     CACHED = "cached"
+    OFFICIAL_TRANSCRIPT = "official_transcript"
+    YOUTUBE_TRANSCRIPT = "youtube_transcript"
+    AUDIO_TRANSCRIPTION = "audio_transcription"
+    API_TRANSCRIPTION = "api_transcription"
 
 
 @dataclass
