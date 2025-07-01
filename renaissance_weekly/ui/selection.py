@@ -649,7 +649,7 @@ class EpisodeSelector:
                     
                     ${{APP_STATE.configuration.transcription_mode === 'test' ? `
                         <div class="notice">
-                            Test mode: Transcriptions limited to 20 minutes
+                            Test mode: Transcriptions limited to 5 minutes
                         </div>
                     ` : ''}}
                     
