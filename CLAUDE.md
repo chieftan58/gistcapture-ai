@@ -21,6 +21,33 @@ python main.py check "Podcast Name" [days]
 
 # Reload prompts for A/B testing
 python main.py reload-prompts
+
+# Force regenerate summaries with current prompt
+python main.py regenerate-summaries [days]
+
+# Run system diagnostics
+python main.py test
+```
+
+### Testing Commands
+```bash
+# Test only episode fetching
+python main.py --test-fetch [days]
+
+# Test summarization with a transcript file
+python main.py --test-summarize <transcript_file>
+
+# Test email generation with cached data
+python main.py --test-email
+
+# Run full pipeline without API calls
+python main.py --dry-run [days]
+
+# Save current cache as test dataset
+python main.py --save-dataset <name>
+
+# Load test dataset into cache
+python main.py --load-dataset <name>
 ```
 
 ### Development Setup
@@ -57,8 +84,10 @@ pip install -e .
 
 ### Important Files
 - `podcasts.yaml` - List of 19 monitored podcasts
-- `prompts/summarizer_prompt.txt` - AI summarization instructions
+- `prompts/summary_prompt.txt` - AI summarization instructions (dynamic headers)
+- `prompts/system_prompt.txt` - System prompt for AI context
 - `renaissance_weekly.db` - SQLite database (auto-created)
+- `requirements.txt` - Python package dependencies (fixed)
 
 ## Key Technical Details
 
@@ -86,10 +115,12 @@ Episodes are tracked with status (pending, transcribed, summarized, emailed) and
 3. Use `python main.py check "Podcast Name"` for specific podcast issues
 
 ### Testing Summarization
-Set `TESTING_MODE=true` to limit audio transcription to 10 minutes for faster testing.
+Set `TESTING_MODE=true` to limit audio transcription to 5 minutes for faster testing.
 
 ## Important Notes
 
-- The `requirements.txt` file appears to contain Python code instead of dependencies. Use `setup.py` for dependency information.
-- No test suite exists currently - be careful when making changes.
 - The project directory name (`gistcapture-ai`) differs from the package name (`renaissance-weekly`).
+- No test suite exists currently - be careful when making changes.
+- Summary caching: Summaries are cached to disk. If you update `prompts/summary_prompt.txt`, use `python main.py regenerate-summaries` to force regeneration.
+- Audio downloads may fail with 403 errors on some platforms. The system has multiple fallback strategies including platform-specific headers and yt-dlp.
+- Test datasets can be saved/loaded to speed up development cycles without re-downloading content.
