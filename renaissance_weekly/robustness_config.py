@@ -4,6 +4,7 @@ System-wide robustness configuration for maximum reliability.
 
 import os
 from typing import Dict, List
+from urllib.parse import urlparse
 
 # Transcript source priorities (in order of preference)
 TRANSCRIPT_SOURCE_PRIORITY = [

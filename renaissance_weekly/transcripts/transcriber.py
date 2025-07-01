@@ -23,6 +23,7 @@ from ..utils.helpers import (
     retry_with_backoff, ProgressTracker, calculate_file_hash, CircuitBreaker
 )
 from ..utils.clients import openai_client, openai_rate_limiter
+from ..robustness_config import should_use_feature
 
 logger = get_logger(__name__)
 
@@ -148,10 +149,6 @@ class AudioTranscriber:
         correlation_id = str(uuid.uuid4())[:8]
         logger.info(f"[{correlation_id}] Starting transcription for: {episode.title}")
         
-        if not episode.audio_url:
-            logger.error(f"[{correlation_id}] No audio URL provided")
-            return None
-        
         audio_file = None
         temp_files_to_clean = []
         
@@ -215,77 +212,98 @@ class AudioTranscriber:
                 logger.warning(f"[{correlation_id}] Cached file invalid, re-downloading")
                 audio_file.unlink()
         
-        audio_url = episode.audio_url
-        logger.info(f"[{correlation_id}] ⬇️ Downloading from: {audio_url[:80]}...")
+        # Find all available audio sources
+        if should_use_feature('use_multiple_audio_sources'):
+            logger.info(f"[{correlation_id}] 🔍 Searching for audio sources...")
+            audio_source_finder = AudioSourceFinder()
+            async with audio_source_finder:
+                audio_sources = await audio_source_finder.find_all_audio_sources(episode)
+            
+            if not audio_sources:
+                logger.error(f"[{correlation_id}] No audio sources found")
+                return None
+            
+            logger.info(f"[{correlation_id}] Found {len(audio_sources)} audio source(s)")
+        else:
+            # Use original single audio URL
+            if not episode.audio_url:
+                logger.error(f"[{correlation_id}] No audio URL provided")
+                return None
+            audio_sources = [episode.audio_url]
+            logger.info(f"[{correlation_id}] Using single audio source from RSS")
         
         # Track this file for cleanup
         self.temp_files.add(str(audio_file))
         
-        # Use PlatformAudioDownloader for initial attempt
-        try:
-            from .audio_downloader import PlatformAudioDownloader
-            platform_downloader = PlatformAudioDownloader()
+        # Try each audio source in order
+        for source_idx, audio_url in enumerate(audio_sources):
+            logger.info(f"[{correlation_id}] Trying source {source_idx + 1}/{len(audio_sources)}: {audio_url[:80]}...")
             
-            # Try platform-specific download first
-            success = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                platform_downloader.download_audio,
-                audio_url,
-                audio_file,
-                episode.podcast
-            )
-            
-            if success and audio_file.exists() and validate_audio_file_comprehensive(audio_file, correlation_id):
-                logger.info(f"[{correlation_id}] ✅ Platform-specific download successful")
-                return audio_file
-            else:
-                logger.debug(f"[{correlation_id}] Platform-specific download failed, trying generic methods...")
-        except Exception as e:
-            logger.debug(f"[{correlation_id}] Platform downloader error: {e}")
-        
-        # Try each header preset with exponential backoff
-        for attempt, headers in enumerate(self.headers_presets):
+            # Use PlatformAudioDownloader for initial attempt
             try:
-                # Add exponential backoff delay (except for first attempt)
-                if attempt > 0:
-                    delay = exponential_backoff_with_jitter(attempt - 1, base_delay=2.0, max_delay=30.0)
-                    logger.info(f"[{correlation_id}] Waiting {delay:.1f}s before attempt {attempt + 1}")
-                    await asyncio.sleep(delay)
+                from .audio_downloader import PlatformAudioDownloader
+                platform_downloader = PlatformAudioDownloader()
                 
-                logger.debug(f"[{correlation_id}] Attempt {attempt + 1} with {headers['User-Agent'][:30]}...")
-                
-                # Add referer based on domain
-                domain = urlparse(audio_url).netloc
-                if domain:
-                    headers = headers.copy()
-                    headers['Referer'] = f'https://{domain}/'
-                
-                # Try async download with validation
-                success = await self._download_with_aiohttp_validated(
-                    audio_url, audio_file, headers, correlation_id
+                # Try platform-specific download first
+                success = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    platform_downloader.download_audio,
+                    audio_url,
+                    audio_file,
+                    episode.podcast
                 )
-                if success:
-                    return audio_file
                 
-                # If async fails, try requests with validation
-                if not success:
-                    success = await self._download_with_requests_validated(
+                if success and audio_file.exists() and validate_audio_file_comprehensive(audio_file, correlation_id):
+                    logger.info(f"[{correlation_id}] ✅ Platform-specific download successful from source {source_idx + 1}")
+                    return audio_file
+                else:
+                    logger.debug(f"[{correlation_id}] Platform-specific download failed, trying generic methods...")
+            except Exception as e:
+                logger.debug(f"[{correlation_id}] Platform downloader error: {e}")
+        
+            # Try each header preset with exponential backoff
+            for attempt, headers in enumerate(self.headers_presets):
+                try:
+                    # Add exponential backoff delay (except for first attempt)
+                    if attempt > 0:
+                        delay = exponential_backoff_with_jitter(attempt - 1, base_delay=2.0, max_delay=30.0)
+                        logger.info(f"[{correlation_id}] Waiting {delay:.1f}s before attempt {attempt + 1}")
+                        await asyncio.sleep(delay)
+                    
+                    logger.debug(f"[{correlation_id}] Attempt {attempt + 1} with {headers['User-Agent'][:30]}...")
+                    
+                    # Add referer based on domain
+                    domain = urlparse(audio_url).netloc
+                    if domain:
+                        headers = headers.copy()
+                        headers['Referer'] = f'https://{domain}/'
+                    
+                    # Try async download with validation
+                    success = await self._download_with_aiohttp_validated(
                         audio_url, audio_file, headers, correlation_id
                     )
                     if success:
                         return audio_file
-                
-            except Exception as e:
-                logger.debug(f"[{correlation_id}] Download attempt {attempt + 1} failed: {e}")
-                if audio_file.exists():
-                    audio_file.unlink()
-                continue
-        
-        # Last resort: try system tools with special options
-        logger.warning(f"[{correlation_id}] All HTTP attempts failed, trying system tools...")
-        success = await self._download_with_system_tool(audio_url, audio_file, correlation_id)
-        if success and validate_audio_file_comprehensive(audio_file, correlation_id):
-            return audio_file
+                    
+                    # If async fails, try requests with validation
+                    if not success:
+                        success = await self._download_with_requests_validated(
+                            audio_url, audio_file, headers, correlation_id
+                        )
+                        if success:
+                            return audio_file
+                    
+                except Exception as e:
+                    logger.debug(f"[{correlation_id}] Download attempt {attempt + 1} failed: {e}")
+                    if audio_file.exists():
+                        audio_file.unlink()
+                    continue
+            
+            # Last resort: try system tools with special options
+            logger.warning(f"[{correlation_id}] All HTTP attempts failed for source {source_idx + 1}, trying system tools...")
+            success = await self._download_with_system_tool(audio_url, audio_file, correlation_id)
+            if success and validate_audio_file_comprehensive(audio_file, correlation_id):
+                return audio_file
         
         logger.error(f"[{correlation_id}] All download attempts failed")
         return None
@@ -698,9 +716,14 @@ class AudioTranscriber:
                     '--add-header', 'User-Agent:Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
                     '--add-header', 'Accept:*/*',
                     '--add-header', 'Accept-Language:en-US,en;q=0.9',
-                    '--cookies-from-browser', 'chrome',  # Use Chrome cookies if available
-                    url
                 ]
+                
+                # Add browser cookie extraction if enabled
+                if should_use_feature('enable_browser_cookie_extraction'):
+                    cmd.extend(['--cookies-from-browser', 'chrome'])
+                    logger.debug(f"[{correlation_id}] Using browser cookies for yt-dlp")
+                
+                cmd.append(url)
                 
                 process = await asyncio.create_subprocess_exec(
                     *cmd,

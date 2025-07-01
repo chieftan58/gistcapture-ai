@@ -37,6 +37,14 @@ class ComprehensiveTranscriptFinder:
             self._session_created = True
         return self.session
     
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session and not self.session.closed:
+            await self.session.close()
+            self._session_created = False
+    
     async def find_transcript(self, episode: Episode) -> Tuple[Optional[str], Optional[TranscriptSource]]:
         """
         Find transcript from all available sources.
@@ -361,15 +369,275 @@ class ComprehensiveTranscriptFinder:
     
     async def _check_assemblyai(self, episode: Episode) -> Optional[str]:
         """Check AssemblyAI for existing transcripts"""
-        # Would implement AssemblyAI API
-        return None
+        if not self.assemblyai_key:
+            return None
+        
+        try:
+            session = await self._get_session()
+            headers = {
+                'authorization': self.assemblyai_key,
+                'content-type': 'application/json'
+            }
+            
+            # First, check if we've already transcribed this episode
+            # AssemblyAI doesn't have a direct search API, but we could store transcript IDs
+            # For now, we'll skip this check
+            
+            # If you have a transcript ID stored, you can retrieve it like this:
+            # transcript_id = get_stored_transcript_id(episode)  # Your storage logic
+            # if transcript_id:
+            #     url = f'https://api.assemblyai.com/v2/transcript/{transcript_id}'
+            #     async with session.get(url, headers=headers) as response:
+            #         if response.status == 200:
+            #             data = await response.json()
+            #             if data.get('status') == 'completed':
+            #                 return data.get('text')
+            
+            logger.debug("AssemblyAI check: No existing transcript found")
+            return None
+            
+        except Exception as e:
+            logger.debug(f"AssemblyAI check failed: {e}")
+            return None
     
     async def _check_rev_ai(self, episode: Episode) -> Optional[str]:
         """Check Rev.ai for transcripts"""
-        # Would implement Rev.ai API
-        return None
+        if not self.rev_ai_key:
+            return None
+        
+        try:
+            session = await self._get_session()
+            headers = {
+                'Authorization': f'Bearer {self.rev_ai_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Rev.ai allows listing jobs, so we can search for existing transcripts
+            # by metadata if we stored episode info when creating the job
+            url = 'https://api.rev.ai/speechtotext/v1/jobs'
+            
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    jobs = await response.json()
+                    
+                    # Search for a job that matches this episode
+                    # This assumes you store episode info in the job's metadata or name
+                    for job in jobs:
+                        if job.get('status') == 'completed':
+                            # Check if job metadata matches episode
+                            job_name = job.get('name', '')
+                            if episode.title in job_name or episode.guid in job_name:
+                                # Get the transcript
+                                job_id = job['id']
+                                transcript_url = f'https://api.rev.ai/speechtotext/v1/jobs/{job_id}/transcript'
+                                
+                                async with session.get(transcript_url, headers=headers) as trans_response:
+                                    if trans_response.status == 200:
+                                        data = await trans_response.json()
+                                        # Rev.ai returns monologues, we need to extract text
+                                        transcript_parts = []
+                                        for monologue in data.get('monologues', []):
+                                            for element in monologue.get('elements', []):
+                                                if element['type'] == 'text':
+                                                    transcript_parts.append(element['value'])
+                                        
+                                        if transcript_parts:
+                                            return ' '.join(transcript_parts)
+            
+            logger.debug("Rev.ai check: No existing transcript found")
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Rev.ai check failed: {e}")
+            return None
     
     async def _check_deepgram(self, episode: Episode) -> Optional[str]:
         """Check Deepgram for transcripts"""
-        # Would implement Deepgram API
-        return None
+        if not self.deepgram_key:
+            return None
+        
+        try:
+            session = await self._get_session()
+            headers = {
+                'Authorization': f'Token {self.deepgram_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Deepgram doesn't provide a way to list past transcriptions
+            # You would need to implement your own storage of request IDs
+            # For now, we'll return None
+            
+            # If you stored request IDs, you could retrieve like this:
+            # request_id = get_stored_deepgram_request_id(episode)
+            # if request_id:
+            #     url = f'https://api.deepgram.com/v1/listen/{request_id}'
+            #     async with session.get(url, headers=headers) as response:
+            #         if response.status == 200:
+            #             data = await response.json()
+            #             # Extract transcript from Deepgram response format
+            #             if 'results' in data and 'channels' in data['results']:
+            #                 transcript = data['results']['channels'][0]['alternatives'][0]['transcript']
+            #                 return transcript
+            
+            logger.debug("Deepgram check: No existing transcript found")
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Deepgram check failed: {e}")
+            return None
+    
+    async def transcribe_with_service(self, audio_url: str, service: str = 'assemblyai') -> Optional[str]:
+        """Transcribe audio using a specific service"""
+        if service == 'assemblyai' and self.assemblyai_key:
+            return await self._transcribe_with_assemblyai(audio_url)
+        elif service == 'rev' and self.rev_ai_key:
+            return await self._transcribe_with_rev_ai(audio_url)
+        elif service == 'deepgram' and self.deepgram_key:
+            return await self._transcribe_with_deepgram(audio_url)
+        else:
+            logger.warning(f"Service {service} not available or not configured")
+            return None
+    
+    async def _transcribe_with_assemblyai(self, audio_url: str) -> Optional[str]:
+        """Transcribe audio using AssemblyAI"""
+        try:
+            session = await self._get_session()
+            headers = {
+                'authorization': self.assemblyai_key,
+                'content-type': 'application/json'
+            }
+            
+            # Submit audio for transcription
+            data = {
+                'audio_url': audio_url,
+                'language_detection': True,
+                'auto_highlights': True,
+                'speaker_labels': True
+            }
+            
+            async with session.post('https://api.assemblyai.com/v2/transcript', 
+                                   headers=headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    transcript_id = result['id']
+                    
+                    # Poll for completion
+                    while True:
+                        async with session.get(f'https://api.assemblyai.com/v2/transcript/{transcript_id}',
+                                             headers=headers) as poll_response:
+                            if poll_response.status == 200:
+                                poll_data = await poll_response.json()
+                                status = poll_data['status']
+                                
+                                if status == 'completed':
+                                    return poll_data['text']
+                                elif status == 'error':
+                                    logger.error(f"AssemblyAI transcription error: {poll_data.get('error')}")
+                                    return None
+                                else:
+                                    # Still processing
+                                    await asyncio.sleep(5)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"AssemblyAI transcription failed: {e}")
+            return None
+    
+    async def _transcribe_with_rev_ai(self, audio_url: str) -> Optional[str]:
+        """Transcribe audio using Rev.ai"""
+        try:
+            session = await self._get_session()
+            headers = {
+                'Authorization': f'Bearer {self.rev_ai_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Submit job
+            data = {
+                'media_url': audio_url,
+                'metadata': f'Episode transcription {datetime.now().isoformat()}'
+            }
+            
+            async with session.post('https://api.rev.ai/speechtotext/v1/jobs',
+                                   headers=headers, json=data) as response:
+                if response.status == 200:
+                    job = await response.json()
+                    job_id = job['id']
+                    
+                    # Poll for completion
+                    while True:
+                        async with session.get(f'https://api.rev.ai/speechtotext/v1/jobs/{job_id}',
+                                             headers=headers) as poll_response:
+                            if poll_response.status == 200:
+                                poll_data = await poll_response.json()
+                                status = poll_data['status']
+                                
+                                if status == 'completed':
+                                    # Get transcript
+                                    transcript_url = f'https://api.rev.ai/speechtotext/v1/jobs/{job_id}/transcript'
+                                    async with session.get(transcript_url, headers=headers) as trans_response:
+                                        if trans_response.status == 200:
+                                            trans_data = await trans_response.json()
+                                            # Extract text from monologues
+                                            transcript_parts = []
+                                            for monologue in trans_data.get('monologues', []):
+                                                for element in monologue.get('elements', []):
+                                                    if element['type'] == 'text':
+                                                        transcript_parts.append(element['value'])
+                                            return ' '.join(transcript_parts)
+                                elif status == 'failed':
+                                    logger.error(f"Rev.ai transcription failed")
+                                    return None
+                                else:
+                                    # Still processing
+                                    await asyncio.sleep(5)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Rev.ai transcription failed: {e}")
+            return None
+    
+    async def _transcribe_with_deepgram(self, audio_url: str) -> Optional[str]:
+        """Transcribe audio using Deepgram"""
+        try:
+            session = await self._get_session()
+            headers = {
+                'Authorization': f'Token {self.deepgram_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Deepgram can do real-time transcription from URL
+            data = {
+                'url': audio_url
+            }
+            
+            # Add parameters for better transcription
+            params = {
+                'model': 'general',
+                'punctuate': 'true',
+                'profanity_filter': 'false',
+                'diarize': 'true',
+                'smart_format': 'true'
+            }
+            
+            url = 'https://api.deepgram.com/v1/listen?' + '&'.join(f'{k}={v}' for k, v in params.items())
+            
+            async with session.post(url, headers=headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    
+                    # Extract transcript
+                    if 'results' in result and 'channels' in result['results']:
+                        channels = result['results']['channels']
+                        if channels and len(channels) > 0:
+                            alternatives = channels[0].get('alternatives', [])
+                            if alternatives:
+                                return alternatives[0]['transcript']
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Deepgram transcription failed: {e}")
+            return None

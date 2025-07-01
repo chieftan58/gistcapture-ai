@@ -172,9 +172,31 @@ The system now searches for transcripts in this order:
 
 ## Key Improvements (Latest)
 
-- **Multi-source audio discovery**: Finds alternative URLs when primary fails
-- **Comprehensive transcript finder**: Checks 10+ sources before audio transcription
-- **Browser cookie extraction**: Handles authenticated/protected content
-- **Platform-specific strategies**: Custom handling for Substack, Apple, etc.
+- **Multi-source audio discovery**: AudioSourceFinder integrated to find alternative URLs when primary fails
+- **Comprehensive transcript finder**: Checks 10+ sources before audio transcription with API integrations
+- **API integrations**: AssemblyAI, Rev.ai, and Deepgram support for transcription
+- **Browser cookie extraction**: Handles authenticated/protected content with yt-dlp
+- **Platform-specific strategies**: Custom handling for Tim Ferriss, American Optimist, Dwarkesh, Huberman Lab, Doctor's Farmacy
 - **System monitoring**: Track failures/successes with detailed metrics
-- **Robustness config**: Centralized configuration for all fallback strategies
+- **Robustness config**: Centralized configuration with feature flags for gradual rollout
+- **Feature flags**: Toggle new features on/off for testing (use_comprehensive_transcript_finder, use_multiple_audio_sources, etc.)
+
+## Integration Status (2025-07-01)
+
+### Completed Integrations:
+1. **AudioSourceFinder**: Wired up in transcriber.py to find multiple audio sources
+2. **API Integrations**: AssemblyAI, Rev.ai, Deepgram methods implemented (need API keys in .env)
+3. **Feature Flags**: Integrated throughout system for gradual feature rollout
+4. **Platform Scrapers**: Added Dwarkesh, Huberman Lab, Doctor's Farmacy to existing Tim Ferriss and American Optimist
+
+### Next Steps:
+1. Test with real API keys for transcription services
+2. Monitor success rates with new integrations
+3. Fine-tune platform-specific scrapers based on results
+4. Consider adding more audio source strategies (Spotify API, etc.)
+5. Implement remaining feature flags (social media search, AI transcript search)
+
+### Known Issues:
+- Substack Cloudflare protection still challenging despite yt-dlp enhancements
+- Some audio sources return 403 errors even with multiple strategies
+- Database remains empty during dry-run mode (expected behavior)
