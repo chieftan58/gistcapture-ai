@@ -1,5 +1,6 @@
 """Email digest generation and sending"""
 
+import os
 import re
 from datetime import datetime
 from typing import List, Dict
@@ -49,6 +50,15 @@ class EmailDigest:
                 plain_text_content=plain_content,
                 html_content=html_content
             )
+            
+            # Check for dry-run mode
+            if os.getenv('DRY_RUN') == 'true':
+                logger.info("🧪 DRY RUN: Skipping SendGrid email send")
+                logger.info(f"  Subject: {subject}")
+                logger.info(f"  To: {EMAIL_TO}")
+                logger.info(f"  Episodes: {len(sorted_summaries)}")
+                logger.info("  Email would be sent in normal operation")
+                return True
             
             # Send email
             response = sendgrid_client.send(message)

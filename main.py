@@ -47,10 +47,17 @@ def print_help():
     print("  python main.py reload-prompts            # Reload prompts from disk")
     print("  python main.py test                      # Run system diagnostics")
     print("  python main.py -h                        # Show this help\n")
+    print("Selective Testing Commands:")
+    print("  python main.py --test-fetch [days]       # Test episode fetching only")
+    print("  python main.py --test-summarize <file>   # Test summarization with transcript file")
+    print("  python main.py --test-email              # Test email generation with cached data")
+    print("  python main.py --dry-run [days]          # Full pipeline without API calls")
+    print("  python main.py --save-dataset <name>     # Save current cache as test dataset")
+    print("  python main.py --load-dataset <name>     # Load test dataset into cache\n")
     print("Environment Variables:")
     print("  VERIFY_APPLE_PODCASTS=true/false   # Enable Apple verification (default: true)")
     print("  FETCH_MISSING_EPISODES=true/false  # Auto-fetch missing episodes (default: true)")
-    print("  TESTING_MODE=true/false            # Limit transcription to 20 min (default: true)")
+    print("  TESTING_MODE=true/false            # Limit transcription to 5 min (default: true)")
     print("  OPENAI_MODEL=gpt-4o                # ChatGPT model to use (default: gpt-4o)")
     print("  OPENAI_TEMPERATURE=0.3             # Model temperature (default: 0.3)")
     print("  OPENAI_MAX_TOKENS=4000             # Max tokens for response (default: 4000)")
@@ -181,6 +188,7 @@ def parse_arguments():
     days_back = 7
     mode = "normal"
     podcast_name = None
+    extra_args = {}
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "verify":
@@ -201,6 +209,40 @@ def parse_arguments():
             mode = "reload-prompts"
         elif sys.argv[1] == "test":
             mode = "test"
+        elif sys.argv[1] == "--test-fetch":
+            mode = "test-fetch"
+            if len(sys.argv) > 2 and sys.argv[2].isdigit():
+                days_back = int(sys.argv[2])
+        elif sys.argv[1] == "--test-summarize":
+            mode = "test-summarize"
+            if len(sys.argv) > 2:
+                extra_args['transcript_file'] = sys.argv[2]
+            else:
+                print("Error: Please specify a transcript file")
+                print("Usage: python main.py --test-summarize <transcript_file>")
+                sys.exit(1)
+        elif sys.argv[1] == "--test-email":
+            mode = "test-email"
+        elif sys.argv[1] == "--dry-run":
+            mode = "dry-run"
+            if len(sys.argv) > 2 and sys.argv[2].isdigit():
+                days_back = int(sys.argv[2])
+        elif sys.argv[1] == "--save-dataset":
+            mode = "save-dataset"
+            if len(sys.argv) > 2:
+                extra_args['dataset_name'] = sys.argv[2]
+            else:
+                print("Error: Please specify a dataset name")
+                print("Usage: python main.py --save-dataset <name>")
+                sys.exit(1)
+        elif sys.argv[1] == "--load-dataset":
+            mode = "load-dataset"
+            if len(sys.argv) > 2:
+                extra_args['dataset_name'] = sys.argv[2]
+            else:
+                print("Error: Please specify a dataset name")
+                print("Usage: python main.py --load-dataset <name>")
+                sys.exit(1)
         elif sys.argv[1].isdigit():
             days_back = int(sys.argv[1])
         elif sys.argv[1] in ["-h", "--help"]:
@@ -211,14 +253,14 @@ def parse_arguments():
             print_help()
             sys.exit(1)
     
-    return mode, days_back, podcast_name
+    return mode, days_back, podcast_name, extra_args
 
 
 async def main():
     """Main entry point with production safeguards"""
     global app_instance
     
-    mode, days_back, podcast_name = parse_arguments()
+    mode, days_back, podcast_name, extra_args = parse_arguments()
     
     # Set up signal handlers
     signal.signal(signal.SIGINT, signal_handler)
@@ -250,6 +292,18 @@ async def main():
         elif mode == "reload-prompts":
             app_instance.summarizer.reload_prompts()
             logger.info("✅ Prompts reloaded successfully")
+        elif mode == "test-fetch":
+            await app_instance.test_fetch_only(days_back)
+        elif mode == "test-summarize":
+            await app_instance.test_summarize_only(extra_args['transcript_file'])
+        elif mode == "test-email":
+            await app_instance.test_email_only()
+        elif mode == "dry-run":
+            await app_instance.run_dry_run(days_back)
+        elif mode == "save-dataset":
+            await app_instance.save_test_dataset(extra_args['dataset_name'])
+        elif mode == "load-dataset":
+            await app_instance.load_test_dataset(extra_args['dataset_name'])
         else:
             await app_instance.run(days_back)
         

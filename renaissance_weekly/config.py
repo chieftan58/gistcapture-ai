@@ -34,7 +34,7 @@ TADDY_API_KEY = os.getenv("TADDY_API_KEY")
 
 # Testing configuration
 TESTING_MODE = os.getenv("TESTING_MODE", "true").lower() == "true"
-MAX_TRANSCRIPTION_MINUTES = 20 if TESTING_MODE else float('inf')
+MAX_TRANSCRIPTION_MINUTES = 5 if TESTING_MODE else float('inf')
 
 # Feature flags
 VERIFY_APPLE_PODCASTS = os.getenv("VERIFY_APPLE_PODCASTS", "true").lower() == "true"

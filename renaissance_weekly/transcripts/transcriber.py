@@ -849,6 +849,11 @@ class AudioTranscriber:
                     logger.error(f"[{correlation_id}] Failed to compress audio file")
                     return None
             
+            # Check for dry-run mode
+            if os.getenv('DRY_RUN') == 'true':
+                logger.info(f"[{correlation_id}] 🧪 DRY RUN: Skipping OpenAI transcription API call")
+                return "This is a dry-run transcript. In normal operation, this would contain the actual transcript from the audio file."
+            
             # Wait for rate limiter before making API call
             wait_time = await openai_rate_limiter.acquire(correlation_id)
             if wait_time > 0:

@@ -322,6 +322,27 @@ class PodcastDatabase:
             logger.error(f"Database error getting recent episodes: {e}")
             return []
     
+    def get_episodes_with_summaries(self, days_back: int = 7) -> List[Dict]:
+        """Get episodes that have summaries"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE published >= datetime('now', '-' || ? || ' days')
+                    AND summary IS NOT NULL AND summary != ''
+                    ORDER BY published DESC
+                """, (days_back,))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting episodes with summaries: {e}")
+            return []
+    
     def get_episodes_without_transcripts(self, days_back: int = 7) -> List[Dict]:
         """Get episodes that don't have transcripts yet"""
         try:

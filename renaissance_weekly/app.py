@@ -771,6 +771,128 @@ class RenaissanceWeekly:
         
         logger.info(f"[{self.correlation_id}] " + "="*80)
     
+    async def test_fetch_only(self, days_back: int = 7):
+        """Test episode fetching without processing"""
+        logger.info(f"[{self.correlation_id}] 🧪 TEST MODE: Fetching episodes only")
+        
+        # Select podcasts
+        selector = EpisodeSelector(correlation_id=self.correlation_id)
+        selected_podcasts, config = await selector.select_podcasts_ui()
+        
+        if not selected_podcasts:
+            logger.info("No podcasts selected")
+            return
+        
+        # Fetch episodes
+        since_date = datetime.now() - timedelta(days=days_back)
+        logger.info(f"[{self.correlation_id}] 📡 Fetching episodes since {since_date.date()}")
+        
+        episodes = await self._fetch_episodes_with_retry(
+            selected_podcasts, 
+            since_date,
+            lambda e: e  # No filtering
+        )
+        
+        logger.info(f"[{self.correlation_id}] ✅ Fetched {len(episodes)} episodes")
+        for episode in episodes[:10]:  # Show first 10
+            logger.info(f"  - {episode.podcast}: {episode.title}")
+    
+    async def test_summarize_only(self, transcript_file: str):
+        """Test summarization with a provided transcript file"""
+        logger.info(f"[{self.correlation_id}] 🧪 TEST MODE: Summarizing transcript from {transcript_file}")
+        
+        # Read transcript
+        transcript_path = Path(transcript_file)
+        if not transcript_path.exists():
+            logger.error(f"Transcript file not found: {transcript_file}")
+            return
+        
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            transcript = f.read()
+        
+        # Create dummy episode
+        episode = Episode(
+            guid="test-episode",
+            title="Test Episode",
+            podcast="Test Podcast",
+            published=datetime.now(),
+            link="https://example.com",
+            audio_url="https://example.com/audio.mp3",
+            duration="1:00:00"
+        )
+        
+        # Generate summary
+        summary = await self.summarizer.generate_summary(episode, transcript, TranscriptSource.CACHED)
+        
+        if summary:
+            logger.info(f"[{self.correlation_id}] ✅ Summary generated ({len(summary)} chars)")
+            print("\n" + "="*80)
+            print(summary)
+            print("="*80 + "\n")
+        else:
+            logger.error(f"[{self.correlation_id}] ❌ Failed to generate summary")
+    
+    async def test_email_only(self):
+        """Test email generation with cached data"""
+        logger.info(f"[{self.correlation_id}] 🧪 TEST MODE: Generating email from cached data")
+        
+        # Get recent episodes with summaries from database
+        recent_episodes = self.db.get_episodes_with_summaries(days_back=7)
+        
+        if not recent_episodes:
+            logger.error("No episodes with summaries found in cache")
+            return
+        
+        logger.info(f"[{self.correlation_id}] Found {len(recent_episodes)} episodes with summaries")
+        
+        # Generate and send digest
+        await self._generate_and_send_digest(recent_episodes[:5])  # Limit to 5 for test
+    
+    async def run_dry_run(self, days_back: int = 7):
+        """Run full pipeline without making API calls"""
+        logger.info(f"[{self.correlation_id}] 🧪 DRY RUN MODE: No API calls will be made")
+        
+        # Set environment to disable API calls
+        import os
+        os.environ['DRY_RUN'] = 'true'
+        
+        try:
+            # Run normal pipeline - components should check DRY_RUN env var
+            await self.run(days_back)
+        finally:
+            # Reset environment
+            os.environ.pop('DRY_RUN', None)
+    
+    async def save_test_dataset(self, name: str):
+        """Save current cache as test dataset"""
+        logger.info(f"[{self.correlation_id}] 💾 Saving test dataset: {name}")
+        
+        from .utils.test_cache import TestDataCache
+        cache = TestDataCache()
+        
+        if cache.save_dataset(name):
+            logger.info(f"[{self.correlation_id}] ✅ Dataset saved successfully")
+            
+            # List all datasets
+            datasets = cache.list_datasets()
+            logger.info(f"[{self.correlation_id}] Available datasets:")
+            for dataset in datasets:
+                logger.info(f"  - {dataset['name']} (created: {dataset['created'][:10]})")
+    
+    async def load_test_dataset(self, name: str):
+        """Load test dataset into cache"""
+        logger.info(f"[{self.correlation_id}] 📂 Loading test dataset: {name}")
+        
+        from .utils.test_cache import TestDataCache
+        cache = TestDataCache()
+        
+        if cache.load_dataset(name):
+            logger.info(f"[{self.correlation_id}] ✅ Dataset loaded successfully")
+            
+            # Show what was loaded
+            recent_episodes = self.db.get_recent_episodes(days_back=30)
+            logger.info(f"[{self.correlation_id}] Loaded {len(recent_episodes)} episodes")
+    
     async def cleanup(self):
         """Clean up resources properly"""
         try:

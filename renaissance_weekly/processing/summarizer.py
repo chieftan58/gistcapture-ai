@@ -173,12 +173,31 @@ class Summarizer:
         # Default if no guest found
         return "[Guest Name]"
     
-    async def _call_openai_api(self, prompt: str, transcript: str) -> Optional[str]:
+    async def _call_openai_api(self, prompt: str) -> Optional[str]:
         """Call OpenAI API with enhanced retry logic and rate limiting"""
         import asyncio
         import uuid
         
         correlation_id = str(uuid.uuid4())[:8]
+        
+        # Check for dry-run mode
+        if os.getenv('DRY_RUN') == 'true':
+            logger.info(f"[{correlation_id}] 🧪 DRY RUN: Skipping OpenAI summarization API call")
+            return """## 🧪 DRY RUN SUMMARY
+
+This is a dry-run summary. In normal operation, this would contain:
+
+### 🔑 Quick Take
+The actual AI-generated summary of the podcast episode.
+
+### Core Sections
+Detailed insights from the episode organized by topic.
+
+### 🛠️ Apply It
+Actionable takeaways from the episode.
+
+---
+*This summary was generated in dry-run mode without making API calls.*"""
         
         # Wait for rate limiter before making API call
         wait_time = await openai_rate_limiter.acquire(correlation_id)

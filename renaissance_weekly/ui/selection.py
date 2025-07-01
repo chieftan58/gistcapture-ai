@@ -105,6 +105,13 @@ class EpisodeSelector:
         parent = self
         
         class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                try:
+                    super().__init__(*args, **kwargs)
+                except Exception as e:
+                    logger.error(f"Handler init error: {e}")
+                    raise
+            
             def do_GET(self):
                 if self.path == '/':
                     self._send_html(parent._generate_html())
@@ -139,12 +146,30 @@ class EpisodeSelector:
                     else:
                         self._send_json({'error': False})
                 else:
-                    self.send_error(404)
+                    self._send_json({'status': 'error', 'message': 'Not found'})
+                    return
             
             def do_POST(self):
-                content_length = int(self.headers['Content-Length'])
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data.decode('utf-8'))
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    if content_length == 0:
+                        self._send_json({'status': 'error', 'message': 'No content provided'})
+                        return
+                    
+                    post_data = self.rfile.read(content_length)
+                    if not post_data:
+                        self._send_json({'status': 'error', 'message': 'Empty request body'})
+                        return
+                    
+                    try:
+                        data = json.loads(post_data.decode('utf-8'))
+                    except json.JSONDecodeError as e:
+                        self._send_json({'status': 'error', 'message': f'Invalid JSON: {str(e)}'})
+                        return
+                except Exception as e:
+                    logger.error(f"Error processing POST request: {e}")
+                    self._send_json({'status': 'error', 'message': 'Request processing failed'})
+                    return
                 
                 if self.path == '/api/select-podcasts':
                     # Handle podcast selection
@@ -190,7 +215,8 @@ class EpisodeSelector:
                         self._send_json({'status': 'error', 'message': str(e)})
                     
                 else:
-                    self.send_error(404)
+                    self._send_json({'status': 'error', 'message': 'Not found'})
+                    return
             
             def _send_html(self, content):
                 self.send_response(200)
@@ -199,10 +225,23 @@ class EpisodeSelector:
                 self.wfile.write(content.encode())
             
             def _send_json(self, data):
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode())
+                try:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Content-Length', str(len(json.dumps(data))))
+                    self.end_headers()
+                    self.wfile.write(json.dumps(data).encode())
+                except Exception as e:
+                    logger.error(f"Error sending JSON response: {e}")
+                    # Try to send error response if possible
+                    try:
+                        error_data = {'status': 'error', 'message': 'Internal server error'}
+                        self.send_response(500)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(error_data).encode())
+                    except:
+                        pass  # Can't recover
             
             def log_message(self, format, *args):
                 pass  # Suppress logs
@@ -768,11 +807,32 @@ class EpisodeSelector:
             }}
         }}
         
+        // Helper function for fetch with timeout
+        async function fetchWithTimeout(url, options = {{}}, timeout = 5000) {{
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            
+            try {{
+                const response = await fetch(url, {{
+                    ...options,
+                    signal: controller.signal
+                }});
+                clearTimeout(id);
+                return response;
+            }} catch (error) {{
+                clearTimeout(id);
+                if (error.name === 'AbortError') {{
+                    throw new Error(\'Request timed out\');
+                }}
+                throw error;
+            }}
+        }}
+        
         async function submitEpisodes() {{
             console.log('Submitting episodes:', Array.from(APP_STATE.selectedEpisodes));
             
             try {{
-                const response = await fetch('/api/select-episodes', {{
+                const response = await fetchWithTimeout('/api/select-episodes', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{
@@ -781,7 +841,25 @@ class EpisodeSelector:
                 }});
                 
                 console.log('Response status:', response.status);
-                const data = await response.json();
+                
+                // Check if response has content before parsing JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {{
+                    throw new Error(\'Server did not return JSON response\');
+                }}
+                
+                const text = await response.text();
+                if (!text) {{
+                    throw new Error(\'Empty response from server\');
+                }}
+                
+                let data;
+                try {{
+                    data = JSON.parse(text);
+                }} catch (e) {{
+                    console.error('Failed to parse JSON:', text);
+                    throw new Error(\'Invalid JSON response from server\');
+                }}
                 console.log('Response data:', data);
                 
                 if (response.ok && data.status === 'success') {{
@@ -801,10 +879,18 @@ class EpisodeSelector:
             // Check for errors periodically
             APP_STATE.errorCheckInterval = setInterval(async () => {{
                 try {{
-                    const response = await fetch('/api/error');
-                    const data = await response.json();
+                    const response = await fetchWithTimeout('/api/error', {{}}, 3000);
                     
-                    if (data.error) {{
+                    // Safe JSON parsing
+                    let data;
+                    try {{
+                        data = await response.json();
+                    }} catch (e) {{
+                        console.error('Failed to parse error response');
+                        return;
+                    }}
+                    
+                    if (data && data.error) {{
                         clearInterval(APP_STATE.statusInterval);
                         clearInterval(APP_STATE.errorCheckInterval);
                         
@@ -823,8 +909,17 @@ class EpisodeSelector:
         
         function startStatusPolling() {{
             APP_STATE.statusInterval = setInterval(async () => {{
-                const response = await fetch('/api/status');
-                const status = await response.json();
+                try {{
+                    const response = await fetchWithTimeout('/api/status', {{}}, 3000);
+                    
+                    // Safe JSON parsing
+                    let status;
+                    try {{
+                        status = await response.json();
+                    }} catch (e) {{
+                        console.error('Failed to parse status response:', e);
+                        return;
+                    }}
                 
                 if (status.status === 'loading') {{
                     const progress = Math.max(5, ((status.progress + 1) / status.total) * 100);
@@ -863,12 +958,22 @@ class EpisodeSelector:
                     
                     // Wait a moment then check for episode data
                     setTimeout(async () => {{
-                        const stateResponse = await fetch('/api/state');
-                        const stateData = await stateResponse.json();
-                        if (stateData.state === 'episode_selection' && stateData.episodes) {{
-                            APP_STATE.state = 'episode_selection';
-                            APP_STATE.episodes = stateData.episodes;
-                            render();
+                        try {{
+                            const stateResponse = await fetchWithTimeout('/api/state', {{}}, 5000);
+                            let stateData;
+                            try {{
+                                stateData = await stateResponse.json();
+                            }} catch (e) {{
+                                console.error('Failed to parse state data:', e);
+                                return;
+                            }}
+                            if (stateData.state === 'episode_selection' && stateData.episodes) {{
+                                APP_STATE.state = 'episode_selection';
+                                APP_STATE.episodes = stateData.episodes;
+                                render();
+                            }}
+                        }} catch (e) {{
+                            console.error('Error fetching state:', e);
                         }}
                     }}, 1000);
                 }} else if (status.status === 'error') {{
@@ -878,6 +983,9 @@ class EpisodeSelector:
                     APP_STATE.state = 'error';
                     APP_STATE.loading_status = status;
                     render();
+                }}
+                }} catch (e) {{
+                    console.error('Status polling error:', e);
                 }}
             }}, 1000);
         }}
