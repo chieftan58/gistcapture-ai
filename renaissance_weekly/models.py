@@ -27,6 +27,7 @@ class Episode:
     link: Optional[str] = None
     duration: str = "Unknown"
     guid: Optional[str] = None
+    apple_podcast_id: Optional[str] = None
     
     def __post_init__(self):
         """Ensure datetime objects are timezone-naive"""
@@ -44,7 +45,8 @@ class Episode:
             'description': self.description,
             'link': self.link,
             'duration': self.duration,
-            'guid': self.guid
+            'guid': self.guid,
+            'apple_podcast_id': self.apple_podcast_id
         }
     
     @classmethod

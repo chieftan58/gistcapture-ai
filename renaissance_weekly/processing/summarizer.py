@@ -69,6 +69,11 @@ class Summarizer:
     async def generate_summary(self, episode: Episode, transcript: str, source: TranscriptSource) -> Optional[str]:
         """Generate executive summary using ChatGPT"""
         try:
+            # Validate transcript is substantial enough for summarization
+            if not self._validate_transcript_content(transcript, source):
+                logger.error(f"❌ Transcript validation failed for {episode.title}")
+                return None
+            
             # Create safe filename for summary cache
             date_str = episode.published.strftime('%Y%m%d')
             safe_podcast = slugify(episode.podcast)[:30]
@@ -137,6 +142,108 @@ class Summarizer:
         prompt = prompt.replace("{publish_date}", publish_date)
         
         return prompt
+    
+    def _validate_transcript_content(self, transcript: str, source: TranscriptSource) -> bool:
+        """
+        Validate that the transcript contains actual episode content, not just metadata.
+        
+        Args:
+            transcript: The transcript text to validate
+            source: The source of the transcript
+            
+        Returns:
+            True if transcript appears to be full content, False if it's just metadata
+        """
+        # Check minimum length (at least 1000 words for a real transcript)
+        word_count = len(transcript.split())
+        if word_count < 1000:
+            logger.warning(f"Transcript too short: {word_count} words (minimum: 1000)")
+            return False
+        
+        # Check character count (at least 5000 characters)
+        char_count = len(transcript)
+        if char_count < 5000:
+            logger.warning(f"Transcript too short: {char_count} characters (minimum: 5000)")
+            return False
+        
+        # Check for metadata-only patterns
+        metadata_patterns = [
+            # Common description patterns
+            r'^(In this episode|On this episode|This week|Today)',
+            r'^(Join us as|Listen as|Tune in)',
+            r'^(Subscribe|Follow|Download)',
+            r'^(Show notes|Episode notes|Links mentioned)',
+            # URL-heavy content (likely show notes)
+            r'https?://\S+',
+            # Social media patterns
+            r'@\w+',
+            r'#\w+',
+            # Common metadata labels
+            r'(Guest|Host|Episode|Duration|Published|Recorded):',
+        ]
+        
+        # Count lines that look like metadata
+        lines = transcript.split('\n')
+        metadata_line_count = 0
+        url_count = 0
+        
+        for line in lines[:50]:  # Check first 50 lines
+            for pattern in metadata_patterns:
+                import re
+                if re.search(pattern, line, re.IGNORECASE):
+                    metadata_line_count += 1
+                    break
+            
+            # Count URLs
+            url_count += len(re.findall(r'https?://\S+', line))
+        
+        # If more than 30% of early lines look like metadata, it's probably not a full transcript
+        metadata_ratio = metadata_line_count / min(len(lines), 50)
+        if metadata_ratio > 0.3:
+            logger.warning(f"High metadata ratio: {metadata_ratio:.1%} of first 50 lines")
+            return False
+        
+        # If there are too many URLs early on, it's likely show notes
+        if url_count > 10:
+            logger.warning(f"Too many URLs in beginning: {url_count} (likely show notes)")
+            return False
+        
+        # Check for conversation patterns (good sign of real transcript)
+        conversation_patterns = [
+            r'^\w+:',  # Speaker labels (e.g., "John:")
+            r'"[^"]+"',  # Quoted speech
+            r'\b(said|says|asked|asks|replied|replies)\b',  # Speech verbs
+            r'\b(um|uh|yeah|okay|right|well)\b',  # Filler words
+        ]
+        
+        conversation_indicators = 0
+        for line in lines[:100]:  # Check first 100 lines
+            for pattern in conversation_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    conversation_indicators += 1
+                    break
+        
+        # If we see conversation patterns, it's likely a real transcript
+        if conversation_indicators > 10:
+            logger.info(f"✅ Transcript validation passed: {word_count} words, {conversation_indicators} conversation indicators")
+            return True
+        
+        # Check source reliability
+        reliable_sources = [
+            TranscriptSource.OFFICIAL_TRANSCRIPT,
+            TranscriptSource.YOUTUBE_TRANSCRIPT,
+            TranscriptSource.AUDIO_TRANSCRIPTION,
+            TranscriptSource.API_TRANSCRIPTION,
+        ]
+        
+        if source in reliable_sources:
+            # More lenient for reliable sources
+            if word_count >= 500 and char_count >= 2500:
+                logger.info(f"✅ Transcript validation passed (reliable source: {source.value})")
+                return True
+        
+        logger.warning(f"Transcript validation failed: insufficient conversation content")
+        return False
     
     def _extract_guest_name(self, title: str, description: Optional[str]) -> str:
         """Try to extract guest name from episode title or description"""

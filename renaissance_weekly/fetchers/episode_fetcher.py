@@ -200,6 +200,9 @@ class ReliableEpisodeFetcher:
         correlation_id = f"{self._correlation_id}-{podcast_name[:10]}"
         logger.info(f"[{correlation_id}] 📡 Fetching episodes for {podcast_name}")
         
+        # Store apple_id for episode creation
+        self._current_apple_id = podcast_config.get("apple_id")
+        
         # Clean up expired cache entries
         self.feed_cache.clear_expired()
         
@@ -469,7 +472,8 @@ class ReliableEpisodeFetcher:
                         description=self._extract_full_description(entry),
                         link=entry.get('link', ''),
                         duration=self._extract_duration(entry),
-                        guid=entry.get('guid', entry.get('id', ''))
+                        guid=entry.get('guid', entry.get('id', '')),
+                        apple_podcast_id=getattr(self, '_current_apple_id', None)
                     )
                     episodes.append(episode)
                     logger.debug(f"[{correlation_id}]     ✓ Added episode: {episode.title[:50]} ({episode.published.strftime('%Y-%m-%d')})")
@@ -601,7 +605,8 @@ class ReliableEpisodeFetcher:
                                         audio_url=item.get("episodeUrl", item.get("previewUrl")),
                                         description=item.get("description", ""),
                                         duration=self._format_duration(str(item.get("trackTimeMillis", 0) // 1000)),
-                                        guid=str(item.get("trackId", ""))
+                                        guid=str(item.get("trackId", "")),
+                                        apple_podcast_id=apple_id
                                     )
                                     episodes.append(episode)
                             except Exception as e:
@@ -825,7 +830,8 @@ class ReliableEpisodeFetcher:
                         description=ep_data.get("description", ""),
                         link=ep_data.get("link", ""),
                         duration=seconds_to_duration(ep_data.get("duration", 0)),
-                        guid=ep_data.get("guid", str(ep_data.get("id", "")))
+                        guid=ep_data.get("guid", str(ep_data.get("id", ""))),
+                        apple_podcast_id=getattr(self, '_current_apple_id', None)
                     )
                     episodes.append(episode)
                 except Exception as e:
@@ -954,7 +960,8 @@ class ReliableEpisodeFetcher:
                                                     published=pub_date,
                                                     audio_url=audio_url,
                                                     link=link,
-                                                    description=self._extract_description_from_page(post_soup)
+                                                    description=self._extract_description_from_page(post_soup),
+                                                    apple_podcast_id=getattr(self, '_current_apple_id', None)
                                                 )
                                                 episodes.append(episode)
                     

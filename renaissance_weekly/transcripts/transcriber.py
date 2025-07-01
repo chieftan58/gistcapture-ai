@@ -19,8 +19,9 @@ from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTE
 from ..utils.logging import get_logger
 from ..fetchers.audio_sources import AudioSourceFinder
 from ..utils.helpers import (
-    slugify, validate_audio_file_comprehensive, exponential_backoff_with_jitter,
-    retry_with_backoff, ProgressTracker, calculate_file_hash, CircuitBreaker
+    slugify, validate_audio_file_comprehensive, validate_audio_file_smart, 
+    exponential_backoff_with_jitter, retry_with_backoff, ProgressTracker, 
+    calculate_file_hash, CircuitBreaker
 )
 from ..utils.clients import openai_client, openai_rate_limiter
 from ..robustness_config import should_use_feature
@@ -160,8 +161,8 @@ class AudioTranscriber:
             
             temp_files_to_clean.append(audio_file)
             
-            # Comprehensive validation
-            if not validate_audio_file_comprehensive(audio_file, correlation_id):
+            # Comprehensive validation with smart mode
+            if not validate_audio_file_smart(audio_file, correlation_id, episode.audio_url):
                 logger.error(f"[{correlation_id}] Downloaded file failed comprehensive validation")
                 return None
             
@@ -204,7 +205,7 @@ class AudioTranscriber:
         
         # Check if already exists and is valid
         if audio_file.exists():
-            if validate_audio_file_comprehensive(audio_file, correlation_id):
+            if validate_audio_file_smart(audio_file, correlation_id, episode.audio_url):
                 file_hash = calculate_file_hash(audio_file)
                 logger.info(f"[{correlation_id}] ✅ Using cached audio file (hash: {file_hash[:8]}...)")
                 return audio_file
@@ -239,6 +240,18 @@ class AudioTranscriber:
         for source_idx, audio_url in enumerate(audio_sources):
             logger.info(f"[{correlation_id}] Trying source {source_idx + 1}/{len(audio_sources)}: {audio_url[:80]}...")
             
+            # First, try to resolve redirects to get direct CDN URL
+            try:
+                from .redirect_resolver import RedirectResolver
+                async with RedirectResolver() as resolver:
+                    resolved_url, redirect_chain = await resolver.resolve_redirect_chain(audio_url)
+                    if resolved_url != audio_url:
+                        logger.info(f"[{correlation_id}] Resolved to direct CDN URL: {resolved_url[:80]}...")
+                        # Try the resolved URL first
+                        audio_sources.insert(source_idx + 1, resolved_url)
+            except Exception as e:
+                logger.debug(f"[{correlation_id}] Redirect resolution failed: {e}")
+            
             # Use PlatformAudioDownloader for initial attempt
             try:
                 from .audio_downloader import PlatformAudioDownloader
@@ -253,7 +266,7 @@ class AudioTranscriber:
                     episode.podcast
                 )
                 
-                if success and audio_file.exists() and validate_audio_file_comprehensive(audio_file, correlation_id):
+                if success and audio_file.exists() and validate_audio_file_smart(audio_file, correlation_id, audio_url):
                     logger.info(f"[{correlation_id}] ✅ Platform-specific download successful from source {source_idx + 1}")
                     return audio_file
                 else:
@@ -299,10 +312,28 @@ class AudioTranscriber:
                         audio_file.unlink()
                     continue
             
+            # Try browser automation for Cloudflare-protected content
+            if 'substack.com' in audio_url or 'cloudflare' in str(e).lower() if 'e' in locals() else False:
+                logger.warning(f"[{correlation_id}] Attempting browser-based download for protected content...")
+                try:
+                    from .browser_downloader import download_with_browser_sync
+                    success = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        download_with_browser_sync,
+                        audio_url,
+                        str(audio_file),
+                        120
+                    )
+                    if success and validate_audio_file_smart(audio_file, correlation_id, audio_url):
+                        logger.info(f"[{correlation_id}] ✅ Browser download successful")
+                        return audio_file
+                except Exception as browser_error:
+                    logger.error(f"[{correlation_id}] Browser download failed: {browser_error}")
+            
             # Last resort: try system tools with special options
             logger.warning(f"[{correlation_id}] All HTTP attempts failed for source {source_idx + 1}, trying system tools...")
             success = await self._download_with_system_tool(audio_url, audio_file, correlation_id)
-            if success and validate_audio_file_comprehensive(audio_file, correlation_id):
+            if success and validate_audio_file_smart(audio_file, correlation_id, audio_url):
                 return audio_file
         
         logger.error(f"[{correlation_id}] All download attempts failed")

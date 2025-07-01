@@ -274,13 +274,14 @@ async def retry_with_backoff(
     raise last_exception
 
 
-def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[str] = None) -> bool:
+def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[str] = None, lenient: bool = False) -> bool:
     """
     Comprehensive audio file validation checking header, samples, and tail.
     
     Args:
         file_path: Path to the audio file
         correlation_id: Optional correlation ID for logging
+        lenient: If True, use more lenient validation for edge cases
         
     Returns:
         True if file is valid audio, False otherwise
@@ -293,14 +294,16 @@ def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[
     
     file_size = file_path.stat().st_size
     
-    # Check minimum size (100KB)
-    if file_size < 100 * 1024:
-        logger.warning(f"[{cid}] File too small: {file_size} bytes")
+    # Check minimum size (10KB for lenient, 100KB for strict)
+    min_size = 10 * 1024 if lenient else 100 * 1024
+    if file_size < min_size:
+        logger.warning(f"[{cid}] File too small: {file_size} bytes (minimum: {min_size})")
         return False
     
-    # Check maximum size (500MB)
-    if file_size > 500 * 1024 * 1024:
-        logger.warning(f"[{cid}] File too large: {file_size / 1024 / 1024:.1f} MB")
+    # Check maximum size (1GB for lenient, 500MB for strict)
+    max_size = 1024 * 1024 * 1024 if lenient else 500 * 1024 * 1024
+    if file_size > max_size:
+        logger.warning(f"[{cid}] File too large: {file_size / 1024 / 1024:.1f} MB (maximum: {max_size / 1024 / 1024:.0f} MB)")
         return False
     
     try:
@@ -314,11 +317,23 @@ def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[
                 (b'\xFF\xFB', 0),      # MP3
                 (b'\xFF\xF3', 0),      # MP3
                 (b'\xFF\xF2', 0),      # MP3
+                (b'\xFF\xFA', 0),      # MP3 (additional)
+                (b'\xFF\xE3', 0),      # MP3 (additional)
                 (b'ftyp', 4),          # MP4/M4A (at offset 4)
                 (b'OggS', 0),          # Ogg Vorbis
                 (b'RIFF', 0),          # WAV
                 (b'fLaC', 0),          # FLAC
+                (b'MAC ', 0),          # APE
+                (b'wvpk', 0),          # WavPack
             ]
+            
+            # In lenient mode, also check for common container formats
+            if lenient:
+                audio_signatures.extend([
+                    (b'\x1A\x45\xDF\xA3', 0),  # Matroska/WebM
+                    (b'\x00\x00\x00\x18ftypmp4', 0),  # MP4 variant
+                    (b'\x00\x00\x00\x20ftypM4A', 0),  # M4A variant
+                ])
             
             # Check for audio signatures
             valid_header = False
@@ -340,8 +355,25 @@ def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[
                 return False
             
             if not valid_header:
-                logger.warning(f"[{cid}] No valid audio signature found in header")
-                return False
+                if lenient:
+                    # In lenient mode, check if file might be a valid binary format
+                    # by checking it's not text/HTML
+                    if header[:5].lower() in [b'<!doc', b'<html', b'<?xml']:
+                        logger.error(f"[{cid}] File appears to be text/HTML, not audio")
+                        return False
+                    
+                    # Check if it has binary content (not all ASCII)
+                    try:
+                        header.decode('ascii')
+                        logger.warning(f"[{cid}] File appears to be text, not binary audio")
+                        return False
+                    except UnicodeDecodeError:
+                        # Good, it's binary
+                        logger.warning(f"[{cid}] No standard audio signature found, but file is binary (lenient mode)")
+                        # Continue validation
+                else:
+                    logger.warning(f"[{cid}] No valid audio signature found in header")
+                    return False
             
             # Sample validation: check 5 random positions in the file
             sample_positions = [
@@ -364,7 +396,8 @@ def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[
                     
                     # Check for null bytes (corruption indicator)
                     if sample == b'\x00' * 16:
-                        logger.warning(f"[{cid}] Found null bytes at position {pos}")
+                        if not lenient:
+                            logger.warning(f"[{cid}] Found null bytes at position {pos}")
                         # Don't fail immediately, some formats have null padding
             
             # Check tail (last 1KB)
@@ -382,6 +415,63 @@ def validate_audio_file_comprehensive(file_path: Path, correlation_id: Optional[
     except Exception as e:
         logger.error(f"[{cid}] Error validating file: {e}")
         return False
+
+
+def validate_audio_file_smart(file_path: Path, correlation_id: Optional[str] = None, audio_url: Optional[str] = None) -> bool:
+    """
+    Smart audio file validation that automatically chooses strict or lenient mode.
+    
+    Args:
+        file_path: Path to the audio file
+        correlation_id: Optional correlation ID for logging
+        audio_url: Optional URL the file was downloaded from (helps determine validation mode)
+        
+    Returns:
+        True if file is valid audio, False otherwise
+    """
+    cid = correlation_id or str(uuid.uuid4())[:8]
+    
+    # First try strict validation
+    if validate_audio_file_comprehensive(file_path, cid, lenient=False):
+        return True
+    
+    # Check if we should try lenient mode
+    should_try_lenient = False
+    
+    # Known problematic platforms that might need lenient validation
+    if audio_url:
+        lenient_domains = [
+            'substack.com',
+            'anchor.fm',
+            'buzzsprout.com',
+            'libsyn.com',
+            'simplecast.com',
+            'podbean.com',
+            'spreaker.com',
+            'soundcloud.com',
+            'transistor.fm',
+            'castos.com',
+            'blubrry.com',
+            'podserve.fm',
+        ]
+        
+        for domain in lenient_domains:
+            if domain in audio_url.lower():
+                should_try_lenient = True
+                logger.info(f"[{cid}] Using lenient validation for {domain} content")
+                break
+    
+    # Also use lenient mode for files with certain extensions
+    file_ext = file_path.suffix.lower()
+    if file_ext in ['.m4a', '.aac', '.opus', '.webm', '.ogg']:
+        should_try_lenient = True
+        logger.info(f"[{cid}] Using lenient validation for {file_ext} format")
+    
+    # Try lenient validation if applicable
+    if should_try_lenient:
+        return validate_audio_file_comprehensive(file_path, cid, lenient=True)
+    
+    return False
 
 
 def calculate_file_hash(file_path: Path, chunk_size: int = 8192) -> str:

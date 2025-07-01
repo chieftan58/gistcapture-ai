@@ -5,7 +5,7 @@ Finds alternative audio URLs when primary sources fail.
 
 import re
 import asyncio
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from urllib.parse import urlparse, parse_qs
 import aiohttp
 from bs4 import BeautifulSoup
@@ -42,34 +42,47 @@ class AudioSourceFinder:
             await self.session.close()
             self._session_created = False
     
-    async def find_all_audio_sources(self, episode: Episode) -> List[str]:
+    async def find_all_audio_sources(self, episode: Episode, podcast_config: Optional[Dict] = None) -> List[str]:
         """
         Find all possible audio sources for an episode.
         Returns list of audio URLs in order of preference.
+        
+        NEW PRIORITY ORDER:
+        1. Platform APIs (most reliable)
+        2. Direct CDN URLs (bypass redirects)
+        3. Episode webpage sources
+        4. YouTube versions
+        5. RSS feed URL (least reliable due to redirects/protection)
         """
         sources = []
         
-        # 1. Primary audio URL from RSS
-        if episode.audio_url:
-            sources.append(episode.audio_url)
+        # 1. Platform-specific searches (HIGHEST PRIORITY)
+        logger.info(f"🔍 Searching platform APIs for: {episode.title[:50]}...")
+        platform_sources = await self._find_platform_specific_sources(episode, podcast_config)
+        sources.extend(platform_sources)
         
-        # 2. Check episode webpage for alternative players
+        # 2. Search for direct CDN URLs (bypass redirects)
+        if episode.audio_url:
+            logger.info("🔍 Looking for direct CDN URLs...")
+            cdn_sources = await self._find_cdn_alternatives(episode.audio_url)
+            sources.extend(cdn_sources)
+        
+        # 3. Check episode webpage for alternative players
         if episode.link:
+            logger.info("🔍 Checking episode webpage for audio sources...")
             web_sources = await self._find_audio_from_webpage(episode.link)
             sources.extend(web_sources)
         
-        # 3. Platform-specific searches
-        platform_sources = await self._find_platform_specific_sources(episode)
-        sources.extend(platform_sources)
-        
-        # 4. Search for mirrors/CDN alternatives
-        cdn_sources = await self._find_cdn_alternatives(episode.audio_url) if episode.audio_url else []
-        sources.extend(cdn_sources)
-        
-        # 5. YouTube audio extraction
+        # 4. YouTube audio extraction
+        logger.info("🔍 Searching for YouTube version...")
         youtube_url = await self._find_youtube_version(episode)
         if youtube_url:
             sources.append(youtube_url)
+        
+        # 5. RSS audio URL (LOWEST PRIORITY - often has redirects/protection)
+        if episode.audio_url:
+            logger.info("📡 Adding RSS feed URL as last resort...")
+            sources.append(episode.audio_url)
         
         # Remove duplicates while preserving order
         seen = set()
@@ -145,19 +158,19 @@ class AudioSourceFinder:
         
         return [url for url in audio_urls if url and not url.startswith('data:')]
     
-    async def _find_platform_specific_sources(self, episode: Episode) -> List[str]:
+    async def _find_platform_specific_sources(self, episode: Episode, podcast_config: Optional[Dict] = None) -> List[str]:
         """Find platform-specific alternative sources"""
         sources = []
+        
+        # Apple Podcasts (FIRST - we have IDs for this)
+        apple_url = await self._find_apple_podcasts_url(episode, podcast_config)
+        if apple_url:
+            sources.append(apple_url)
         
         # Spotify
         spotify_url = await self._find_spotify_url(episode)
         if spotify_url:
             sources.append(spotify_url)
-        
-        # Apple Podcasts
-        apple_url = await self._find_apple_podcasts_url(episode)
-        if apple_url:
-            sources.append(apple_url)
         
         # Google Podcasts (if still available)
         google_url = await self._find_google_podcasts_url(episode)
@@ -167,26 +180,42 @@ class AudioSourceFinder:
         return sources
     
     async def _find_cdn_alternatives(self, original_url: str) -> List[str]:
-        """Find CDN alternatives for the same audio file"""
+        """Find CDN alternatives and resolve redirect chains"""
         alternatives = []
         
         if not original_url:
             return alternatives
         
-        parsed = urlparse(original_url)
-        
-        # Common CDN patterns
-        cdn_patterns = {
-            'cloudfront.net': ['d1.cloudfront.net', 'd2.cloudfront.net', 'd3.cloudfront.net'],
-            'amazonaws.com': ['s3.amazonaws.com', 's3-us-west-2.amazonaws.com'],
-            'akamaized.net': ['media.akamaized.net', 'audio.akamaized.net'],
-        }
-        
-        for domain, alternates in cdn_patterns.items():
-            if domain in parsed.netloc:
-                for alt in alternates:
-                    alt_url = original_url.replace(parsed.netloc, alt)
-                    alternatives.append(alt_url)
+        try:
+            # Use RedirectResolver to find direct CDN URLs
+            from ..transcripts.redirect_resolver import RedirectResolver
+            
+            async with RedirectResolver() as resolver:
+                # Get all CDN alternatives including resolved redirects
+                cdn_alternatives = await resolver.find_all_cdn_alternatives(original_url)
+                alternatives.extend(cdn_alternatives)
+                
+                # Also try the simpler pattern-based approach
+                parsed = urlparse(original_url)
+                
+                # Common CDN patterns
+                cdn_patterns = {
+                    'cloudfront.net': ['d1.cloudfront.net', 'd2.cloudfront.net', 'd3.cloudfront.net'],
+                    'amazonaws.com': ['s3.amazonaws.com', 's3-us-west-2.amazonaws.com'],
+                    'akamaized.net': ['media.akamaized.net', 'audio.akamaized.net'],
+                }
+                
+                for domain, alternates in cdn_patterns.items():
+                    if domain in parsed.netloc:
+                        for alt in alternates:
+                            alt_url = original_url.replace(parsed.netloc, alt)
+                            if alt_url not in alternatives:
+                                alternatives.append(alt_url)
+                
+        except Exception as e:
+            logger.debug(f"Error finding CDN alternatives: {e}")
+            # Fall back to simple approach
+            return alternatives[:5]  # Limit to 5 alternatives
         
         return alternatives
     
@@ -214,10 +243,77 @@ class AudioSourceFinder:
         # Placeholder for now
         return None
     
-    async def _find_apple_podcasts_url(self, episode: Episode) -> Optional[str]:
-        """Find Apple Podcasts URL for episode"""
-        # This would use Apple Podcasts API
-        # Placeholder for now
+    async def _find_apple_podcasts_url(self, episode: Episode, podcast_config: Optional[Dict] = None) -> Optional[str]:
+        """Find Apple Podcasts URL for episode using iTunes Search API"""
+        try:
+            # Get apple_id from episode or podcast_config
+            apple_id = episode.apple_podcast_id
+            if not apple_id and podcast_config and 'apple_id' in podcast_config:
+                apple_id = podcast_config['apple_id']
+            
+            if not apple_id:
+                return None
+                
+            # Use iTunes Search API to find episodes
+            session = await self._get_session()
+            
+            # Search for recent episodes of this podcast
+            search_url = "https://itunes.apple.com/lookup"
+            params = {
+                'id': apple_id,
+                'entity': 'podcastEpisode',
+                'limit': 50  # Get recent episodes
+            }
+            
+            async with session.get(search_url, params=params) as response:
+                if response.status != 200:
+                    return None
+                    
+                data = await response.json()
+                
+                if 'results' not in data or len(data['results']) < 2:
+                    return None
+                
+                # First result is podcast info, episodes start from index 1
+                episodes = data['results'][1:]
+                
+                # Try to match episode by title
+                episode_title_lower = episode.title.lower()
+                for ep in episodes:
+                    if 'trackName' in ep and 'episodeUrl' in ep:
+                        # Fuzzy title matching
+                        ep_title_lower = ep['trackName'].lower()
+                        
+                        # Check for exact match or close match
+                        if (episode_title_lower == ep_title_lower or 
+                            episode_title_lower in ep_title_lower or
+                            ep_title_lower in episode_title_lower):
+                            
+                            audio_url = ep.get('episodeUrl')
+                            if audio_url:
+                                logger.info(f"✅ Found Apple Podcasts audio URL: {audio_url[:80]}...")
+                                return audio_url
+                
+                # Try matching by date if title match fails
+                if hasattr(episode, 'published') and episode.published:
+                    target_date = episode.published.date()
+                    for ep in episodes:
+                        if 'releaseDate' in ep and 'episodeUrl' in ep:
+                            import datetime
+                            release_date = datetime.datetime.fromisoformat(
+                                ep['releaseDate'].replace('Z', '+00:00')
+                            ).date()
+                            
+                            # Allow 1 day difference for timezone issues
+                            if abs((release_date - target_date).days) <= 1:
+                                audio_url = ep.get('episodeUrl')
+                                if audio_url:
+                                    logger.info(f"✅ Found Apple Podcasts audio URL by date: {audio_url[:80]}...")
+                                    return audio_url
+                
+        except Exception as e:
+            logger.debug(f"Error finding Apple Podcasts URL: {e}")
+        
         return None
     
     async def _find_google_podcasts_url(self, episode: Episode) -> Optional[str]:
