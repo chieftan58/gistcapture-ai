@@ -50,39 +50,52 @@ class AudioTranscriber:
         # Enhanced headers for different download scenarios
         self.headers_presets = [
             {
-                # Chrome on Mac - most compatible
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
+                # Apple Podcasts (most reliable for podcast content)
+                'User-Agent': 'Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
+                'Accept': '*/*',
                 'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Encoding': 'br, gzip, deflate',
+                'Connection': 'keep-alive',
+                'X-Apple-Store-Front': '143441-1,32'
+            },
+            {
+                # Chrome with audio context - good for web-based podcasts
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'identity;q=1, *;q=0',
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache',
-                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
                 'Sec-Ch-Ua-Mobile': '?0',
                 'Sec-Ch-Ua-Platform': '"macOS"',
                 'Sec-Fetch-Dest': 'audio',
                 'Sec-Fetch-Mode': 'no-cors',
                 'Sec-Fetch-Site': 'cross-site',
-                'Referer': 'https://www.google.com/'
+                'Range': 'bytes=0-'
             },
             {
-                # Safari on Mac
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+                # Overcast - popular podcast app
+                'User-Agent': 'Overcast/2024.1 (+http://overcast.fm/; iOS podcast app)',
+                'Accept': 'audio/mpeg, audio/*',
+                'Accept-Encoding': 'gzip, deflate',
+                'X-Playback-Session-Id': str(uuid.uuid4()),
+                'Connection': 'keep-alive'
+            },
+            {
+                # Spotify podcast user agent
+                'User-Agent': 'Spotify/8.8.0 iOS/16.6 (iPhone13)',
+                'Accept': 'audio/mpeg, audio/*;q=0.9, */*;q=0.8',
+                'Accept-Language': 'en',
+                'Accept-Encoding': 'gzip',
+            },
+            {
+                # Generic mobile browser fallback
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
                 'Accept': '*/*',
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive'
-            },
-            {
-                # Podcast app
-                'User-Agent': 'Podcasts/1.0.0 (+http://www.apple.com/itunes/)',
-                'Accept': 'audio/*',
-                'Range': 'bytes=0-'
-            },
-            {
-                # Curl fallback
-                'User-Agent': 'curl/7.68.0',
-                'Accept': '*/*'
             }
         ]
     
@@ -207,11 +220,27 @@ class AudioTranscriber:
         # Track this file for cleanup
         self.temp_files.add(str(audio_file))
         
-        # Special handling for Substack URLs
-        if 'substack.com' in audio_url:
-            success = await self._download_substack_audio(audio_url, audio_file, episode, correlation_id)
+        # Use PlatformAudioDownloader for initial attempt
+        try:
+            from .audio_downloader import PlatformAudioDownloader
+            platform_downloader = PlatformAudioDownloader()
+            
+            # Try platform-specific download first
+            success = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                platform_downloader.download_audio,
+                audio_url,
+                audio_file,
+                episode.podcast
+            )
+            
             if success and audio_file.exists() and validate_audio_file_comprehensive(audio_file, correlation_id):
+                logger.info(f"[{correlation_id}] ✅ Platform-specific download successful")
                 return audio_file
+            else:
+                logger.debug(f"[{correlation_id}] Platform-specific download failed, trying generic methods...")
+        except Exception as e:
+            logger.debug(f"[{correlation_id}] Platform downloader error: {e}")
         
         # Try each header preset with exponential backoff
         for attempt, headers in enumerate(self.headers_presets):
@@ -665,7 +694,10 @@ class AudioTranscriber:
                     '--quiet',
                     '--no-warnings',
                     '--no-playlist',
-                    '--user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    '--add-header', 'User-Agent:Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
+                    '--add-header', 'Accept:*/*',
+                    '--add-header', 'Accept-Language:en-US,en;q=0.9',
+                    '--cookies-from-browser', 'chrome',  # Use Chrome cookies if available
                     url
                 ]
                 
@@ -695,13 +727,19 @@ class AudioTranscriber:
             else:
                 logger.warning(f"[{correlation_id}] ⚠️ yt-dlp not found - install with: pip install yt-dlp")
             
-            # Try curl with more options
+            # Try curl with podcast app headers
             cmd = [
                 'curl', '-L', '-f', '-s', '-S',
                 '--compressed',
-                '-H', 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                '-H', 'Accept: audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
+                '--max-time', '300',
+                '--retry', '3',
+                '--retry-delay', '5',
+                '-H', 'User-Agent: Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
+                '-H', 'Accept: */*',
                 '-H', 'Accept-Language: en-US,en;q=0.9',
+                '-H', 'Accept-Encoding: br, gzip, deflate',
+                '-H', 'Connection: keep-alive',
+                '-H', 'X-Apple-Store-Front: 143441-1,32',
                 '-H', 'Cache-Control: no-cache',
                 '--connect-timeout', '30',
                 '--max-time', '600',  # 10 minutes

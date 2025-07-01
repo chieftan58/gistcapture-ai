@@ -45,6 +45,7 @@ def print_help():
     print("  python main.py verify [days]             # Run verification report")
     print("  python main.py check \"Podcast Name\" [days] # Check single podcast")
     print("  python main.py reload-prompts            # Reload prompts from disk")
+    print("  python main.py regenerate-summaries [days] # Force regenerate summaries")
     print("  python main.py test                      # Run system diagnostics")
     print("  python main.py -h                        # Show this help\n")
     print("Selective Testing Commands:")
@@ -207,6 +208,10 @@ def parse_arguments():
                 sys.exit(1)
         elif sys.argv[1] == "reload-prompts":
             mode = "reload-prompts"
+        elif sys.argv[1] == "regenerate-summaries":
+            mode = "regenerate-summaries"
+            if len(sys.argv) > 2 and sys.argv[2].isdigit():
+                days_back = int(sys.argv[2])
         elif sys.argv[1] == "test":
             mode = "test"
         elif sys.argv[1] == "--test-fetch":
@@ -292,6 +297,8 @@ async def main():
         elif mode == "reload-prompts":
             app_instance.summarizer.reload_prompts()
             logger.info("✅ Prompts reloaded successfully")
+        elif mode == "regenerate-summaries":
+            await app_instance.regenerate_summaries(days_back)
         elif mode == "test-fetch":
             await app_instance.test_fetch_only(days_back)
         elif mode == "test-summarize":

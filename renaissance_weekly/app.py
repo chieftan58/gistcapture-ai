@@ -26,7 +26,7 @@ from .email.digest import EmailDigest
 from .utils.logging import get_logger
 from .utils.helpers import (
     validate_env_vars, get_available_memory, get_cpu_count,
-    ProgressTracker, exponential_backoff_with_jitter
+    ProgressTracker, exponential_backoff_with_jitter, slugify
 )
 from .utils.clients import openai_rate_limiter
 
@@ -892,6 +892,80 @@ class RenaissanceWeekly:
             # Show what was loaded
             recent_episodes = self.db.get_recent_episodes(days_back=30)
             logger.info(f"[{self.correlation_id}] Loaded {len(recent_episodes)} episodes")
+    
+    async def regenerate_summaries(self, days_back: int = 7):
+        """Force regenerate summaries for recent episodes"""
+        logger.info(f"[{self.correlation_id}] 🔄 Regenerating summaries for last {days_back} days")
+        
+        # Get episodes with transcripts
+        since_date = datetime.now() - timedelta(days=days_back)
+        episodes = self.db.get_recent_episodes(days_back)
+        episodes_with_transcripts = []
+        
+        for ep_dict in episodes:
+            if ep_dict.get('transcript'):
+                episode = Episode(
+                    guid=ep_dict['guid'],
+                    title=ep_dict['title'],
+                    podcast=ep_dict['podcast'],
+                    published=datetime.fromisoformat(ep_dict['published']),
+                    link=ep_dict.get('link', ''),
+                    audio_url=ep_dict.get('audio_url', ''),
+                    duration=ep_dict.get('duration', '')
+                )
+                episodes_with_transcripts.append({
+                    'episode': episode,
+                    'transcript': ep_dict['transcript'],
+                    'source': TranscriptSource(ep_dict.get('transcript_source', 'UNKNOWN'))
+                })
+        
+        logger.info(f"[{self.correlation_id}] Found {len(episodes_with_transcripts)} episodes with transcripts")
+        
+        # Delete existing summaries
+        from .config import SUMMARY_DIR
+        deleted_count = 0
+        for ep_data in episodes_with_transcripts:
+            episode = ep_data['episode']
+            date_str = episode.published.strftime('%Y%m%d')
+            safe_podcast = slugify(episode.podcast)[:30]
+            safe_title = slugify(episode.title)[:50]
+            summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_summary.md"
+            
+            if summary_file.exists():
+                summary_file.unlink()
+                deleted_count += 1
+                logger.info(f"  Deleted cached summary: {summary_file.name}")
+        
+        logger.info(f"[{self.correlation_id}] Deleted {deleted_count} cached summaries")
+        
+        # Regenerate summaries
+        summaries = []
+        for i, ep_data in enumerate(episodes_with_transcripts, 1):
+            episode = ep_data['episode']
+            logger.info(f"[{self.correlation_id}] [{i}/{len(episodes_with_transcripts)}] Regenerating: {episode.podcast} - {episode.title}")
+            
+            summary = await self.summarizer.generate_summary(
+                episode,
+                ep_data['transcript'],
+                ep_data['source']
+            )
+            
+            if summary:
+                summaries.append({
+                    'episode': episode,
+                    'summary': summary
+                })
+                # Update database
+                self.db.save_summary(episode, summary)
+            else:
+                logger.warning(f"[{self.correlation_id}] Failed to regenerate summary")
+        
+        logger.info(f"[{self.correlation_id}] ✅ Regenerated {len(summaries)} summaries")
+        
+        # Optionally send email with regenerated summaries
+        if summaries and EMAIL_TO:
+            logger.info(f"[{self.correlation_id}] 📧 Sending digest with regenerated summaries...")
+            await self._generate_and_send_digest(summaries)
     
     async def cleanup(self):
         """Clean up resources properly"""

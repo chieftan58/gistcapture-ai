@@ -19,14 +19,39 @@ class PlatformAudioDownloader:
     
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        
+        # Add retry adapter for better reliability
+        from requests.adapters import HTTPAdapter
+        from requests.packages.urllib3.util.retry import Retry
+        
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        # Rotate user agents to avoid detection
+        self.user_agents = [
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'AppleCoreMedia/1.0.0.20G165 (iPhone; U; CPU OS 16_6 like Mac OS X; en_us)',
+            'Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
+            'Overcast/2024.1 (+http://overcast.fm/; iOS podcast app)',
+        ]
+        self.current_ua_index = 0
+        self._set_default_headers()
     
     def download_audio(self, url: str, output_path: Path, podcast_name: str = "") -> bool:
         """Download audio with platform-specific strategy and validation"""
         logger.info(f"🎵 Downloading audio from: {url[:80]}...")
         domain = urlparse(url).netloc.lower()
+        
+        # Add small delay to avoid rate limiting
+        time.sleep(0.5)
         
         # Platform-specific strategies
         strategies = {
@@ -38,6 +63,8 @@ class PlatformAudioDownloader:
             'feeds.simplecast.com': self._download_simplecast,
             'feeds.megaphone.fm': self._download_megaphone,
             'rss.art19.com': self._download_art19,
+            'dts.podtrac.com': self._download_generic,  # Common redirect service
+            'pdst.fm': self._download_generic,  # Podcast distribution
         }
         
         # Try platform-specific strategy
@@ -152,26 +179,45 @@ class PlatformAudioDownloader:
             # If ffprobe is not available, we can't do this validation
             return True  # Assume it's valid if we can't check
     
+    def _set_default_headers(self):
+        """Set default headers with current user agent"""
+        self.session.headers.update({
+            'User-Agent': self.user_agents[self.current_ua_index],
+            'Accept': 'audio/mpeg, audio/*, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+        })
+    
+    def _rotate_user_agent(self):
+        """Rotate to next user agent"""
+        self.current_ua_index = (self.current_ua_index + 1) % len(self.user_agents)
+        self._set_default_headers()
+        logger.debug(f"Rotated to user agent: {self.user_agents[self.current_ua_index][:50]}...")
+    
     def _download_substack(self, url: str, output_path: Path) -> bool:
         """Download from Substack with better error handling"""
         try:
             # Try multiple approaches for Substack
             approaches = [
-                # Approach 1: Direct download with cookies
+                # Approach 1: Direct download with browser-like headers
                 {
                     'headers': {
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                        'Accept': 'audio/mpeg, audio/*, */*',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
                         'Accept-Language': 'en-US,en;q=0.9',
-                        'Accept-Encoding': 'gzip, deflate, br',
-                        'DNT': '1',
-                        'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1',
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none',
-                        'Sec-Fetch-User': '?1',
-                        'Cache-Control': 'max-age=0',
+                        'Accept-Encoding': 'identity;q=1, *;q=0',
+                        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                        'Sec-Ch-Ua-Mobile': '?0',
+                        'Sec-Ch-Ua-Platform': '"macOS"',
+                        'Sec-Fetch-Dest': 'audio',
+                        'Sec-Fetch-Mode': 'no-cors',
+                        'Sec-Fetch-Site': 'cross-site',
+                        'Range': 'bytes=0-',
+                        'Referer': 'https://substack.com/',
                     },
                     'cookies': {
                         'substack.sid': 'anonymous',
@@ -332,7 +378,7 @@ class PlatformAudioDownloader:
                 'Accept': '*/*'
             }
             
-            response = self.session.get(url, headers=headers, stream=True, allow_redirects=True, timeout=60)
+            response = self.session.get(url, headers=headers, stream=True, allow_redirects=True, timeout=(10, 120))
             
             if response.status_code == 200:
                 # Check content type
@@ -359,7 +405,7 @@ class PlatformAudioDownloader:
                 'Accept-Encoding': 'identity',
             }
             
-            response = self.session.get(url, headers=headers, stream=True, timeout=60)
+            response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
             
             if response.status_code == 200:
                 with open(output_path, 'wb') as f:
@@ -388,7 +434,7 @@ class PlatformAudioDownloader:
                 'Range': 'bytes=0-'  # Sometimes helps with large files
             }
             
-            response = self.session.get(url, headers=headers, stream=True, timeout=60)
+            response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
             
             if response.status_code in [200, 206]:  # 206 for partial content
                 with open(output_path, 'wb') as f:
@@ -404,23 +450,61 @@ class PlatformAudioDownloader:
             return False
     
     def _download_art19(self, url: str, output_path: Path) -> bool:
-        """Download from Art19"""
+        """Download from Art19 with enhanced headers"""
         try:
-            # Art19 likes podcast app user agents
-            headers = {
-                'User-Agent': 'Overcast/3.0 (+http://overcast.fm/)',
-                'Accept': 'audio/mpeg'
-            }
+            # Art19 requires specific headers to avoid 403
+            approaches = [
+                # Approach 1: Apple Podcasts app
+                {
+                    'User-Agent': 'Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0',
+                    'Accept': '*/*',
+                    'Accept-Encoding': 'br, gzip, deflate',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cache-Control': 'no-cache',
+                },
+                # Approach 2: Overcast
+                {
+                    'User-Agent': 'Overcast/2024.1 (+http://overcast.fm/; iOS podcast app)',
+                    'Accept': 'audio/mpeg, audio/*',
+                    'X-Playback-Session-Id': 'F6D8F9E0-1234-4D5E-B098-' + str(int(time.time())),
+                },
+                # Approach 3: Browser with audio context
+                {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,*/*;q=0.5',
+                    'Sec-Fetch-Dest': 'audio',
+                    'Sec-Fetch-Mode': 'no-cors',
+                    'Sec-Fetch-Site': 'cross-site',
+                    'Range': 'bytes=0-',
+                }
+            ]
             
-            response = self.session.get(url, headers=headers, stream=True, timeout=60)
-            
-            if response.status_code == 200:
-                with open(output_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                return True
-                
+            for i, headers in enumerate(approaches):
+                try:
+                    logger.debug(f"Art19 attempt {i+1} with {headers.get('User-Agent', '')[:30]}...")
+                    response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
+                    
+                    if response.status_code == 200:
+                        total_size = int(response.headers.get('Content-Length', 0))
+                        downloaded = 0
+                        
+                        with open(output_path, 'wb') as f:
+                            for chunk in response.iter_content(chunk_size=32768):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded += len(chunk)
+                                    if total_size > 0 and downloaded % (1024 * 1024) == 0:
+                                        progress = (downloaded / total_size) * 100
+                                        logger.debug(f"Download progress: {progress:.1f}%")
+                        return True
+                    elif response.status_code == 403:
+                        logger.warning(f"Art19 approach {i+1} got 403, trying next...")
+                        time.sleep(1)  # Brief pause between attempts
+                    else:
+                        logger.warning(f"Art19 approach {i+1} got status {response.status_code}")
+                except Exception as e:
+                    logger.debug(f"Art19 approach {i+1} failed: {e}")
+                    
             return False
             
         except Exception as e:
@@ -430,12 +514,12 @@ class PlatformAudioDownloader:
     def _download_generic(self, url: str, output_path: Path) -> bool:
         """Generic download with multiple header attempts"""
         user_agents = [
-            ('Podcasts/1.0', 'audio/*'),
-            ('Mozilla/5.0 (compatible; GooglePodcasts)', '*/*'),
-            ('CastBox/8.0 (fm.castbox.audiobook.radio.podcast)', 'audio/*'),
-            ('Podbean/7.0 (http://podbean.com)', '*/*'),
-            ('Overcast/3.0 (+http://overcast.fm/)', 'audio/mpeg'),
-            ('AppleCoreMedia/1.0.0.20G75', '*/*'),
+            ('Podcasts/1580.1 CFNetwork/1408.0.4 Darwin/22.5.0', 'audio/*, */*'),
+            ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'audio/webm,audio/*;q=0.9,*/*;q=0.5'),
+            ('Spotify/8.8.0 iOS/16.6 (iPhone13)', 'audio/mpeg, audio/*'),
+            ('CastBox/8.32.1-230915 (Linux;Android 13)', 'audio/*'),
+            ('PocketCasts/1.0 (Pocket Casts Feed Parser; +http://pocketcasts.com/)', '*/*'),
+            ('AppleCoreMedia/1.0.0.20G165 (iPhone; U; CPU OS 16_6 like Mac OS X; en_us)', '*/*'),
         ]
         
         for ua, accept in user_agents:
@@ -445,7 +529,7 @@ class PlatformAudioDownloader:
                     'Accept': accept,
                     'Accept-Encoding': 'identity',  # Avoid compressed responses
                 }
-                response = self.session.get(url, headers=headers, stream=True, timeout=60)
+                response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
                 
                 if response.status_code == 200:
                     # Check content type
