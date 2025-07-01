@@ -155,3 +155,26 @@ The system now searches for transcripts in this order:
 - Get free API keys at:
   - YouTube: https://console.cloud.google.com/
   - Podcast Index: https://api.podcastindex.org/
+
+## Installation for Maximum Reliability
+
+1. Install full yt-dlp dependencies:
+   ```bash
+   ./install_ytdlp_full.sh
+   ```
+
+2. Configure optional APIs in .env:
+   ```
+   YOUTUBE_API_KEY=your_key
+   PODCASTINDEX_API_KEY=your_key
+   PODCASTINDEX_API_SECRET=your_secret
+   ```
+
+## Key Improvements (Latest)
+
+- **Multi-source audio discovery**: Finds alternative URLs when primary fails
+- **Comprehensive transcript finder**: Checks 10+ sources before audio transcription
+- **Browser cookie extraction**: Handles authenticated/protected content
+- **Platform-specific strategies**: Custom handling for Substack, Apple, etc.
+- **System monitoring**: Track failures/successes with detailed metrics
+- **Robustness config**: Centralized configuration for all fallback strategies
