@@ -236,3 +236,6 @@ The system now searches for transcripts in this order:
 - UI selection phase causing system timeouts
 - Some audio sources return 403 errors despite multiple strategies
 - Database remains empty during dry-run mode (expected behavior)
+
+### Recent Updates (2025-01-01):
+- Fixed UI to correctly display 5-minute test mode limit (was showing 20 minutes)
