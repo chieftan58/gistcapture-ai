@@ -148,5 +148,75 @@
     "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:17.871490",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:17.875142",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:17.877324",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:19.256467",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:19.466723",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:38.852443",
+    "component": "summarization",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-01T21:32:40.394036",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
   }
 ]
