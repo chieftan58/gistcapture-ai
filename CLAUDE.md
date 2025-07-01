@@ -163,11 +163,28 @@ The system now searches for transcripts in this order:
    ./install_ytdlp_full.sh
    ```
 
-2. Configure optional APIs in .env:
+2. Install Playwright for browser automation:
+   ```bash
+   playwright install chromium
    ```
+
+3. Configure optional APIs in .env:
+   ```
+   # Core APIs
+   OPENAI_API_KEY=your_key
+   SENDGRID_API_KEY=your_key
+   
+   # Enhanced Discovery APIs
    YOUTUBE_API_KEY=your_key
+   SPOTIFY_CLIENT_ID=your_client_id
+   SPOTIFY_CLIENT_SECRET=your_client_secret
    PODCASTINDEX_API_KEY=your_key
    PODCASTINDEX_API_SECRET=your_secret
+   
+   # Transcription Service APIs (optional)
+   ASSEMBLYAI_API_KEY=your_key
+   REVAI_API_KEY=your_key
+   DEEPGRAM_API_KEY=your_key
    ```
 
 ## Key Improvements (Latest)
@@ -175,7 +192,13 @@ The system now searches for transcripts in this order:
 - **Multi-source audio discovery**: AudioSourceFinder integrated to find alternative URLs when primary fails
 - **Comprehensive transcript finder**: Checks 10+ sources before audio transcription with API integrations
 - **API integrations**: AssemblyAI, Rev.ai, and Deepgram support for transcription
-- **Browser cookie extraction**: Handles authenticated/protected content with yt-dlp
+- **Browser automation**: Playwright integration for Cloudflare-protected content
+- **Smart audio validation**: Lenient validation modes for different platforms
+- **API-first approach**: Reordered source priority - APIs before RSS feeds
+- **YouTube API integration**: Enhanced episode discovery with official API
+- **Spotify API integration**: Direct access to Spotify-hosted podcasts
+- **Redirect chain resolution**: Bypasses tracking redirects to find direct CDN URLs
+- **Content validation**: Ensures summaries are from full transcripts, not metadata
 - **Platform-specific strategies**: Custom handling for Tim Ferriss, American Optimist, Dwarkesh, Huberman Lab, Doctor's Farmacy
 - **System monitoring**: Track failures/successes with detailed metrics
 - **Robustness config**: Centralized configuration with feature flags for gradual rollout
@@ -188,15 +211,28 @@ The system now searches for transcripts in this order:
 2. **API Integrations**: AssemblyAI, Rev.ai, Deepgram methods implemented (need API keys in .env)
 3. **Feature Flags**: Integrated throughout system for gradual feature rollout
 4. **Platform Scrapers**: Added Dwarkesh, Huberman Lab, Doctor's Farmacy to existing Tim Ferriss and American Optimist
+5. **Browser Automation**: Playwright-based downloader for Cloudflare-protected content
+6. **Smart Validation**: Lenient audio validation modes based on platform
+7. **YouTube API**: Full integration with fallback to web scraping
+8. **Spotify API**: OAuth-based access to Spotify-hosted episodes
+9. **Redirect Resolver**: Finds direct CDN URLs bypassing tracking redirects
+10. **Content Validator**: Ensures summaries are from full transcripts only
+
+### Current Performance (from latest test runs):
+- **Audio Download Success**: 18.2% (improved from 0%)
+- **Transcript Fetch Success**: 20%
+- **Primary Failures**: Substack/Cloudflare protection (403 errors)
+- **Working Platforms**: Apple Podcasts, YouTube, some RSS feeds
 
 ### Next Steps:
-1. Test with real API keys for transcription services
-2. Monitor success rates with new integrations
-3. Fine-tune platform-specific scrapers based on results
-4. Consider adding more audio source strategies (Spotify API, etc.)
-5. Implement remaining feature flags (social media search, AI transcript search)
+1. Implement authenticated browser sessions for Substack
+2. Add proxy rotation for distributed downloading
+3. Test with real API keys for transcription services
+4. Fine-tune platform-specific scrapers based on results
+5. Debug UI selection timeout issue (system times out after 2 minutes)
 
 ### Known Issues:
-- Substack Cloudflare protection still challenging despite yt-dlp enhancements
-- Some audio sources return 403 errors even with multiple strategies
+- Substack Cloudflare protection blocks even browser automation attempts
+- UI selection phase causing system timeouts
+- Some audio sources return 403 errors despite multiple strategies
 - Database remains empty during dry-run mode (expected behavior)
