@@ -2998,5 +2998,335 @@
     "error_message": "Failed to transcribe audio",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T03:59:38.651922",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T03:59:38.664581",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T03:59:38.747926",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:00:26.936244",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "How Tech Can Rebuild America",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:00:29.097331",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "The Light Switch Moment | Kim Becker",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:00:40.714100",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:00:42.548278",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Stop Making Failure a Badge of Honor | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:01:38.949273",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:01:39.818480",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:01:40.013286",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:02:07.201568",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:02:08.192275",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:06:05.419042",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:06:43.129592",
+    "component": "summarization",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:06:43.509468",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:07:18.575216",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:07:31.689330",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:08:12.421120",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:08:17.408781",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:08:34.040823",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:08:34.399940",
+    "component": "summarization",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:08:35.269487",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:09:28.425761",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:14:09.281176",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:14:13.591183",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:15:03.805719",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:15:20.391611",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:15:20.456952",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:15:48.796422",
+    "component": "summarization",
+    "podcast": "The Drive",
+    "episode_title": "Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:15:51.444330",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:16:36.471197",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:16:48.342848",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T04:17:37.574184",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
   }
 ]
