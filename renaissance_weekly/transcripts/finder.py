@@ -65,7 +65,13 @@ class TranscriptFinder:
                 logger.info("✅ Found transcript from RSS feed URL")
                 return transcript, TranscriptSource.RSS_FEED
         
-        # 2. Use comprehensive transcript finder for all sources (if enabled)
+        # 2. Try podcast-specific methods FIRST (before generic scraping)
+        transcript = await self._try_podcast_specific_methods(episode)
+        if transcript:
+            logger.info("✅ Found transcript using podcast-specific method")
+            return transcript, TranscriptSource.SCRAPED
+        
+        # 3. Use comprehensive transcript finder for all sources (if enabled)
         if should_use_feature('use_comprehensive_transcript_finder'):
             async with self.comprehensive_finder:
                 transcript, source = await self.comprehensive_finder.find_transcript(episode)
@@ -75,14 +81,14 @@ class TranscriptFinder:
         else:
             logger.debug("Comprehensive transcript finder is disabled via feature flag")
         
-        # 3. Try to scrape from episode page (fallback to original method)
+        # 4. Try to scrape from episode page (fallback to original method)
         if episode.link:
             transcript = await self._scrape_from_page(episode.link)
             if transcript:
                 logger.info("✅ Found transcript from episode page")
                 return transcript, TranscriptSource.SCRAPED
         
-        # 4. Try Podcast Index API
+        # 5. Try Podcast Index API
         podcast_index_url = await self.podcast_index.find_episode_transcript(
             episode.title, episode.podcast
         )
@@ -91,12 +97,6 @@ class TranscriptFinder:
             if transcript:
                 logger.info("✅ Found transcript from Podcast Index")
                 return transcript, TranscriptSource.RSS_FEED
-        
-        # 5. Try podcast-specific methods
-        transcript = await self._try_podcast_specific_methods(episode)
-        if transcript:
-            logger.info("✅ Found transcript using podcast-specific method")
-            return transcript, TranscriptSource.SCRAPED
         
         # 6. Try YouTube transcript
         transcript = await self.youtube_finder.find_youtube_transcript(
@@ -212,6 +212,10 @@ class TranscriptFinder:
         # The Doctor's Farmacy
         if 'farmacy' in podcast_lower or 'doctor' in podcast_lower:
             return await self._try_doctors_farmacy_transcript(episode)
+        
+        # The Drive (Peter Attia)
+        if 'the drive' in podcast_lower or 'attia' in podcast_lower:
+            return await self._try_the_drive_transcript(episode)
         
         # Add more podcast-specific methods as needed
         
@@ -598,3 +602,209 @@ class TranscriptFinder:
             logger.debug(f"Failed to scrape Doctor's Farmacy page: {e}")
         
         return None
+    
+    async def _try_the_drive_transcript(self, episode: Episode) -> Optional[str]:
+        """Try to find The Drive (Peter Attia) transcript"""
+        logger.info("🔍 Looking for The Drive transcript on peterattia.com...")
+        
+        # The Drive episodes often have transcripts on peterattia.com
+        # First try to extract episode number from title
+        episode_match = re.search(r'#(\d+)', episode.title) or re.search(r'AMA\s*(\d+)', episode.title)
+        
+        # Try various URL patterns for Peter Attia's site
+        urls_to_try = []
+        
+        if episode.link:
+            # Sometimes the episode link points to the transcript page
+            urls_to_try.append(episode.link)
+            
+            # Try replacing libsyn link with peterattia.com
+            if 'libsyn.com' in episode.link:
+                # Extract slug from libsyn URL
+                slug_match = re.search(r'/([^/]+?)(?:-\d+)?$', episode.link)
+                if slug_match:
+                    slug = slug_match.group(1)
+                    urls_to_try.extend([
+                        f"https://peterattia.com/podcast/{slug}/",
+                        f"https://www.peterattia.com/podcast/{slug}/",
+                        f"https://peterattia.com/{slug}/",
+                    ])
+        
+        if episode_match:
+            episode_num = episode_match.group(1)
+            urls_to_try.extend([
+                f"https://peterattia.com/podcast/episode-{episode_num}/",
+                f"https://www.peterattia.com/podcast/episode-{episode_num}/",
+                f"https://peterattia.com/episode-{episode_num}/",
+            ])
+        
+        # Try to search based on guest names from title
+        # Extract guest names (usually after the topic, separated by |)
+        title_parts = episode.title.split('|')
+        if len(title_parts) > 1:
+            guest_part = title_parts[-1].strip()
+            # Remove common suffixes like M.D., Ph.D.
+            guest_clean = re.sub(r'\b(M\.D\.|Ph\.D\.|Dr\.)\b', '', guest_part).strip()
+            guest_slug = guest_clean.lower().replace(' ', '-').replace(',', '')
+            urls_to_try.extend([
+                f"https://peterattia.com/podcast/{guest_slug}/",
+                f"https://www.peterattia.com/{guest_slug}/",
+            ])
+        
+        # Try each URL
+        for url in urls_to_try:
+            try:
+                transcript = await self._scrape_peterattia_page(url)
+                if transcript:
+                    return transcript
+            except Exception as e:
+                logger.debug(f"Failed to fetch from {url}: {e}")
+                continue
+        
+        # If we couldn't find it by direct URL, try searching the site
+        try:
+            # Clean up episode title for search
+            search_title = re.sub(r'#\d+:\s*', '', episode.title)
+            search_title = re.sub(r'\s*\|.*$', '', search_title)[:50]  # Remove guest names for search
+            
+            # Peter Attia's site search
+            search_url = f"https://peterattia.com/?s={search_title.replace(' ', '+')}"
+            
+            session = await self._get_session()
+            async with session.get(search_url) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # Look for podcast episode links in search results
+                    articles = soup.find_all('article', limit=5)
+                    for article in articles:
+                        link = article.find('a', href=True)
+                        if link and '/podcast/' in link.get('href', ''):
+                            transcript = await self._scrape_peterattia_page(link['href'])
+                            if transcript:
+                                return transcript
+        except Exception as e:
+            logger.debug(f"The Drive search failed: {e}")
+        
+        return None
+    
+    async def _scrape_peterattia_page(self, url: str) -> Optional[str]:
+        """Scrape transcript from Peter Attia's website"""
+        try:
+            session = await self._get_session()
+            async with session.get(url) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # Peter Attia's site often has transcripts in specific sections
+                    # First, look for "Full Transcript" or "Transcript" sections
+                    transcript_headers = soup.find_all(['h2', 'h3'], string=re.compile(r'transcript', re.I))
+                    
+                    for header in transcript_headers:
+                        # Get the content after the transcript header
+                        content_div = header.find_next_sibling('div') or header.parent
+                        if content_div:
+                            # Sometimes transcript is in a toggle/accordion
+                            transcript_content = content_div.find('div', class_=re.compile(r'transcript|content|text', re.I))
+                            if transcript_content:
+                                text = transcript_content.get_text(separator='\n', strip=True)
+                                if self._is_likely_transcript(text):
+                                    logger.info("✅ Found The Drive transcript in accordion/toggle")
+                                    return self._clean_transcript(text)
+                            else:
+                                # Try getting all text after the header
+                                text = content_div.get_text(separator='\n', strip=True)
+                                if self._is_likely_transcript(text):
+                                    logger.info("✅ Found The Drive transcript after header")
+                                    return self._clean_transcript(text)
+                    
+                    # Look for specific transcript containers
+                    transcript_selectors = [
+                        'div.podcast-transcript',
+                        'div.episode-transcript',
+                        'div.transcript-content',
+                        'div.transcript-text',
+                        'section.transcript',
+                        'div[class*="transcript"]',
+                        'div.entry-content div.content',  # Common WordPress pattern
+                        'div.podcast-content',
+                    ]
+                    
+                    for selector in transcript_selectors:
+                        elements = soup.select(selector)
+                        for element in elements:
+                            # Skip if it's just show notes or timestamps
+                            text = element.get_text(separator='\n', strip=True)
+                            
+                            # Check if this is actual transcript content, not just show notes
+                            if self._is_likely_transcript(text) and not self._is_show_notes(text):
+                                logger.info(f"✅ Found The Drive transcript using selector: {selector}")
+                                return self._clean_transcript(text)
+                    
+                    # Sometimes the transcript is in the main content area
+                    # but we need to skip the show notes section
+                    main_content = soup.find('div', class_='entry-content') or soup.find('article')
+                    if main_content:
+                        # Find all text sections
+                        sections = main_content.find_all(['div', 'section'], recursive=False)
+                        
+                        for section in sections:
+                            # Skip sections that look like show notes
+                            section_text = section.get_text(separator='\n', strip=True)
+                            if self._is_likely_transcript(section_text) and not self._is_show_notes(section_text):
+                                logger.info("✅ Found The Drive transcript in main content")
+                                return self._clean_transcript(section_text)
+                    
+        except Exception as e:
+            logger.debug(f"Failed to scrape Peter Attia page: {e}")
+        
+        return None
+    
+    def _is_show_notes(self, text: str) -> bool:
+        """Check if text is show notes rather than transcript"""
+        lines = text.split('\n')[:30]  # Check first 30 lines
+        
+        show_notes_indicators = [
+            'show notes',
+            'timestamps',
+            'topics discussed',
+            'key takeaways',
+            'resources mentioned',
+            'links from this episode',
+            'in this episode',
+            'episode highlights',
+            'chapter markers',
+        ]
+        
+        # Count indicators
+        indicator_count = 0
+        timestamp_count = 0
+        url_count = 0
+        
+        for line in lines:
+            line_lower = line.lower()
+            
+            # Check for show notes indicators
+            if any(indicator in line_lower for indicator in show_notes_indicators):
+                indicator_count += 1
+            
+            # Check for timestamps
+            if re.search(r'\[?\d{1,2}:\d{2}(?::\d{2})?\]?', line):
+                timestamp_count += 1
+            
+            # Check for URLs
+            if re.search(r'https?://', line):
+                url_count += 1
+        
+        # If we see multiple indicators, it's likely show notes
+        if indicator_count >= 2 or timestamp_count >= 5 or url_count >= 5:
+            return True
+        
+        # Check if most lines are very short (typical of show notes)
+        short_lines = sum(1 for line in lines if len(line.strip()) < 50)
+        if short_lines > len(lines) * 0.7:
+            return True
+        
+        return False
