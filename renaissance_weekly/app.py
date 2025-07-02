@@ -41,8 +41,10 @@ class ResourceAwareConcurrencyManager:
         self.correlation_id = correlation_id
         self.base_concurrency = 3
         self.max_concurrency = 10
-        self.min_memory_per_task = 500  # MB
+        self.min_memory_per_task = 500  # MB for test mode
+        self.min_memory_per_task_full = 1500  # MB for full mode (larger audio files)
         self.cpu_multiplier = 1.5
+        self.is_full_mode = False
         
     def get_optimal_concurrency(self, openai_limit: int = 3) -> int:
         """Calculate optimal concurrency based on system resources with OpenAI limit"""
@@ -51,8 +53,9 @@ class ResourceAwareConcurrencyManager:
             available_memory = get_available_memory()
             cpu_count = get_cpu_count()
             
-            # Calculate memory-based limit
-            memory_limit = int(available_memory / self.min_memory_per_task)
+            # Calculate memory-based limit based on mode
+            memory_per_task = self.min_memory_per_task_full if self.is_full_mode else self.min_memory_per_task
+            memory_limit = int(available_memory / memory_per_task)
             
             # Calculate CPU-based limit
             cpu_limit = int(cpu_count * self.cpu_multiplier)
@@ -152,6 +155,9 @@ class RenaissanceWeekly:
             self.concurrency_manager = ResourceAwareConcurrencyManager(self.correlation_id)
             self.exception_aggregator = ExceptionAggregator(self.correlation_id)
             
+            # Default transcription mode (will be updated from UI selection)
+            self.current_transcription_mode = 'test'
+            
             # Initialize global rate limiter info
             logger.info(f"[{self.correlation_id}] 🔧 OpenAI rate limiter configured: 45 requests/minute (with 10% buffer)")
             
@@ -216,6 +222,22 @@ class RenaissanceWeekly:
             logger.info(f"[{self.correlation_id}] ✅ Selected {len(selected_episodes)} episodes for processing")
             logger.info(f"[{self.correlation_id}] 📅 Lookback period: {configuration['lookback_days']} days")
             logger.info(f"[{self.correlation_id}] 🔧 Transcription mode: {configuration['transcription_mode']}")
+            
+            # Cost estimation and warning for full mode
+            if configuration['transcription_mode'] == 'full':
+                estimated_cost = self._estimate_processing_cost(selected_episodes)
+                logger.warning(f"[{self.correlation_id}] 💰 COST WARNING: Full episode transcription")
+                logger.warning(f"[{self.correlation_id}] 💵 Estimated cost: ${estimated_cost['total']:.2f}")
+                logger.warning(f"[{self.correlation_id}]    - Transcription: ${estimated_cost['transcription']:.2f}")
+                logger.warning(f"[{self.correlation_id}]    - Summarization: ${estimated_cost['summarization']:.2f}")
+                logger.warning(f"[{self.correlation_id}] ⏱️  Estimated time: {estimated_cost['time_minutes']:.0f} minutes")
+                
+                # In production, could add a confirmation step here
+                await asyncio.sleep(3)  # Give user time to see the warning
+            
+            # Store configuration for use during processing
+            self.current_transcription_mode = configuration.get('transcription_mode', 'test')
+            self.concurrency_manager.is_full_mode = (self.current_transcription_mode == 'full')
             
             await pipeline_progress.complete_item(True)
             
@@ -494,16 +516,26 @@ class RenaissanceWeekly:
     async def _monitor_resources(self, initial_concurrency: int):
         """Monitor system resources and log warnings if needed"""
         check_interval = 30  # seconds
-        low_memory_threshold = 200  # MB
+        low_memory_threshold = 500 if self.concurrency_manager.is_full_mode else 200  # MB
         
         while True:
             try:
                 await asyncio.sleep(check_interval)
                 
                 available_memory = get_available_memory()
+                total_memory = get_available_memory() + get_used_memory() if 'get_used_memory' in globals() else available_memory * 2
+                memory_usage_pct = ((total_memory - available_memory) / total_memory) * 100
+                
+                # Log detailed memory info
+                logger.info(
+                    f"[{self.correlation_id}] 💾 Memory: {available_memory:.0f}MB free "
+                    f"({memory_usage_pct:.1f}% used) | Mode: {self.current_transcription_mode}"
+                )
+                
                 if available_memory < low_memory_threshold:
                     logger.warning(
-                        f"[{self.correlation_id}] ⚠️  Low memory warning: {available_memory:.0f}MB available. "
+                        f"[{self.correlation_id}] ⚠️  Low memory warning: {available_memory:.0f}MB available "
+                        f"(threshold: {low_memory_threshold}MB). "
                         f"Consider reducing concurrency from {initial_concurrency}."
                     )
                 
@@ -567,7 +599,7 @@ class RenaissanceWeekly:
                     return None
                 
                 logger.info(f"[{episode_id}] 🔗 Audio URL: {episode.audio_url[:80]}...")
-                transcript_text = await self.transcriber.transcribe_episode(episode)
+                transcript_text = await self.transcriber.transcribe_episode(episode, self.current_transcription_mode)
                 
                 if transcript_text:
                     transcript_source = TranscriptSource.GENERATED
@@ -615,6 +647,42 @@ class RenaissanceWeekly:
             raise
         finally:
             logger.info(f"[{episode_id}] {'='*60}\n")
+    
+    def _estimate_processing_cost(self, episodes: List[Episode]) -> dict:
+        """Estimate the cost of processing episodes"""
+        # Average podcast episode duration
+        avg_duration_minutes = 90  # Conservative estimate
+        
+        # Cost rates (as of 2024)
+        whisper_cost_per_minute = 0.006
+        gpt4_cost_per_1k_tokens = 0.01  # Input tokens
+        gpt4_output_cost_per_1k_tokens = 0.03
+        
+        # Estimate tokens for summarization (roughly 4 tokens per 3 words)
+        avg_transcript_words = avg_duration_minutes * 150  # ~150 words per minute speaking
+        avg_tokens = (avg_transcript_words * 4) / 3
+        avg_summary_tokens = 1000  # Output tokens
+        
+        total_minutes = len(episodes) * avg_duration_minutes
+        transcription_cost = total_minutes * whisper_cost_per_minute
+        
+        # GPT-4 costs
+        input_cost = len(episodes) * (avg_tokens / 1000) * gpt4_cost_per_1k_tokens
+        output_cost = len(episodes) * (avg_summary_tokens / 1000) * gpt4_output_cost_per_1k_tokens
+        summarization_cost = input_cost + output_cost
+        
+        # Time estimation (including rate limits)
+        transcription_time = len(episodes) * 5  # ~5 minutes per episode with chunking
+        processing_time = transcription_time + (len(episodes) * 1)  # +1 minute per episode for other tasks
+        
+        return {
+            'transcription': transcription_cost,
+            'summarization': summarization_cost,
+            'total': transcription_cost + summarization_cost,
+            'time_minutes': processing_time,
+            'episodes': len(episodes),
+            'total_audio_minutes': total_minutes
+        }
     
     async def check_single_podcast(self, podcast_name: str, days_back: int = 7):
         """Debug function to check a single podcast"""

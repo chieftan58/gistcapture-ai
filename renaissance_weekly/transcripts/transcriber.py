@@ -23,7 +23,7 @@ from ..utils.helpers import (
     exponential_backoff_with_jitter, retry_with_backoff, ProgressTracker, 
     calculate_file_hash, CircuitBreaker
 )
-from ..utils.clients import openai_client, openai_rate_limiter
+from ..utils.clients import openai_client, openai_rate_limiter, whisper_rate_limiter
 from ..robustness_config import should_use_feature
 
 logger = get_logger(__name__)
@@ -40,6 +40,7 @@ class AudioTranscriber:
         self.session = None
         self._session_lock = asyncio.Lock()
         self.temp_files = set()  # Track temp files for cleanup
+        self._current_mode = 'test'  # Default mode, updated per episode
         
         # Circuit breaker for OpenAI API with special rate limit handling
         self.openai_circuit_breaker = CircuitBreaker(
@@ -145,10 +146,13 @@ class AudioTranscriber:
         except Exception as e:
             logger.error(f"Cleanup error: {e}")
     
-    async def transcribe_episode(self, episode: Episode) -> Optional[str]:
+    async def transcribe_episode(self, episode: Episode, transcription_mode: str = None) -> Optional[str]:
         """Download and transcribe episode audio with robust error handling"""
         correlation_id = str(uuid.uuid4())[:8]
         logger.info(f"[{correlation_id}] Starting transcription for: {episode.title}")
+        
+        # Use provided mode or fall back to environment setting
+        self._current_mode = transcription_mode if transcription_mode else ('test' if TESTING_MODE else 'full')
         
         audio_file = None
         temp_files_to_clean = []
@@ -172,6 +176,17 @@ class AudioTranscriber:
             
             # Transcribe with Whisper
             transcript = await self._transcribe_with_whisper(audio_file, correlation_id)
+            
+            # Stream processing: delete audio file immediately after successful transcription
+            if transcript and self._current_mode == 'full':
+                try:
+                    if audio_file.exists():
+                        audio_file.unlink()
+                        self.temp_files.discard(str(audio_file))
+                        temp_files_to_clean.remove(audio_file)
+                        logger.info(f"[{correlation_id}] 🗑️  Deleted audio file immediately to save disk space")
+                except Exception as e:
+                    logger.debug(f"[{correlation_id}] Could not delete audio file immediately: {e}")
             
             return transcript
             
@@ -923,16 +938,21 @@ class AudioTranscriber:
         
         try:
             # Handle test mode truncation
-            if TESTING_MODE:
+            if self._current_mode == 'test':
                 logger.info(f"[{correlation_id}] 🧪 TEST MODE: Limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
                 trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60, correlation_id)
                 if trimmed_file:
                     audio_file = trimmed_file
                     files_to_clean.append(trimmed_file)
             
-            # Ensure file is under 25MB (Whisper limit)
+            # Check if we need to use chunking for large files
             file_size = audio_file.stat().st_size
-            if file_size > 25 * 1024 * 1024:
+            if file_size > 25 * 1024 * 1024 and self._current_mode == 'full':
+                # For full episodes, use chunking instead of compression
+                logger.info(f"[{correlation_id}] 📚 File too large ({file_size / 1024 / 1024:.1f} MB), using chunked transcription...")
+                return await self._transcribe_with_chunks(audio_file, correlation_id)
+            elif file_size > 25 * 1024 * 1024:
+                # In test mode, compress as before
                 logger.warning(f"[{correlation_id}] File too large ({file_size / 1024 / 1024:.1f} MB), compressing...")
                 compressed_file = await self._compress_audio(audio_file, correlation_id)
                 if compressed_file:
@@ -948,14 +968,14 @@ class AudioTranscriber:
                 return "This is a dry-run transcript. In normal operation, this would contain the actual transcript from the audio file."
             
             # Wait for rate limiter before making API call
-            wait_time = await openai_rate_limiter.acquire(correlation_id)
+            wait_time = await whisper_rate_limiter.acquire(correlation_id)
             if wait_time > 0:
-                logger.info(f"[{correlation_id}] Rate limiting: waiting {wait_time:.1f}s before API call")
+                logger.info(f"[{correlation_id}] Whisper rate limiting: waiting {wait_time:.1f}s before API call")
                 await asyncio.sleep(wait_time)
             
             # Log current rate limiter usage
-            usage = openai_rate_limiter.get_current_usage()
-            logger.info(f"[{correlation_id}] OpenAI rate limit usage: {usage['current_requests']}/{usage['max_requests']} ({usage['utilization']:.1f}%)")
+            usage = whisper_rate_limiter.get_current_usage()
+            logger.info(f"[{correlation_id}] Whisper API rate limit usage: {usage['current_requests']}/{usage['max_requests']} ({usage['utilization']:.1f}%)")
             
             # Define the transcription function for retry and circuit breaker
             async def transcribe():
@@ -1206,3 +1226,213 @@ class AudioTranscriber:
             logger.error(f"[{correlation_id}] Audio conversion error: {e}")
         
         return None
+    
+    async def _transcribe_with_chunks(self, audio_file: Path, correlation_id: str) -> Optional[str]:
+        """Transcribe large audio files by splitting into chunks under 25MB"""
+        try:
+            logger.info(f"[{correlation_id}] 🔪 Starting chunked transcription...")
+            
+            # Calculate chunk duration based on file size and bitrate
+            file_size_mb = audio_file.stat().st_size / (1024 * 1024)
+            
+            # Get audio duration using ffprobe
+            duration_seconds = await self._get_audio_duration(audio_file, correlation_id)
+            if not duration_seconds:
+                logger.error(f"[{correlation_id}] Failed to get audio duration")
+                return None
+            
+            # Calculate optimal chunk size (aim for ~20MB chunks with some buffer)
+            target_chunk_mb = 20
+            num_chunks = max(2, int(file_size_mb / target_chunk_mb) + 1)
+            chunk_duration = duration_seconds / num_chunks
+            
+            logger.info(f"[{correlation_id}] Splitting {duration_seconds/60:.1f} min audio into {num_chunks} chunks of ~{chunk_duration/60:.1f} min each")
+            
+            # Split audio into chunks
+            chunks = []
+            for i in range(num_chunks):
+                start_time = i * chunk_duration
+                chunk_file = await self._extract_audio_chunk(audio_file, start_time, chunk_duration, i, correlation_id)
+                if chunk_file:
+                    chunks.append(chunk_file)
+                else:
+                    logger.error(f"[{correlation_id}] Failed to create chunk {i+1}/{num_chunks}")
+            
+            if not chunks:
+                logger.error(f"[{correlation_id}] No chunks created successfully")
+                return None
+            
+            # Transcribe each chunk
+            transcripts = []
+            for i, chunk_file in enumerate(chunks):
+                try:
+                    logger.info(f"[{correlation_id}] 📝 Transcribing chunk {i+1}/{len(chunks)}...")
+                    
+                    # Use the regular transcription method for each chunk
+                    transcript = await self._transcribe_single_file(chunk_file, correlation_id)
+                    
+                    if transcript:
+                        transcripts.append(transcript)
+                        logger.info(f"[{correlation_id}] ✅ Chunk {i+1} transcribed: {len(transcript)} characters")
+                    else:
+                        logger.error(f"[{correlation_id}] ❌ Failed to transcribe chunk {i+1}")
+                    
+                finally:
+                    # Clean up chunk file immediately after transcription
+                    try:
+                        chunk_file.unlink()
+                        self.temp_files.discard(str(chunk_file))
+                    except Exception as e:
+                        logger.debug(f"[{correlation_id}] Error cleaning up chunk: {e}")
+            
+            # Combine all transcripts
+            if transcripts:
+                full_transcript = " ".join(transcripts)
+                logger.info(f"[{correlation_id}] ✅ Combined {len(transcripts)} chunks into {len(full_transcript)} characters")
+                return full_transcript
+            else:
+                logger.error(f"[{correlation_id}] No chunks were successfully transcribed")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Chunked transcription error: {e}", exc_info=True)
+            return None
+    
+    async def _get_audio_duration(self, audio_file: Path, correlation_id: str) -> Optional[float]:
+        """Get audio duration in seconds using ffprobe"""
+        try:
+            import shutil
+            if not shutil.which('ffprobe'):
+                # Fallback: estimate based on file size (assume 128kbps)
+                file_size_bits = audio_file.stat().st_size * 8
+                estimated_seconds = file_size_bits / (128 * 1000)
+                logger.warning(f"[{correlation_id}] ffprobe not available, estimating duration: {estimated_seconds/60:.1f} min")
+                return estimated_seconds
+            
+            cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+                   '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_file)]
+            
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode == 0:
+                duration = float(stdout.decode().strip())
+                return duration
+            else:
+                logger.error(f"[{correlation_id}] ffprobe error: {stderr.decode()}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Duration detection error: {e}")
+            return None
+    
+    async def _extract_audio_chunk(self, audio_file: Path, start_time: float, duration: float, chunk_index: int, correlation_id: str) -> Optional[Path]:
+        """Extract a chunk of audio using ffmpeg"""
+        try:
+            chunk_file = TEMP_DIR / f"chunk_{chunk_index}_{audio_file.stem}.mp3"
+            self.temp_files.add(str(chunk_file))
+            
+            import shutil
+            if shutil.which('ffmpeg'):
+                cmd = [
+                    'ffmpeg', '-i', str(audio_file),
+                    '-ss', str(start_time),
+                    '-t', str(duration),
+                    '-acodec', 'libmp3lame',
+                    '-b:a', '128k',  # Consistent bitrate for predictable file sizes
+                    '-y',
+                    str(chunk_file)
+                ]
+                
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0 and chunk_file.exists():
+                    chunk_size_mb = chunk_file.stat().st_size / (1024 * 1024)
+                    logger.info(f"[{correlation_id}] ✅ Created chunk {chunk_index+1}: {chunk_size_mb:.1f} MB")
+                    return chunk_file
+                else:
+                    logger.error(f"[{correlation_id}] ffmpeg chunk extraction failed: {stderr.decode()}")
+            else:
+                # Fallback to pydub
+                from pydub import AudioSegment
+                logger.info(f"[{correlation_id}] Using pydub for chunk extraction...")
+                
+                audio = AudioSegment.from_file(str(audio_file))
+                start_ms = int(start_time * 1000)
+                end_ms = int((start_time + duration) * 1000)
+                chunk = audio[start_ms:end_ms]
+                
+                chunk.export(str(chunk_file), format="mp3", bitrate="128k")
+                chunk_size_mb = chunk_file.stat().st_size / (1024 * 1024)
+                logger.info(f"[{correlation_id}] ✅ Created chunk {chunk_index+1} with pydub: {chunk_size_mb:.1f} MB")
+                return chunk_file
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Chunk extraction error: {e}")
+            return None
+    
+    async def _transcribe_single_file(self, audio_file: Path, correlation_id: str) -> Optional[str]:
+        """Transcribe a single audio file (used for chunks)"""
+        try:
+            # Check for dry-run mode
+            if os.getenv('DRY_RUN') == 'true':
+                return "Dry-run chunk transcript"
+            
+            # Wait for rate limiter
+            wait_time = await whisper_rate_limiter.acquire(correlation_id)
+            if wait_time > 0:
+                logger.info(f"[{correlation_id}] Whisper rate limiting: waiting {wait_time:.1f}s before API call")
+                await asyncio.sleep(wait_time)
+            
+            # Define the transcription function
+            async def transcribe():
+                with open(audio_file, 'rb') as f:
+                    loop = asyncio.get_event_loop()
+                    
+                    def api_call():
+                        try:
+                            return openai_client.audio.transcriptions.create(
+                                model="whisper-1",
+                                file=f,
+                                response_format="text",
+                                language="en"
+                            )
+                        except Exception as e:
+                            if hasattr(e, 'response'):
+                                raise e
+                            else:
+                                class APIError(Exception):
+                                    def __init__(self, message):
+                                        super().__init__(message)
+                                        self.response = None
+                                raise APIError(str(e))
+                    
+                    return await loop.run_in_executor(None, api_call)
+            
+            # Try transcription with retry
+            transcript = await retry_with_backoff(
+                transcribe,
+                max_attempts=5,
+                base_delay=2.0,
+                max_delay=300.0,
+                exceptions=(Exception,),
+                correlation_id=correlation_id,
+                handle_rate_limit=True
+            )
+            
+            return transcript
+            
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Single file transcription error: {e}")
+            return None

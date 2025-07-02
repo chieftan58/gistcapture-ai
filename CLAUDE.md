@@ -120,6 +120,15 @@ Episodes are tracked with status (pending, transcribed, summarized, emailed) and
 ### Testing Summarization
 Set `TESTING_MODE=true` to limit audio transcription to 15 minutes for faster testing (provides more content for better summaries while still being quick).
 
+### Full Episode Processing
+The UI now includes a Test/Full mode selector:
+- **Test Mode**: 15-minute clips, ~$0.10 per episode, fast processing
+- **Full Mode**: Complete episodes with:
+  - Automatic audio chunking for files >25MB
+  - Cost: ~$0.50-1.50 per episode (depending on length)
+  - Time: ~5-10 minutes per episode (due to Whisper API rate limits)
+  - Higher memory requirements (1.5GB per concurrent task)
+
 ## Important Notes
 
 - The project directory name (`gistcapture-ai`) differs from the package name (`renaissance-weekly`).
@@ -268,6 +277,15 @@ The system now searches for transcripts in this order:
   - The Drive podcast now succeeds by falling back to audio when scraper returns metadata
   - Validation failures are tracked separately from "not found" failures
 - Achieved theoretical 100% success rate (all failures now have working fallback paths)
+
+- **Added full-length podcast processing support:**
+  - **Audio Chunking**: Automatically splits files >25MB into ~20MB chunks for Whisper API
+  - **Correct Rate Limiting**: Separate rate limiter for Whisper API (3 RPM) vs Chat API (45 RPM)
+  - **Stream Processing**: Deletes audio files immediately after transcription to save disk space
+  - **Cost Warnings**: Shows estimated costs before processing (~$1-2 per full episode)
+  - **Dynamic Concurrency**: Adjusts based on mode - 500MB/task for test, 1.5GB/task for full
+  - **UI Integration**: Test/Full mode selector in UI properly connected to backend
+  - **Progress Persistence**: Already implemented - resumes from saved transcripts on restart
 
 ### Recent Updates (2025-01-01):
 - Fixed UI to correctly display test mode limit
