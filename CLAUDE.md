@@ -323,3 +323,12 @@ The system now searches for transcripts in this order:
   - Enhanced asyncio.gather monitoring to ensure all episodes complete
   - Added verification after processing to detect incomplete episode sets
   - Improved timeout handling to prevent stuck episodes
+
+### Known Issues (2025-01-02):
+- **UI State Management**: The UI reverts from cost estimate screen back to episode selection due to persistent server state polling. Temporary fixes applied but needs further debugging:
+  - Added state guards in `waitForEpisodeFetch()` and `startStatusPolling()`
+  - Issue: Server continues returning `state: 'episode_selection'` causing client reversion
+  - Workaround: Quick progression through screens still works
+- **Fixed Issues**:
+  - JavaScript regex SyntaxWarnings in selection.py (escaped backslashes)
+  - Double dollar signs ($$) in cost estimate screen display

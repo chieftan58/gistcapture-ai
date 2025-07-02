@@ -810,7 +810,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Estimated Cost</div>
-                                <div class="estimate-value">$$${{totalCost.toFixed(2)}}</div>
+                                <div class="estimate-value">${{totalCost.toFixed(2)}}</div>
                             </div>
                             
                             <div class="estimate-item">
@@ -820,7 +820,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Cost per Episode</div>
-                                <div class="estimate-value">~$$${{costPerEpisode.toFixed(2)}}</div>
+                                <div class="estimate-value">~${{costPerEpisode.toFixed(2)}}</div>
                             </div>
                         </div>
                         
@@ -828,15 +828,15 @@ class EpisodeSelector:
                             <h3>Cost Breakdown</h3>
                             <div class="breakdown-item">
                                 <span>Audio Transcription (Whisper API)</span>
-                                <span>$$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
+                                <span>${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Summarization (GPT-4)</span>
-                                <span>$$${{(episodeCount * 0.03).toFixed(2)}}</span>
+                                <span>${{(episodeCount * 0.03).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Other API Calls</span>
-                                <span>$$${{(episodeCount * 0.01).toFixed(2)}}</span>
+                                <span>${{(episodeCount * 0.01).toFixed(2)}}</span>
                             </div>
                         </div>
                         
@@ -1069,18 +1069,18 @@ class EpisodeSelector:
         
         function formatEpisodeTitle(title) {{
             // Extract episode number if present
-            const epMatch = title.match(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i);
+            const epMatch = title.match(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i);
             if (epMatch) {{
                 // Episode number found at start
                 return title;
             }}
             
             // Check if there's an episode number elsewhere in the title
-            const numberMatch = title.match(/(#\d+|episode\s+\d+|ep\.?\s*\d+)/i);
+            const numberMatch = title.match(/(#\\d+|episode\\s+\\d+|ep\\.?\\s*\\d+)/i);
             if (numberMatch) {{
                 // Move it to the front
                 const num = numberMatch[0];
-                const cleanTitle = title.replace(numberMatch[0], '').replace(/\s*[-–—|:]\s*/, ' ').trim();
+                const cleanTitle = title.replace(numberMatch[0], '').replace(/\\s*[-–—|:]\\s*/, ' ').trim();
                 return `${{num}} - ${{cleanTitle}}`;
             }}
             
@@ -1098,16 +1098,16 @@ class EpisodeSelector:
             let enhanced = description;
             
             // Look for host/guest patterns in description
-            const guestMatch = description.match(/with\s+([A-Z][a-zA-Z\s]+?)(?:\.|,|;|\s+discusses|\s+talks|\s+on)/);
-            const hostMatch = description.match(/hosted by\s+([A-Z][a-zA-Z\s]+?)(?:\.|,|;)/i);
+            const guestMatch = description.match(/with\\s+([A-Z][a-zA-Z\\s]+?)(?:\\.|,|;|\\s+discusses|\\s+talks|\\s+on)/);
+            const hostMatch = description.match(/hosted by\\s+([A-Z][a-zA-Z\\s]+?)(?:\\.|,|;)/i);
             
             // If no guest found in description, try to extract from title
             let guestName = null;
             if (!guestMatch) {{
                 // Common patterns: "Name Name:", "with Name Name", "ft. Name Name", "featuring Name Name"
-                const titleGuestMatch = epTitle.match(/(?:with|ft\.?|featuring)\s+([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/i) ||
-                                       epTitle.match(/^([A-Z][a-zA-Z\s]+?):\s+/) ||
-                                       epTitle.match(/[-–—]\s*([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/);
+                const titleGuestMatch = epTitle.match(/(?:with|ft\\.?|featuring)\\s+([A-Z][a-zA-Z\\s]+?)(?:\\s*[-–—|,]|$)/i) ||
+                                       epTitle.match(/^([A-Z][a-zA-Z\\s]+?):\\s+/) ||
+                                       epTitle.match(/[-–—]\\s*([A-Z][a-zA-Z\\s]+?)(?:\\s*[-–—|,]|$)/);
                 if (titleGuestMatch && titleGuestMatch[1]) {{
                     guestName = titleGuestMatch[1].trim();
                 }}
@@ -1133,12 +1133,12 @@ class EpisodeSelector:
             
             // Extract main topic - look for key phrases
             const topicPatterns = [
-                /discusses?\s+(.+?)(?:\.|;|,\s+and)/i,
-                /talks?\s+about\s+(.+?)(?:\.|;|,\s+and)/i,
-                /explores?\s+(.+?)(?:\.|;|,\s+and)/i,
-                /on\s+(.+?)(?:\.|;|,\s+and)/i,
-                /covering\s+(.+?)(?:\.|;|,\s+and)/i,
-                /about\s+(.+?)(?:\.|;|,\s+and)/i
+                /discusses?\\s+(.+?)(?:\\.|;|,\\s+and)/i,
+                /talks?\\s+about\\s+(.+?)(?:\\.|;|,\\s+and)/i,
+                /explores?\\s+(.+?)(?:\\.|;|,\\s+and)/i,
+                /on\\s+(.+?)(?:\\.|;|,\\s+and)/i,
+                /covering\\s+(.+?)(?:\\.|;|,\\s+and)/i,
+                /about\\s+(.+?)(?:\\.|;|,\\s+and)/i
             ];
             
             let topic = null;
@@ -1155,10 +1155,10 @@ class EpisodeSelector:
                 // Remove guest name and episode number from title to get topic
                 let cleanTitle = epTitle;
                 if (guestName) {{
-                    cleanTitle = cleanTitle.replace(new RegExp(guestName + '\\s*:?', 'i'), '');
+                    cleanTitle = cleanTitle.replace(new RegExp(guestName + '\\\\s*:?', 'i'), '');
                 }}
-                cleanTitle = cleanTitle.replace(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i, '');
-                cleanTitle = cleanTitle.replace(/^\s*[-–—|:]\s*/, '').trim();
+                cleanTitle = cleanTitle.replace(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i, '');
+                cleanTitle = cleanTitle.replace(/^\\s*[-–—|:]\\s*/, '').trim();
                 if (cleanTitle && cleanTitle.length > 10) {{
                     topic = cleanTitle;
                 }}
@@ -1207,9 +1207,9 @@ class EpisodeSelector:
             }}
             
             // Extract guest from title
-            const guestMatch = title.match(/(?:with|ft\.?|featuring)\s+([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/i) ||
-                              title.match(/^([A-Z][a-zA-Z\s]+?):\s+/) ||
-                              title.match(/[-–—]\s*([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/);
+            const guestMatch = title.match(/(?:with|ft\\.?|featuring)\\s+([A-Z][a-zA-Z\\s]+?)(?:\\s*[-–—|,]|$)/i) ||
+                              title.match(/^([A-Z][a-zA-Z\\s]+?):\\s+/) ||
+                              title.match(/[-–—]\\s*([A-Z][a-zA-Z\\s]+?)(?:\\s*[-–—|,]|$)/);
             
             if (guestMatch && guestMatch[1]) {{
                 desc += `Guest: ${{guestMatch[1].trim()}}. `;
@@ -1218,13 +1218,13 @@ class EpisodeSelector:
             // Extract topic from title
             let topic = title;
             // Remove episode numbers
-            topic = topic.replace(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i, '');
+            topic = topic.replace(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i, '');
             // Remove guest name if found
             if (guestMatch && guestMatch[1]) {{
-                topic = topic.replace(new RegExp(guestMatch[1] + '\\s*:?', 'i'), '');
-                topic = topic.replace(/(?:with|ft\.?|featuring)\s*/i, '');
+                topic = topic.replace(new RegExp(guestMatch[1] + '\\\\s*:?', 'i'), '');
+                topic = topic.replace(/(?:with|ft\\.?|featuring)\\s*/i, '');
             }}
-            topic = topic.replace(/^\s*[-–—|:]\s*/, '').trim();
+            topic = topic.replace(/^\\s*[-–—|:]\\s*/, '').trim();
             
             if (topic && topic.length > 10) {{
                 desc += `Topic: ${{topic}}. `;
@@ -1453,6 +1453,12 @@ class EpisodeSelector:
         
         // Function to wait for episode fetch to complete
         async function waitForEpisodeFetch() {{
+            // Stop polling if we've moved past loading state
+            if (APP_STATE.state !== 'loading') {{
+                console.log('Stopping episode fetch polling - state is:', APP_STATE.state);
+                return;
+            }}
+            
             try {{
                 console.log('Checking if episodes are ready...');
                 const stateResponse = await fetchWithTimeout('/api/state', {{}}, 5000);
@@ -1460,9 +1466,12 @@ class EpisodeSelector:
                 
                 if (stateData.state === 'episode_selection' && stateData.episodes) {{
                     console.log(`Episodes ready! Transitioning with ${{stateData.episodes.length}} episodes`);
-                    APP_STATE.state = 'episode_selection';
-                    APP_STATE.episodes = stateData.episodes;
-                    render();
+                    // Only update state if we're still in loading state
+                    if (APP_STATE.state === 'loading') {{
+                        APP_STATE.state = 'episode_selection';
+                        APP_STATE.episodes = stateData.episodes;
+                        render();
+                    }}
                 }} else {{
                     console.log('Episodes not ready yet, will check again...');
                     setTimeout(() => {{
@@ -1511,6 +1520,13 @@ class EpisodeSelector:
         
         function startStatusPolling() {{
             APP_STATE.statusInterval = setInterval(async () => {{
+                // Stop polling if we've moved past loading state
+                if (APP_STATE.state !== 'loading') {{
+                    clearInterval(APP_STATE.statusInterval);
+                    APP_STATE.statusInterval = null;
+                    return;
+                }}
+                
                 try {{
                     const response = await fetchWithTimeout('/api/status', {{}}, 3000);
                     
@@ -1574,9 +1590,12 @@ class EpisodeSelector:
                             console.log('State data received:', stateData);
                             if (stateData.state === 'episode_selection' && stateData.episodes) {{
                                 console.log(`Transitioning to episode selection with ${{stateData.episodes.length}} episodes`);
-                                APP_STATE.state = 'episode_selection';
-                                APP_STATE.episodes = stateData.episodes;
-                                render();
+                                // Only update state if we're still in loading state
+                                if (APP_STATE.state === 'loading') {{
+                                    APP_STATE.state = 'episode_selection';
+                                    APP_STATE.episodes = stateData.episodes;
+                                    render();
+                                }}
                             }} else {{
                                 console.log('Not ready for episode selection yet, state:', stateData.state);
                                 // Retry after a delay
@@ -1679,6 +1698,11 @@ class EpisodeSelector:
         
         // New navigation functions
         function proceedToCostEstimate() {{
+            // Stop any ongoing polling
+            if (APP_STATE.statusInterval) {{
+                clearInterval(APP_STATE.statusInterval);
+                APP_STATE.statusInterval = null;
+            }}
             APP_STATE.state = 'cost_estimate';
             render();
         }}
