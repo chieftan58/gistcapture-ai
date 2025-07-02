@@ -679,9 +679,9 @@ class EpisodeSelector:
                                         <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" id="episode-${{ep.id.replace(/[|:]/g, '_')}}" onclick="toggleEpisode('${{ep.id}}')">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">
-                                                <div class="episode-title">${{ep.title}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
+                                                <div class="episode-title">${{formatEpisodeTitle(ep.title)}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
                                                 <div class="episode-meta">${{formatDate(ep.published)}} · ${{ep.duration}}</div>
-                                                <div class="episode-description">${{(ep.description || '').substring(0, 150)}}...</div>
+                                                <div class="episode-description">${{formatEpisodeDescription(ep.description, ep.title, ep.podcast)}}</div>
                                             </div>
                                         </div>
                                     `).join('')}}
@@ -728,6 +728,228 @@ class EpisodeSelector:
             const date = new Date(dateStr);
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             return months[date.getMonth()] + ' ' + date.getDate();
+        }}
+        
+        function formatEpisodeTitle(title) {{
+            // Extract episode number if present
+            const epMatch = title.match(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i);
+            if (epMatch) {{
+                // Episode number found at start
+                return title;
+            }}
+            
+            // Check if there's an episode number elsewhere in the title
+            const numberMatch = title.match(/(#\d+|episode\s+\d+|ep\.?\s*\d+)/i);
+            if (numberMatch) {{
+                // Move it to the front
+                const num = numberMatch[0];
+                const cleanTitle = title.replace(numberMatch[0], '').replace(/\s*[-–—|:]\s*/, ' ').trim();
+                return `${{num}} - ${{cleanTitle}}`;
+            }}
+            
+            // No episode number found, return as is
+            return title;
+        }}
+        
+        function formatEpisodeDescription(description, epTitle, podcastName) {{
+            // If no description or very short, generate one from title and podcast context
+            if (!description || description.length < 50) {{
+                return generateDescriptionFromTitle(epTitle, podcastName);
+            }}
+            
+            // First, try to extract key information
+            let enhanced = description;
+            
+            // Look for host/guest patterns in description
+            const guestMatch = description.match(/with\s+([A-Z][a-zA-Z\s]+?)(?:\.|,|;|\s+discusses|\s+talks|\s+on)/);
+            const hostMatch = description.match(/hosted by\s+([A-Z][a-zA-Z\s]+?)(?:\.|,|;)/i);
+            
+            // If no guest found in description, try to extract from title
+            let guestName = null;
+            if (!guestMatch) {{
+                // Common patterns: "Name Name:", "with Name Name", "ft. Name Name", "featuring Name Name"
+                const titleGuestMatch = epTitle.match(/(?:with|ft\.?|featuring)\s+([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/i) ||
+                                       epTitle.match(/^([A-Z][a-zA-Z\s]+?):\s+/) ||
+                                       epTitle.match(/[-–—]\s*([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/);
+                if (titleGuestMatch && titleGuestMatch[1]) {{
+                    guestName = titleGuestMatch[1].trim();
+                }}
+            }} else {{
+                guestName = guestMatch[1].trim();
+            }}
+            
+            // Create a structured description
+            let structuredDesc = '';
+            
+            // Add podcast-specific host info
+            const hostInfo = getHostForPodcast(podcastName);
+            if (hostInfo) {{
+                structuredDesc += `Host: ${{hostInfo}}. `;
+            }} else if (hostMatch && hostMatch[1]) {{
+                structuredDesc += `Host: ${{hostMatch[1].trim()}}. `;
+            }}
+            
+            // Add guest info
+            if (guestName) {{
+                structuredDesc += `Guest: ${{guestName}}. `;
+            }}
+            
+            // Extract main topic - look for key phrases
+            const topicPatterns = [
+                /discusses?\s+(.+?)(?:\.|;|,\s+and)/i,
+                /talks?\s+about\s+(.+?)(?:\.|;|,\s+and)/i,
+                /explores?\s+(.+?)(?:\.|;|,\s+and)/i,
+                /on\s+(.+?)(?:\.|;|,\s+and)/i,
+                /covering\s+(.+?)(?:\.|;|,\s+and)/i,
+                /about\s+(.+?)(?:\.|;|,\s+and)/i
+            ];
+            
+            let topic = null;
+            for (const pattern of topicPatterns) {{
+                const match = description.match(pattern);
+                if (match && match[1]) {{
+                    topic = match[1].trim();
+                    break;
+                }}
+            }}
+            
+            // If no topic found in description, extract from title
+            if (!topic) {{
+                // Remove guest name and episode number from title to get topic
+                let cleanTitle = epTitle;
+                if (guestName) {{
+                    cleanTitle = cleanTitle.replace(new RegExp(guestName + '\\s*:?', 'i'), '');
+                }}
+                cleanTitle = cleanTitle.replace(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i, '');
+                cleanTitle = cleanTitle.replace(/^\s*[-–—|:]\s*/, '').trim();
+                if (cleanTitle && cleanTitle.length > 10) {{
+                    topic = cleanTitle;
+                }}
+            }}
+            
+            if (topic) {{
+                structuredDesc += `Topic: ${{topic}}. `;
+            }}
+            
+            // If we have good structured content, use it
+            if (structuredDesc.length > 30) {{
+                // Add any additional context from original description
+                const sentences = description.match(/[^.!?]+[.!?]+/g) || [];
+                const relevantSentences = sentences.filter(s => 
+                    !s.match(/subscribe/i) && 
+                    !s.match(/follow us/i) && 
+                    !s.match(/support the show/i) &&
+                    s.length > 20
+                ).slice(0, 2);
+                
+                if (relevantSentences.length > 0) {{
+                    structuredDesc += relevantSentences.join(' ').trim();
+                }}
+                
+                return structuredDesc;
+            }}
+            
+            // Fall back to original description with sentence limit
+            const sentences = description.match(/[^.!?]+[.!?]+/g) || [];
+            const cleanSentences = sentences.filter(s => 
+                !s.match(/subscribe/i) && 
+                !s.match(/follow us/i) && 
+                !s.match(/support the show/i)
+            ).slice(0, 5);
+            
+            return cleanSentences.join(' ').trim() || description.substring(0, 400) + '...';
+        }}
+        
+        function generateDescriptionFromTitle(title, podcast) {{
+            let desc = '';
+            
+            // Get host info
+            const host = getHostForPodcast(podcast);
+            if (host) {{
+                desc += `Host: ${{host}}. `;
+            }}
+            
+            // Extract guest from title
+            const guestMatch = title.match(/(?:with|ft\.?|featuring)\s+([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/i) ||
+                              title.match(/^([A-Z][a-zA-Z\s]+?):\s+/) ||
+                              title.match(/[-–—]\s*([A-Z][a-zA-Z\s]+?)(?:\s*[-–—|,]|$)/);
+            
+            if (guestMatch && guestMatch[1]) {{
+                desc += `Guest: ${{guestMatch[1].trim()}}. `;
+            }}
+            
+            // Extract topic from title
+            let topic = title;
+            // Remove episode numbers
+            topic = topic.replace(/^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)/i, '');
+            // Remove guest name if found
+            if (guestMatch && guestMatch[1]) {{
+                topic = topic.replace(new RegExp(guestMatch[1] + '\\s*:?', 'i'), '');
+                topic = topic.replace(/(?:with|ft\.?|featuring)\s*/i, '');
+            }}
+            topic = topic.replace(/^\s*[-–—|:]\s*/, '').trim();
+            
+            if (topic && topic.length > 10) {{
+                desc += `Topic: ${{topic}}. `;
+            }}
+            
+            // Add podcast-specific context
+            const context = getPodcastContext(podcast);
+            if (context && desc.length < 200) {{
+                desc += context;
+            }}
+            
+            return desc || 'Episode information not available. Check title for details.';
+        }}
+        
+        function getHostForPodcast(podcast) {{
+            const hosts = {{
+                'Tim Ferriss': 'Tim Ferriss',
+                'The Drive': 'Dr. Peter Attia',
+                'Huberman Lab': 'Dr. Andrew Huberman',
+                'Modern Wisdom': 'Chris Williamson',
+                'Knowledge Project': 'Shane Parrish',
+                'Dwarkesh Podcast': 'Dwarkesh Patel',
+                'All-In': 'Chamath, Jason, Sacks & Friedberg',
+                'No Priors': 'Elad Gil & Sarah Guo',
+                'Cognitive Revolution': 'Nathan Labenz',
+                'American Optimist': 'Joe Lonsdale',
+                'BG2 Pod': 'Bill Gurley & Brad Gerstner',
+                'Founders': 'David Senra',
+                'The Doctor\\'s Farmacy': 'Dr. Mark Hyman',
+                'Odd Lots': 'Joe Weisenthal & Tracy Alloway',
+                'Macro Voices': 'Erik Townsend',
+                'Market Huddle': 'Patrick Ceresna & Kevin Muir',
+                'We Study Billionaires': 'The Investors Podcast Team',
+                'Forward Guidance': 'Forward Guidance Team',
+                'A16Z': 'Various a16z Partners'
+            }};
+            return hosts[podcast] || null;
+        }}
+        
+        function getPodcastContext(podcast) {{
+            const contexts = {{
+                'Tim Ferriss': 'Deconstructing world-class performers.',
+                'The Drive': 'Longevity, health optimization, and medical science.',
+                'Huberman Lab': 'Neuroscience and health optimization.',
+                'Modern Wisdom': 'Philosophy, psychology, and productivity.',
+                'Knowledge Project': 'Decision-making and mental models.',
+                'Dwarkesh Podcast': 'AI, science, and technology futures.',
+                'All-In': 'Tech, markets, politics, and current events.',
+                'No Priors': 'AI and startup insights.',
+                'Cognitive Revolution': 'AI capabilities and impacts.',
+                'American Optimist': 'Innovation, policy, and building.',
+                'BG2 Pod': 'Technology and venture capital.',
+                'Founders': 'Lessons from entrepreneur biographies.',
+                'The Doctor\\'s Farmacy': 'Functional medicine and nutrition.',
+                'Odd Lots': 'Finance, economics, and markets.',
+                'Macro Voices': 'Global macro investing.',
+                'Market Huddle': 'Trading and market analysis.',
+                'We Study Billionaires': 'Value investing principles.',
+                'Forward Guidance': 'Macro economics analysis.',
+                'A16Z': 'Technology and startup insights.'
+            }};
+            return contexts[podcast] || '';
         }}
         
         function togglePodcast(name) {{

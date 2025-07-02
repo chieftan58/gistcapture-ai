@@ -299,12 +299,29 @@ class ReliableEpisodeFetcher:
     
     def _episode_key(self, episode: Episode) -> str:
         """Create a unique key for episode deduplication"""
-        # Try multiple methods to create a unique key
-        if episode.guid:
-            return episode.guid
+        # Always use title + date for consistent deduplication
+        # This prevents the same episode with different GUIDs from being duplicated
         
-        # Fallback to title + date
-        title_clean = re.sub(r'[^\w\s]', '', episode.title.lower())
+        # Remove common episode number prefixes
+        title = episode.title.lower()
+        # Remove patterns like "#123 -", "Episode 123:", "Ep. 123 |", etc.
+        title = re.sub(r'^(#?\d+\s*[-–—|:]?\s*|episode\s+\d+\s*[-–—|:]?\s*|ep\.?\s*\d+\s*[-–—|:]?\s*)', '', title, flags=re.IGNORECASE)
+        
+        # Remove guest name prefixes (e.g., "Katherine Boyle: How Tech..." -> "How Tech...")
+        # Pattern: "Name Name: " at the beginning
+        title = re.sub(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*:\s*', '', title, flags=re.MULTILINE)
+        
+        # Also check if the title contains a colon and the part after it matches another episode
+        # This handles cases where the full title is "Guest: Topic" but RSS might just have "Topic"
+        if ':' in title:
+            # Get the part after the colon as a potential match
+            after_colon = title.split(':', 1)[1].strip()
+            # We'll use the shorter version for matching
+            if len(after_colon) > 10:  # Only if it's substantial
+                title = after_colon
+        
+        # Clean remaining non-alphanumeric characters
+        title_clean = re.sub(r'[^\w\s]', '', title)
         date_str = episode.published.strftime('%Y%m%d')
         return f"{title_clean}_{date_str}"
     
