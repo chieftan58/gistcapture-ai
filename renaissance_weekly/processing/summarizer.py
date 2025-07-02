@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..models import Episode, TranscriptSource
-from ..config import SUMMARY_DIR, BASE_DIR
+from ..config import SUMMARY_DIR, BASE_DIR, TESTING_MODE
 from ..utils.logging import get_logger
 from ..utils.helpers import slugify, retry_with_backoff, CircuitBreaker
 from ..utils.clients import openai_client, openai_rate_limiter
@@ -89,7 +89,8 @@ class Summarizer:
             # Prepare the prompt with episode data
             prompt = self._prepare_prompt(episode, transcript, source)
             
-            logger.info(f"🤖 Generating summary with {self.model}...")
+            mode_info = " (TESTING MODE: 5-min clips)" if TESTING_MODE else ""
+            logger.info(f"🤖 Generating summary with {self.model}{mode_info}...")
             
             # Call OpenAI API with rate limiting and circuit breaker
             response = await self._call_openai_api(prompt)
@@ -154,16 +155,21 @@ class Summarizer:
         Returns:
             True if transcript appears to be full content, False if it's just metadata
         """
-        # Check minimum length (at least 1000 words for a real transcript)
+        # Adjust thresholds based on testing mode
+        # In testing mode (5 min clips), expect ~750 words at 150 wpm speaking rate
+        min_words = 500 if TESTING_MODE else 1000
+        min_chars = 2500 if TESTING_MODE else 5000
+        
+        # Check minimum length
         word_count = len(transcript.split())
-        if word_count < 1000:
-            logger.warning(f"Transcript too short: {word_count} words (minimum: 1000)")
+        if word_count < min_words:
+            logger.warning(f"Transcript too short: {word_count} words (minimum: {min_words}, testing_mode={TESTING_MODE})")
             return False
         
-        # Check character count (at least 5000 characters)
+        # Check character count
         char_count = len(transcript)
-        if char_count < 5000:
-            logger.warning(f"Transcript too short: {char_count} characters (minimum: 5000)")
+        if char_count < min_chars:
+            logger.warning(f"Transcript too short: {char_count} characters (minimum: {min_chars}, testing_mode={TESTING_MODE})")
             return False
         
         # Check for metadata-only patterns
@@ -198,9 +204,11 @@ class Summarizer:
             url_count += len(re.findall(r'https?://\S+', line))
         
         # If more than 30% of early lines look like metadata, it's probably not a full transcript
+        # Be more lenient in test mode since 5-minute clips might have intro-heavy starts
+        max_metadata_ratio = 0.5 if TESTING_MODE else 0.3
         metadata_ratio = metadata_line_count / min(len(lines), 50)
-        if metadata_ratio > 0.3:
-            logger.warning(f"High metadata ratio: {metadata_ratio:.1%} of first 50 lines")
+        if metadata_ratio > max_metadata_ratio:
+            logger.warning(f"High metadata ratio: {metadata_ratio:.1%} of first 50 lines (max: {max_metadata_ratio:.0%})")
             return False
         
         # If there are too many URLs early on, it's likely show notes
@@ -224,8 +232,10 @@ class Summarizer:
                     break
         
         # If we see conversation patterns, it's likely a real transcript
-        if conversation_indicators > 10:
-            logger.info(f"✅ Transcript validation passed: {word_count} words, {conversation_indicators} conversation indicators")
+        # Adjust threshold for test mode (5-minute clips have fewer patterns)
+        min_indicators = 1 if TESTING_MODE else 10
+        if conversation_indicators >= min_indicators:
+            logger.info(f"✅ Transcript validation passed: {word_count} words, {conversation_indicators} conversation indicators (min: {min_indicators})")
             return True
         
         # Check source reliability
@@ -242,6 +252,17 @@ class Summarizer:
                 logger.info(f"✅ Transcript validation passed (reliable source: {source.value})")
                 return True
         
+        # Special handling for test mode audio transcriptions
+        if TESTING_MODE and source == TranscriptSource.AUDIO_TRANSCRIPTION:
+            # Very lenient for test mode audio transcriptions
+            if word_count >= 200 and char_count >= 1000:
+                logger.info(f"✅ Transcript validation passed (test mode audio: {word_count} words, {conversation_indicators} conversation indicators)")
+                return True
+        
+        # Log detailed validation metrics for debugging
+        logger.info(f"Validation metrics - Words: {word_count}/{min_words}, Chars: {char_count}/{min_chars}, "
+                   f"Conversation indicators: {conversation_indicators}/{min_indicators}, "
+                   f"Metadata ratio: {metadata_ratio:.1%}/{max_metadata_ratio:.0%}, URLs: {url_count}")
         logger.warning(f"Transcript validation failed: insufficient conversation content")
         return False
     

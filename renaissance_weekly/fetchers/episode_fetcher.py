@@ -15,6 +15,8 @@ import time
 import hashlib
 import uuid
 from functools import lru_cache
+import concurrent.futures
+import threading
 
 from ..models import Episode
 from ..database import PodcastDatabase
@@ -424,12 +426,34 @@ class ReliableEpisodeFetcher:
         
         return []
     
+    def _parse_feed_with_timeout(self, content: bytes, correlation_id: str, timeout: int = 10):
+        """Parse feedparser content with timeout protection"""
+        import feedparser
+        
+        # Use ThreadPoolExecutor to enforce timeout on feedparser.parse()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(feedparser.parse, content)
+            try:
+                # Wait for parsing to complete with timeout
+                feed = future.result(timeout=timeout)
+                return feed
+            except concurrent.futures.TimeoutError:
+                logger.error(f"[{correlation_id}]     Feedparser timed out after {timeout}s - skipping this feed")
+                # Cancel the future if possible
+                future.cancel()
+                # Return empty feed structure
+                return type('obj', (object,), {'entries': []})()
+            except Exception as e:
+                logger.error(f"[{correlation_id}]     Feedparser error: {e}")
+                return type('obj', (object,), {'entries': []})()
+    
     def _parse_rss_feed(self, content: bytes, podcast_name: str, days_back: int, correlation_id: str) -> List[Episode]:
         """Parse RSS feed content into episodes with more robust parsing"""
         try:
-            feed = feedparser.parse(content)
+            # Parse RSS feed with timeout protection
+            feed = self._parse_feed_with_timeout(content, correlation_id)
             
-            if not feed.entries:
+            if not feed or not hasattr(feed, 'entries') or not feed.entries:
                 logger.warning(f"[{correlation_id}]     No entries in feed")
                 return []
             

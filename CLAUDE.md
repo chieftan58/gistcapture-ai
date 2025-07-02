@@ -115,7 +115,7 @@ Episodes are tracked with status (pending, transcribed, summarized, emailed) and
 3. Use `python main.py check "Podcast Name"` for specific podcast issues
 
 ### Testing Summarization
-Set `TESTING_MODE=true` to limit audio transcription to 5 minutes for faster testing.
+Set `TESTING_MODE=true` to limit audio transcription to 15 minutes for faster testing (provides more content for better summaries while still being quick).
 
 ## Important Notes
 
@@ -238,4 +238,7 @@ The system now searches for transcripts in this order:
 - Database remains empty during dry-run mode (expected behavior)
 
 ### Recent Updates (2025-01-01):
-- Fixed UI to correctly display 5-minute test mode limit (was showing 20 minutes)
+- Fixed UI to correctly display test mode limit
+- Increased test mode transcription from 5 to 15 minutes for better content coverage
+- Relaxed transcript validation for test mode (1 conversation indicator minimum)
+- Added special handling for test mode audio transcriptions

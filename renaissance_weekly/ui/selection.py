@@ -87,12 +87,19 @@ class EpisodeSelector:
         # Get selected episodes
         selected_episodes = []
         if self._selected_episode_indices:
-            logger.info(f"[{self._correlation_id}] 📋 Processing {len(self._selected_episode_indices)} selected episode indices")
-            for idx in self._selected_episode_indices:
-                if 0 <= idx < len(self.episode_cache):
-                    selected_episodes.append(self.episode_cache[idx])
+            logger.info(f"[{self._correlation_id}] 📋 Processing {len(self._selected_episode_indices)} selected episodes")
+            # Create a lookup map for episodes by their ID
+            episode_map = {}
+            for ep in self.episode_cache:
+                ep_id = f"{ep.podcast}|{ep.title}|{ep.published}"
+                episode_map[ep_id] = ep
+            
+            # Map selected IDs to episodes
+            for ep_id in self._selected_episode_indices:
+                if ep_id in episode_map:
+                    selected_episodes.append(episode_map[ep_id])
                 else:
-                    logger.warning(f"[{self._correlation_id}] Invalid episode index: {idx}")
+                    logger.warning(f"[{self._correlation_id}] Episode not found for ID: {ep_id}")
         
         # Cleanup
         self._shutdown_server()
@@ -125,6 +132,7 @@ class EpisodeSelector:
                     
                     if parent.state == 'episode_selection' and parent.episode_cache:
                         response_data['episodes'] = [{
+                            'id': f"{ep.podcast}|{ep.title}|{ep.published}",  # Unique identifier
                             'podcast': ep.podcast,
                             'title': ep.title,
                             'published': ep.published.isoformat() if hasattr(ep.published, 'isoformat') else str(ep.published),
@@ -320,13 +328,19 @@ class EpisodeSelector:
                 
                 # Store episodes
                 self.episode_cache = episodes
+                logger.info(f"[{self._correlation_id}] 📦 Stored {len(episodes)} episodes in cache")
+                
+                # Update state to episode_selection
+                old_state = self.state
                 self.state = "episode_selection"
+                logger.info(f"[{self._correlation_id}] 🔄 State transition: {old_state} → episode_selection")
+                
                 self.loading_status = {
                     'status': 'ready',
                     'episode_count': len(episodes)
                 }
                 
-                logger.info(f"[{self._correlation_id}] ✅ Background fetch complete: {len(episodes)} episodes")
+                logger.info(f"[{self._correlation_id}] ✅ Background fetch complete: {len(episodes)} episodes ready for selection")
                 
             except Exception as e:
                 logger.error(f"[{self._correlation_id}] Error in fetch callback: {e}", exc_info=True)
@@ -593,11 +607,11 @@ class EpisodeSelector:
             
             // Group episodes by podcast
             const episodesByPodcast = {{}};
-            APP_STATE.episodes.forEach((ep, idx) => {{
+            APP_STATE.episodes.forEach((ep) => {{
                 if (!episodesByPodcast[ep.podcast]) {{
                     episodesByPodcast[ep.podcast] = [];
                 }}
-                episodesByPodcast[ep.podcast].push({{...ep, index: idx}});
+                episodesByPodcast[ep.podcast].push(ep);
             }});
             
             // Sort episodes within each podcast by date descending
@@ -649,7 +663,7 @@ class EpisodeSelector:
                     
                     ${{APP_STATE.configuration.transcription_mode === 'test' ? `
                         <div class="notice">
-                            Test mode: Transcriptions limited to 5 minutes
+                            Test Mode: 15 Minutes - Transcriptions limited to 15 minutes per episode
                         </div>
                     ` : ''}}
                     
@@ -662,7 +676,7 @@ class EpisodeSelector:
                                 </div>
                                 <div class="episodes-list">
                                     ${{episodesByPodcast[podcast].map(ep => `
-                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.index) ? 'selected' : ''}}" id="episode-${{ep.index}}" onclick="toggleEpisode(${{ep.index}})">
+                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" id="episode-${{ep.id.replace(/[|:]/g, '_')}}" onclick="toggleEpisode('${{ep.id}}')">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">
                                                 <div class="episode-title">${{ep.title}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
@@ -750,22 +764,25 @@ class EpisodeSelector:
             document.querySelector('.button-primary').disabled = APP_STATE.selectedPodcasts.size === 0;
         }}
         
-        function toggleEpisode(index) {{
-            const episode = document.getElementById('episode-' + index);
-            if (APP_STATE.selectedEpisodes.has(index)) {{
-                APP_STATE.selectedEpisodes.delete(index);
+        function toggleEpisode(id) {{
+            const safeId = id.replace(/[|:]/g, '_');
+            const episode = document.getElementById('episode-' + safeId);
+            if (APP_STATE.selectedEpisodes.has(id)) {{
+                APP_STATE.selectedEpisodes.delete(id);
                 episode.classList.remove('selected');
             }} else {{
-                APP_STATE.selectedEpisodes.add(index);
+                APP_STATE.selectedEpisodes.add(id);
                 episode.classList.add('selected');
             }}
             updateEpisodeCount();
         }}
         
         function selectAllEpisodes() {{
+            APP_STATE.selectedEpisodes.clear();
+            APP_STATE.episodes.forEach(ep => {{
+                APP_STATE.selectedEpisodes.add(ep.id);
+            }});
             document.querySelectorAll('.episode-item').forEach(episode => {{
-                const index = parseInt(episode.id.split('-')[1]);
-                APP_STATE.selectedEpisodes.add(index);
                 episode.classList.add('selected');
             }});
             updateEpisodeCount();
@@ -875,6 +892,32 @@ class EpisodeSelector:
             }}
         }}
         
+        // Function to wait for episode fetch to complete
+        async function waitForEpisodeFetch() {{
+            try {{
+                console.log('Checking if episodes are ready...');
+                const stateResponse = await fetchWithTimeout('/api/state', {{}}, 5000);
+                const stateData = await stateResponse.json();
+                
+                if (stateData.state === 'episode_selection' && stateData.episodes) {{
+                    console.log(`Episodes ready! Transitioning with ${{stateData.episodes.length}} episodes`);
+                    APP_STATE.state = 'episode_selection';
+                    APP_STATE.episodes = stateData.episodes;
+                    render();
+                }} else {{
+                    console.log('Episodes not ready yet, will check again...');
+                    setTimeout(() => {{
+                        waitForEpisodeFetch();
+                    }}, 2000);
+                }}
+            }} catch (e) {{
+                console.error('Error checking for episodes:', e);
+                setTimeout(() => {{
+                    waitForEpisodeFetch();
+                }}, 2000);
+            }}
+        }}
+        
         function startErrorChecking() {{
             // Check for errors periodically
             APP_STATE.errorCheckInterval = setInterval(async () => {{
@@ -957,8 +1000,10 @@ class EpisodeSelector:
                     document.querySelector('.loading-title').textContent = 'Loading episodes...';
                     
                     // Wait a moment then check for episode data
+                    console.log('Fetching complete, waiting for episode data...');
                     setTimeout(async () => {{
                         try {{
+                            console.log('Checking for episode selection state...');
                             const stateResponse = await fetchWithTimeout('/api/state', {{}}, 5000);
                             let stateData;
                             try {{
@@ -967,13 +1012,25 @@ class EpisodeSelector:
                                 console.error('Failed to parse state data:', e);
                                 return;
                             }}
+                            console.log('State data received:', stateData);
                             if (stateData.state === 'episode_selection' && stateData.episodes) {{
+                                console.log(`Transitioning to episode selection with ${{stateData.episodes.length}} episodes`);
                                 APP_STATE.state = 'episode_selection';
                                 APP_STATE.episodes = stateData.episodes;
                                 render();
+                            }} else {{
+                                console.log('Not ready for episode selection yet, state:', stateData.state);
+                                // Retry after a delay
+                                setTimeout(() => {{
+                                    waitForEpisodeFetch();
+                                }}, 2000);
                             }}
                         }} catch (e) {{
                             console.error('Error fetching state:', e);
+                            // Retry after a delay
+                            setTimeout(() => {{
+                                waitForEpisodeFetch();
+                            }}, 2000);
                         }}
                     }}, 1000);
                 }} else if (status.status === 'error') {{

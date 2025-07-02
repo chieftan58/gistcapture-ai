@@ -218,5 +218,2225 @@
     "error_message": "Failed to generate summary",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:11.671109",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:13.264766",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:14.068543",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:14.629819",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:34.325578",
+    "component": "summarization",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:34.974771",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:35.798064",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:36.175439",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:36.468933",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:37.814790",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:39.736099",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:40.967383",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:55.820745",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:56.459691",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:57.668829",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:57.839766",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:58.141154",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:24:59.378919",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:07.097509",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:08.473490",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:16.448621",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:17.695620",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:22.822684",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:23.595537",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:25.262875",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:25.868008",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:37.119091",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:37.815175",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "The Chemistry of Food & Taste | Dr. Harold McGee",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:38.402599",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:38.728441",
+    "component": "summarization",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:40.531156",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:41.140562",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:42.494997",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:44.458986",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:25:45.917316",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:00.417881",
+    "component": "summarization",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:00.450625",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:00.940184",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:00.992161",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:06.665850",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:26:27.122240",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:00.659585",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:13.617499",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:22.273305",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:22.734423",
+    "component": "summarization",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:29.753764",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:29.854959",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#817: 4-Hour Workweek Success Stories \u2014 Charlie Houpert on Building \u201cCharisma on Command\u201d to 10M+ Subscribers, From Charging $10 for Seminars to Making Millions, Living in Brazil, Critical Early Decisions, and The Secret to Freedom",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:30.427082",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:37.434115",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:38.695910",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:50.260596",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:51.521279",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:27:55.353065",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:28:11.889378",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:31:18.225671",
+    "component": "summarization",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:40:49.701930",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:40:50.983398",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:40:51.173393",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:40:51.962140",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:41:24.441024",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:21.375587",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:22.930474",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:23.674823",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:24.519371",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:42.457878",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:43.048817",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:43.912362",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:44.318539",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:44.551459",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:44.600641",
+    "component": "summarization",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:46.064597",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:47:46.071646",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:05.970234",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:06.485587",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:06.587708",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:07.704801",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:07.858655",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:07.883179",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:19.265973",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:20.628231",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:25.273870",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:26.855449",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:34.954281",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:35.550930",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:37.083221",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:37.590273",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:46.033605",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:46.599813",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "The Chemistry of Food & Taste | Dr. Harold McGee",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:47.174100",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:47.428016",
+    "component": "summarization",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:49.289634",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:52.556933",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:53.836644",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:56.843355",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:48:58.095078",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:08.798204",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:09.336614",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:14.165906",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:14.788968",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:32.581412",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:32.840723",
+    "component": "summarization",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:34.671434",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:34.753953",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:55.309819",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:55.700088",
+    "component": "summarization",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:58.619956",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:58.709180",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#817: 4-Hour Workweek Success Stories \u2014 Charlie Houpert on Building \u201cCharisma on Command\u201d to 10M+ Subscribers, From Charging $10 for Seminars to Making Millions, Living in Brazil, Critical Early Decisions, and The Secret to Freedom",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:49:59.243394",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:50:17.485499",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:50:18.955804",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:54:08.771258",
+    "component": "summarization",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:54:10.008908",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:54:26.470863",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:54:56.375049",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T00:55:35.978420",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:18.250903",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:19.909312",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:20.996057",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:21.807100",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:39.603464",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:39.951914",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:40.845525",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:41.070852",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:42.022600",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:42.719852",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:42.928910",
+    "component": "summarization",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:08:43.595719",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:01.809369",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:02.068391",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:02.976521",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:03.142918",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:05.049743",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:05.342199",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:11.407584",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:11.620786",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:22.384931",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:22.642073",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:25.789319",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:26.051054",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:33.497045",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:33.756308",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:36.985767",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:43.659021",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:44.269661",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:44.555450",
+    "component": "summarization",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:45.313082",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:48.743575",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:48.963086",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:09:49.456735",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:02.202583",
+    "component": "summarization",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:02.488476",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:02.839145",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:03.039525",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:04.284205",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:07.585724",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:25.041331",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:25.591983",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:26.571531",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:26.984057",
+    "component": "summarization",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:29.434604",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:29.558556",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#817: 4-Hour Workweek Success Stories \u2014 Charlie Houpert on Building \u201cCharisma on Command\u201d to 10M+ Subscribers, From Charging $10 for Seminars to Making Millions, Living in Brazil, Critical Early Decisions, and The Secret to Freedom",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:29.764531",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:45.421401",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:10:45.669169",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:11:00.656533",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:11:00.869403",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:11:22.476134",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:15:50.681514",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:20:27.290260",
+    "component": "summarization",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:09.792418",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:10.248400",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:10.288639",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:10.384833",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:27.963372",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:28.291692",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:29.152345",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:29.319700",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:31.095536",
+    "component": "summarization",
+    "podcast": "A16Z",
+    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:31.299098",
+    "component": "summarization",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:32.079309",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:32.116314",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:47.681817",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:47.930846",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:48.792529",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:48.958663",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:52.418416",
+    "component": "summarization",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:41:52.661773",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:02.497917",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:02.760728",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:08.228583",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:08.447700",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:16.462232",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:16.697593",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:22.157204",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:22.394794",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:25.878329",
+    "component": "summarization",
+    "podcast": "Forward Guidance",
+    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:27.164621",
+    "component": "summarization",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:27.485719",
+    "component": "summarization",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:28.272731",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:32.909657",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:33.173078",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:39.460017",
+    "component": "summarization",
+    "podcast": "Founders",
+    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:39.664449",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:47.764475",
+    "component": "summarization",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:48.015530",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:50.875473",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:51.125698",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:53.204839",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:42:57.051724",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:08.759205",
+    "component": "summarization",
+    "podcast": "No Priors",
+    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:09.317574",
+    "component": "summarization",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:09.548821",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:10.012385",
+    "component": "summarization",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:12.789704",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:12.899859",
+    "component": "summarization",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#817: 4-Hour Workweek Success Stories \u2014 Charlie Houpert on Building \u201cCharisma on Command\u201d to 10M+ Subscribers, From Charging $10 for Seminars to Making Millions, Living in Brazil, Critical Early Decisions, and The Secret to Freedom",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:13.144199",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:25.026429",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:28.747454",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:29.008522",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:32.958612",
+    "component": "summarization",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:40.573639",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-02T01:43:43.822743",
+    "component": "summarization",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
+    "error_type": "SummarizationFailed",
+    "error_message": "Failed to generate summary",
+    "retry_count": 0,
+    "resolved": false
   }
 ]
