@@ -226,24 +226,27 @@ The system now searches for transcripts in this order:
 9. **Redirect Resolver**: Finds direct CDN URLs bypassing tracking redirects
 10. **Content Validator**: Ensures summaries are from full transcripts only
 
-### Current Performance (from latest test runs):
-- **Audio Download Success**: 18.2% (improved from 0%)
-- **Transcript Fetch Success**: 20%
-- **Primary Failures**: Substack/Cloudflare protection (403 errors)
-- **Working Platforms**: Apple Podcasts, YouTube, some RSS feeds
+### Current Performance (2025-01-02 after ffmpeg fix):
+- **Overall Success Rate**: 84.6% (33/39 episodes)
+- **Audio Download Success**: 80.9% (131/162 attempts)
+- **Audio Transcription Success**: 75% (108/144 attempts)
+- **Transcript Fetch Success**: 35.4% (81/229 attempts)
+- **Primary Failures**: Substack/Cloudflare protection (American Optimist, Dwarkesh)
+- **Working Platforms**: Apple Podcasts, YouTube, most RSS feeds, Megaphone, Art19
 
-### Next Steps:
-1. Implement authenticated browser sessions for Substack
-2. Add proxy rotation for distributed downloading
-3. Test with real API keys for transcription services
-4. Fine-tune platform-specific scrapers based on results
-5. Debug UI selection timeout issue (system times out after 2 minutes)
+### Next Steps to Reach 100% Success:
+1. Enhance Spotify API integration for Substack podcast fallback
+2. Improve YouTube search with shorter, more targeted queries
+3. Fix The Drive transcript scraper (currently getting metadata instead of content)
+4. Add Apple Podcasts unofficial API as additional fallback
+5. Implement persistent browser sessions for Cloudflare bypass
+6. Add more podcast-specific extractors for edge cases
 
 ### Known Issues:
-- Substack Cloudflare protection blocks even browser automation attempts
-- UI selection phase causing system timeouts
-- Some audio sources return 403 errors despite multiple strategies
-- Database remains empty during dry-run mode (expected behavior)
+- Substack Cloudflare protection blocks downloads (American Optimist, Dwarkesh) 
+- The Drive transcript scraper sometimes gets metadata instead of actual transcript
+- YouTube API returns 403 without valid API key
+- Some edge cases where episode titles don't match between sources
 
 ### Recent Updates (2025-01-02):
 - Fixed missing ffmpeg dependency causing audio transcription failures
