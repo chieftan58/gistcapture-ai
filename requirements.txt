@@ -17,3 +17,8 @@ pycryptodomex>=3.18.0
 websockets>=11.0
 brotli>=1.0.9
 mutagen>=1.46.0
+playwright>=1.40.0
+# Optional transcription service SDKs (uncomment if needed)
+# assemblyai>=0.20.0
+# rev-ai>=2.18.0
+# deepgram-sdk>=3.0.0
