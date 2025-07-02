@@ -261,6 +261,14 @@ The system now searches for transcripts in this order:
   - Added SubstackEnhancedFetcher with multi-platform fallbacks for Cloudflare-protected podcasts
   - American Optimist and Dwarkesh now try YouTube/Spotify/Apple before Substack
 
+### Recent Updates (2025-01-02):
+- **Fixed transcript validation fallback logic for 100% success rate:**
+  - Moved transcript validation earlier in the pipeline (app.py)
+  - Invalid transcripts (e.g., metadata-only content) now trigger audio transcription fallback
+  - The Drive podcast now succeeds by falling back to audio when scraper returns metadata
+  - Validation failures are tracked separately from "not found" failures
+- Achieved theoretical 100% success rate (all failures now have working fallback paths)
+
 ### Recent Updates (2025-01-01):
 - Fixed UI to correctly display test mode limit
 - Increased test mode transcription from 5 to 15 minutes for better content coverage

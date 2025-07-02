@@ -538,11 +538,28 @@ class RenaissanceWeekly:
             logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
             transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode)
             
-            # Step 2: If no transcript found, transcribe from audio
+            # If transcript found, validate it immediately
+            if transcript_text:
+                # Validate the transcript content
+                if self.summarizer._validate_transcript_content(transcript_text, transcript_source):
+                    logger.info(f"[{episode_id}] ✅ Found valid transcript (source: {transcript_source.value})")
+                    logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                    monitor.record_success('transcript_fetch', episode.podcast)
+                else:
+                    logger.warning(f"[{episode_id}] ⚠️ Found transcript but validation failed - falling back to audio")
+                    monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
+                                         'ValidationFailed', 'Transcript found but contains only metadata')
+                    # Reset transcript to trigger audio fallback
+                    transcript_text = None
+                    transcript_source = None
+            
+            # Step 2: If no valid transcript found, transcribe from audio
             if not transcript_text:
-                monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
-                                     'NotFound', 'No transcript found from any source')
-                logger.info(f"\n[{episode_id}] 🎵 Step 2: No transcript found - transcribing from audio...")
+                # Only record as NotFound if we didn't already record as ValidationFailed
+                if transcript_source is None:
+                    monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
+                                         'NotFound', 'No transcript found from any source')
+                logger.info(f"\n[{episode_id}] 🎵 Step 2: No valid transcript found - transcribing from audio...")
                 
                 # Check if we have audio URL
                 if not episode.audio_url:
@@ -562,10 +579,6 @@ class RenaissanceWeekly:
                     monitor.record_failure('audio_transcription', episode.podcast, episode.title,
                                          'TranscriptionFailed', 'Failed to transcribe audio')
                     return None
-            else:
-                logger.info(f"[{episode_id}] ✅ Found existing transcript (source: {transcript_source.value})")
-                logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
-                monitor.record_success('transcript_fetch', episode.podcast)
             
             # Save transcript to database
             try:

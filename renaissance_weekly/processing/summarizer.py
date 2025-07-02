@@ -69,10 +69,8 @@ class Summarizer:
     async def generate_summary(self, episode: Episode, transcript: str, source: TranscriptSource) -> Optional[str]:
         """Generate executive summary using ChatGPT"""
         try:
-            # Validate transcript is substantial enough for summarization
-            if not self._validate_transcript_content(transcript, source):
-                logger.error(f"❌ Transcript validation failed for {episode.title}")
-                return None
+            # Note: Transcript validation is now done earlier in the pipeline
+            # to allow fallback to audio transcription when needed
             
             # Create safe filename for summary cache
             date_str = episode.published.strftime('%Y%m%d')
