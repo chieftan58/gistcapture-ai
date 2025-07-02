@@ -13,6 +13,7 @@ from .youtube_transcript import YouTubeTranscriptFinder
 from .podcast_index import PodcastIndexAPI
 from .transcript_sources import ComprehensiveTranscriptFinder
 from ..robustness_config import should_use_feature
+from .substack_enhanced import AmericanOptimistEnhanced, DwarkeshPodcastEnhanced
 
 logger = get_logger(__name__)
 
@@ -295,10 +296,18 @@ class TranscriptFinder:
     
     async def _try_american_optimist_transcript(self, episode: Episode) -> Optional[str]:
         """Try to find American Optimist transcript from Substack"""
-        logger.info("🔍 Looking for American Optimist transcript on Substack...")
+        logger.info("🔍 Looking for American Optimist transcript...")
         
-        # American Optimist is hosted on Substack
-        # Try to find the Substack post URL
+        # First try the enhanced multi-source approach
+        try:
+            transcript, audio_url = await AmericanOptimistEnhanced.get_content(episode)
+            if transcript:
+                logger.info("✅ Found American Optimist transcript via enhanced methods")
+                return transcript
+        except Exception as e:
+            logger.debug(f"Enhanced methods failed: {e}")
+        
+        # Fall back to standard Substack scraping
         if episode.link and 'substack.com' in episode.link:
             # Direct Substack post link
             transcript = await self._scrape_substack_post(episode.link)
@@ -425,9 +434,18 @@ class TranscriptFinder:
     
     async def _try_dwarkesh_transcript(self, episode: Episode) -> Optional[str]:
         """Try to find Dwarkesh Podcast transcript from Substack"""
-        logger.info("🔍 Looking for Dwarkesh Podcast transcript on Substack...")
+        logger.info("🔍 Looking for Dwarkesh Podcast transcript...")
         
-        # Dwarkesh is on Substack like American Optimist
+        # First try the enhanced multi-source approach
+        try:
+            transcript, audio_url = await DwarkeshPodcastEnhanced.get_content(episode)
+            if transcript:
+                logger.info("✅ Found Dwarkesh transcript via enhanced methods")
+                return transcript
+        except Exception as e:
+            logger.debug(f"Enhanced methods failed: {e}")
+        
+        # Fall back to standard Substack scraping
         if episode.link and 'substack.com' in episode.link:
             transcript = await self._scrape_substack_post(episode.link)
             if transcript:
