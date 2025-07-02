@@ -52,7 +52,10 @@ python main.py --load-dataset <name>
 
 ### Development Setup
 ```bash
-# Install dependencies
+# Install system dependencies
+sudo apt-get update && sudo apt-get install -y ffmpeg
+
+# Install Python dependencies
 pip install -e .
 
 # Create .env file with required API keys:
@@ -158,17 +161,22 @@ The system now searches for transcripts in this order:
 
 ## Installation for Maximum Reliability
 
-1. Install full yt-dlp dependencies:
+1. Install system dependencies:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y ffmpeg
+   ```
+
+2. Install full yt-dlp dependencies:
    ```bash
    ./install_ytdlp_full.sh
    ```
 
-2. Install Playwright for browser automation:
+3. Install Playwright for browser automation:
    ```bash
    playwright install chromium
    ```
 
-3. Configure optional APIs in .env:
+4. Configure optional APIs in .env:
    ```
    # Core APIs
    OPENAI_API_KEY=your_key
@@ -236,6 +244,13 @@ The system now searches for transcripts in this order:
 - UI selection phase causing system timeouts
 - Some audio sources return 403 errors despite multiple strategies
 - Database remains empty during dry-run mode (expected behavior)
+
+### Recent Updates (2025-01-02):
+- Fixed missing ffmpeg dependency causing audio transcription failures
+- Improved episode deduplication to handle varying title formats (e.g., "Guest: Topic" vs "Topic")
+- Enhanced UI episode descriptions with host/guest/topic extraction
+- Fixed JavaScript escaping issue preventing UI from loading
+- Added system dependency requirement: ffmpeg (required for pydub/OpenAI Whisper)
 
 ### Recent Updates (2025-01-01):
 - Fixed UI to correctly display test mode limit
