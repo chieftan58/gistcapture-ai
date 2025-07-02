@@ -88,7 +88,11 @@ audio/
 
 # Transcript Files (contain copyrighted content)
 # ---------------------------------------------
-transcripts/
+# Only ignore transcript content files, not source code
+/transcripts/
+/renaissance_weekly/transcripts/*.txt
+/renaissance_weekly/transcripts/*.vtt
+/renaissance_weekly/transcripts/*.srt
 *_transcript.txt
 *_transcription.txt
 *.vtt
