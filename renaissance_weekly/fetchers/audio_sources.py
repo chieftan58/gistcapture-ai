@@ -219,24 +219,88 @@ class AudioSourceFinder:
         
         return alternatives
     
+    def _build_youtube_queries(self, episode: Episode) -> List[str]:
+        """Build optimized YouTube search queries"""
+        queries = []
+        
+        # Extract key information
+        podcast_name = episode.podcast
+        title = episode.title
+        
+        # Remove common patterns that make search less effective
+        # Remove episode numbers
+        title_clean = re.sub(r'^#?\d+\s*[-–—|:]?\s*', '', title)
+        title_clean = re.sub(r'^Episode\s+\d+\s*[-–—|:]?\s*', '', title_clean, flags=re.IGNORECASE)
+        title_clean = re.sub(r'^Ep\.?\s*\d+\s*[-–—|:]?\s*', '', title_clean, flags=re.IGNORECASE)
+        
+        # Extract guest name if present (pattern: "Guest Name: Topic")
+        guest_match = re.match(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*:\s*(.+)$', title_clean)
+        if guest_match:
+            guest_name = guest_match.group(1)
+            topic = guest_match.group(2)
+            
+            # Query 1: Podcast + Guest name (most specific)
+            queries.append(f"{podcast_name} {guest_name}")
+            
+            # Query 2: Podcast + Topic keywords
+            topic_keywords = ' '.join(topic.split()[:5])  # First 5 words
+            queries.append(f"{podcast_name} {topic_keywords}")
+            
+            # Query 3: Guest + Podcast (reversed)
+            queries.append(f"{guest_name} {podcast_name}")
+        else:
+            # No clear guest pattern
+            # Query 1: Podcast + First few words of title
+            title_words = title_clean.split()[:6]
+            queries.append(f"{podcast_name} {' '.join(title_words)}")
+            
+            # Query 2: Just significant keywords
+            # Remove common words
+            stop_words = {'the', 'a', 'an', 'of', 'with', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'}
+            keywords = [w for w in title_words if w.lower() not in stop_words][:4]
+            if keywords:
+                queries.append(f"{podcast_name} {' '.join(keywords)}")
+        
+        # Query 3: Episode number if present (as fallback)
+        episode_num_match = re.search(r'#?(\d+)', title)
+        if episode_num_match and len(queries) < 3:
+            queries.append(f"{podcast_name} episode {episode_num_match.group(1)}")
+        
+        # Clean up all queries
+        cleaned_queries = []
+        for query in queries:
+            # Remove special characters
+            query = re.sub(r'[#\-–—:]', ' ', query)
+            query = re.sub(r'\s+', ' ', query).strip()
+            # Limit length
+            query = query[:80]  # Shorter queries work better
+            if query and query not in cleaned_queries:
+                cleaned_queries.append(query)
+        
+        return cleaned_queries[:3]  # Return top 3 queries
+    
     async def _find_youtube_version(self, episode: Episode) -> Optional[str]:
         """Find YouTube version of the episode"""
         try:
             import os
             
-            # Search YouTube for the episode
-            search_query = f"{episode.podcast} {episode.title}"
-            # Clean up the query
-            search_query = re.sub(r'[#\-–—:]', ' ', search_query)
-            search_query = re.sub(r'\s+', ' ', search_query).strip()[:100]
+            # Build optimized search queries
+            queries = self._build_youtube_queries(episode)
             
             # Check if YouTube API key is available
             youtube_api_key = os.getenv('YOUTUBE_API_KEY')
-            if youtube_api_key:
-                return await self._search_youtube_api(search_query, episode, youtube_api_key)
-            else:
-                # Fall back to web scraping
-                return await self._search_youtube_web(search_query, episode)
+            
+            # Try each query until we find a match
+            for search_query in queries:
+                logger.debug(f"🔍 YouTube search: {search_query}")
+                
+                if youtube_api_key:
+                    result = await self._search_youtube_api(search_query, episode, youtube_api_key)
+                else:
+                    result = await self._search_youtube_web(search_query, episode)
+                
+                if result:
+                    return result
             
         except Exception as e:
             logger.debug(f"Error finding YouTube version: {e}")

@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 
 from ..utils.logging import get_logger
 from ..models import Episode
+from .spotify_transcript import SpotifyTranscriptFetcher
 
 logger = get_logger(__name__)
 
@@ -282,6 +283,37 @@ class SpeechmaticsClient(TranscriptAPIClient):
         return None
 
 
+class SpotifyClient(TranscriptAPIClient):
+    """
+    Spotify transcript/content client.
+    Uses Spotify API to fetch episode information and available content.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.fetcher = SpotifyTranscriptFetcher()
+        
+    async def __aenter__(self):
+        await self.fetcher.__aenter__()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.fetcher.__aexit__(exc_type, exc_val, exc_tb)
+        
+    async def search_transcript(self, episode: Episode) -> Optional[str]:
+        """Search for transcript or content via Spotify API"""
+        try:
+            # Use the Spotify transcript fetcher
+            content = await self.fetcher.get_transcript(episode)
+            if content:
+                logger.info(f"✅ Found Spotify content for: {episode.title}")
+                return content
+        except Exception as e:
+            logger.error(f"Spotify client error: {e}")
+        
+        return None
+
+
 class TranscriptAPIAggregator:
     """
     Aggregates multiple transcript API sources.
@@ -291,6 +323,7 @@ class TranscriptAPIAggregator:
     def __init__(self):
         self.clients = [
             PodcastIndexClient(),
+            SpotifyClient(),  # Add Spotify before less reliable sources
             DescriptClient(),
             OtterAIClient(),
             SpeechmaticsClient(),
