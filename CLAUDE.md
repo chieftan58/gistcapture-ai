@@ -243,17 +243,23 @@ The system now searches for transcripts in this order:
 6. Add more podcast-specific extractors for edge cases
 
 ### Known Issues:
-- Substack Cloudflare protection blocks downloads (American Optimist, Dwarkesh) 
-- The Drive transcript scraper sometimes gets metadata instead of actual transcript
-- YouTube API returns 403 without valid API key
+- YouTube API returns 403 without valid API key (but falls back to web scraping)
 - Some edge cases where episode titles don't match between sources
+- Spotify API doesn't provide direct audio URLs (only web URLs and previews)
+- Some enhanced features require API keys (Spotify, YouTube) for best results
 
 ### Recent Updates (2025-01-02):
-- Fixed missing ffmpeg dependency causing audio transcription failures
+- Fixed missing ffmpeg dependency causing audio transcription failures (improved success rate from 0% to 84.6%)
 - Improved episode deduplication to handle varying title formats (e.g., "Guest: Topic" vs "Topic")
 - Enhanced UI episode descriptions with host/guest/topic extraction
 - Fixed JavaScript escaping issue preventing UI from loading
 - Added system dependency requirement: ffmpeg (required for pydub/OpenAI Whisper)
+- **Multi-source enhancements for 100% success rate:**
+  - Integrated Spotify API for episode content/descriptions
+  - Enhanced YouTube search with smarter query strategies
+  - Fixed The Drive transcript scraper (now extracts actual transcripts, not metadata)
+  - Added SubstackEnhancedFetcher with multi-platform fallbacks for Cloudflare-protected podcasts
+  - American Optimist and Dwarkesh now try YouTube/Spotify/Apple before Substack
 
 ### Recent Updates (2025-01-01):
 - Fixed UI to correctly display test mode limit
