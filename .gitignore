@@ -309,3 +309,5 @@ podcasts.override.yaml
 !LICENSE
 !podcasts.yaml
 !prompts/*.txt
+# Environment variables
+.env
