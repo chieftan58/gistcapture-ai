@@ -39,6 +39,12 @@ class EpisodeSelector:
         self._fetch_thread = None
         self._fetch_exception = None
         self._correlation_id = str(uuid.uuid4())[:8]
+        self._processing_status = None
+        self._processing_episodes = []
+        self._processing_mode = 'test'
+        self._processing_cancelled = False
+        self._email_approved = False
+        self._process_thread = None
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
@@ -204,23 +210,72 @@ class EpisodeSelector:
                     
                 elif self.path == '/api/select-episodes':
                     try:
-                        # Handle episode selection
+                        # Handle episode selection - now just saves for later processing
                         parent._selected_episode_indices = data.get('selected_episodes', [])
-                        parent.state = "complete"
                         
                         logger.info(f"[{parent._correlation_id}] 📥 Received episode selection: {len(parent._selected_episode_indices)} episodes")
                         
                         self._send_json({'status': 'success', 'count': len(parent._selected_episode_indices)})
                         
-                        # Signal completion after response is sent
-                        threading.Thread(
-                            target=lambda: (time.sleep(0.1), parent._selection_complete.set()),
-                            daemon=True
-                        ).start()
-                        
                     except Exception as e:
                         logger.error(f"[{parent._correlation_id}] Error in episode selection: {e}", exc_info=True)
                         self._send_json({'status': 'error', 'message': str(e)})
+                    
+                elif self.path == '/api/start-processing':
+                    # Start processing with the selected episodes
+                    parent._processing_status = {
+                        'total': len(data.get('episodes', [])),
+                        'completed': 0,
+                        'failed': 0,
+                        'current': None,
+                        'errors': []
+                    }
+                    parent._processing_episodes = data.get('episodes', [])
+                    parent._processing_mode = data.get('mode', 'test')
+                    parent._processing_cancelled = False
+                    
+                    # Start actual processing in background
+                    if not hasattr(parent, '_process_thread') or not parent._process_thread.is_alive():
+                        parent._process_thread = threading.Thread(
+                            target=parent._process_episodes_background,
+                            daemon=True
+                        )
+                        parent._process_thread.start()
+                    
+                    self._send_json({'status': 'success'})
+                    
+                elif self.path == '/api/processing-status':
+                    # Return current processing status
+                    status = getattr(parent, '_processing_status', {
+                        'total': 0,
+                        'completed': 0,
+                        'failed': 0,
+                        'current': None,
+                        'errors': []
+                    })
+                    self._send_json(status)
+                    
+                elif self.path == '/api/cancel-processing':
+                    # Cancel ongoing processing
+                    parent._processing_cancelled = True
+                    self._send_json({'status': 'success'})
+                    
+                elif self.path == '/api/email-preview':
+                    # Generate email preview
+                    preview = parent._generate_email_preview()
+                    self._send_json({'preview': preview})
+                    
+                elif self.path == '/api/send-email':
+                    # Mark email as approved and ready to send
+                    parent._email_approved = True
+                    parent.state = "complete"
+                    self._send_json({'status': 'success'})
+                    
+                    # Signal completion after response is sent
+                    threading.Thread(
+                        target=lambda: (time.sleep(0.1), parent._selection_complete.set()),
+                        daemon=True
+                    ).start()
                     
                 else:
                     self._send_json({'status': 'error', 'message': 'Not found'})
@@ -443,7 +498,23 @@ class EpisodeSelector:
             }},
             episodes: [],
             statusInterval: null,
-            errorCheckInterval: null
+            errorCheckInterval: null,
+            processingStatus: {{
+                total: 0,
+                completed: 0,
+                failed: 0,
+                current: null,
+                startTime: null,
+                errors: []
+            }},
+            costEstimate: {{
+                episodes: 0,
+                estimatedCost: 0,
+                estimatedTime: 0,
+                breakdown: {{}}
+            }},
+            emailPreview: null,
+            processingCancelled: false
         }};
         
         // Render functions for each state
@@ -698,9 +769,275 @@ class EpisodeSelector:
                         <div class="selection-info">
                             <span class="selection-count">${{APP_STATE.selectedEpisodes.size}}</span> selected
                         </div>
-                        <button class="button button-primary" onclick="submitEpisodes()" ${{APP_STATE.selectedEpisodes.size === 0 ? 'disabled' : ''}}>
-                            Process
+                        <button class="button button-primary" onclick="proceedToCostEstimate()" ${{APP_STATE.selectedEpisodes.size === 0 ? 'disabled' : ''}}>
+                            Next →
                         </button>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderCostEstimate() {{
+            const episodeCount = APP_STATE.selectedEpisodes.size;
+            const mode = APP_STATE.configuration.transcription_mode;
+            
+            // Calculate estimates
+            const costPerEpisode = mode === 'test' ? 0.10 : 1.50;
+            const timePerEpisode = mode === 'test' ? 0.5 : 5; // minutes
+            const totalCost = episodeCount * costPerEpisode;
+            const totalTime = episodeCount * timePerEpisode;
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Cost & Time Estimate</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('estimate')}}
+                    
+                    <div class="estimate-card">
+                        <div class="estimate-header">
+                            <h2>Processing Estimate</h2>
+                            <div class="mode-badge ${{mode}}">${{mode.toUpperCase()}} MODE</div>
+                        </div>
+                        
+                        <div class="estimate-grid">
+                            <div class="estimate-item">
+                                <div class="estimate-label">Episodes Selected</div>
+                                <div class="estimate-value">${{episodeCount}}</div>
+                            </div>
+                            
+                            <div class="estimate-item">
+                                <div class="estimate-label">Estimated Cost</div>
+                                <div class="estimate-value">$$${{totalCost.toFixed(2)}}</div>
+                            </div>
+                            
+                            <div class="estimate-item">
+                                <div class="estimate-label">Estimated Time</div>
+                                <div class="estimate-value">${{formatDuration(totalTime)}}</div>
+                            </div>
+                            
+                            <div class="estimate-item">
+                                <div class="estimate-label">Cost per Episode</div>
+                                <div class="estimate-value">~$$${{costPerEpisode.toFixed(2)}}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="estimate-breakdown">
+                            <h3>Cost Breakdown</h3>
+                            <div class="breakdown-item">
+                                <span>Audio Transcription (Whisper API)</span>
+                                <span>$$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
+                            </div>
+                            <div class="breakdown-item">
+                                <span>Summarization (GPT-4)</span>
+                                <span>$$${{(episodeCount * 0.03).toFixed(2)}}</span>
+                            </div>
+                            <div class="breakdown-item">
+                                <span>Other API Calls</span>
+                                <span>$$${{(episodeCount * 0.01).toFixed(2)}}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="action-section">
+                            <button class="button secondary" onclick="goBackToEpisodes()">
+                                ← Back to Episodes
+                            </button>
+                            <button class="button primary" onclick="startProcessing()">
+                                Start Processing →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderProcessing() {{
+            const {{ total, completed, failed, current, startTime, errors }} = APP_STATE.processingStatus;
+            const progress = total > 0 ? (completed + failed) / total * 100 : 0;
+            const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
+            const rate = completed > 0 ? elapsed / completed : 0;
+            const remaining = (total - completed - failed) * rate;
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Processing Episodes</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('processing')}}
+                    
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <h2>Processing Progress</h2>
+                            <button class="button danger small" onclick="cancelProcessing()">
+                                Cancel Processing
+                            </button>
+                        </div>
+                        
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${{progress}}%"></div>
+                            <div class="progress-text">${{completed + failed}}/${{total}} episodes</div>
+                        </div>
+                        
+                        <div class="stats-grid">
+                            <div class="stat-item success">
+                                <div class="stat-value">${{completed}}</div>
+                                <div class="stat-label">Successful</div>
+                            </div>
+                            
+                            <div class="stat-item danger">
+                                <div class="stat-value">${{failed}}</div>
+                                <div class="stat-label">Failed</div>
+                            </div>
+                            
+                            <div class="stat-item">
+                                <div class="stat-value">${{formatDuration(elapsed / 60)}}</div>
+                                <div class="stat-label">Elapsed</div>
+                            </div>
+                            
+                            <div class="stat-item">
+                                <div class="stat-value">${{formatDuration(remaining / 60)}}</div>
+                                <div class="stat-label">Remaining</div>
+                            </div>
+                        </div>
+                        
+                        ${{current ? `
+                            <div class="current-episode">
+                                <div class="current-label">Currently Processing:</div>
+                                <div class="current-title">${{current.podcast}}: ${{current.title}}</div>
+                                <div class="current-status">${{current.status}}</div>
+                            </div>
+                        ` : ''}}
+                        
+                        ${{errors.length > 0 ? `
+                            <div class="error-section">
+                                <h3>Failed Episodes</h3>
+                                <div class="error-list">
+                                    ${{errors.map(err => `
+                                        <div class="error-item">
+                                            <div class="error-title">${{err.episode}}</div>
+                                            <div class="error-message">${{err.message}}</div>
+                                        </div>
+                                    `).join('')}}
+                                </div>
+                            </div>
+                        ` : ''}}
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderResults() {{
+            const {{ total, completed, failed, errors }} = APP_STATE.processingStatus;
+            const successRate = total > 0 ? (completed / total * 100).toFixed(1) : 0;
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Processing Results</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('results')}}
+                    
+                    <div class="results-card">
+                        <div class="results-header">
+                            <h2>Processing Complete</h2>
+                            <div class="success-rate ${{successRate >= 90 ? 'good' : successRate >= 70 ? 'warning' : 'poor'}}">
+                                ${{successRate}}% Success Rate
+                            </div>
+                        </div>
+                        
+                        <div class="results-summary">
+                            <div class="result-stat success">
+                                <div class="result-icon">✓</div>
+                                <div class="result-count">${{completed}}</div>
+                                <div class="result-label">Successful Episodes</div>
+                            </div>
+                            
+                            <div class="result-stat danger">
+                                <div class="result-icon">✗</div>
+                                <div class="result-count">${{failed}}</div>
+                                <div class="result-label">Failed Episodes</div>
+                            </div>
+                        </div>
+                        
+                        ${{failed > 0 ? `
+                            <div class="failed-episodes">
+                                <h3>Failed Episodes</h3>
+                                ${{errors.map(err => `
+                                    <div class="failed-item">
+                                        <div class="failed-title">${{err.episode}}</div>
+                                        <div class="failed-reason">${{err.message}}</div>
+                                    </div>
+                                `).join('')}}
+                            </div>
+                        ` : ''}}
+                        
+                        <div class="action-section">
+                            <button class="button primary" onclick="proceedToEmail()">
+                                Continue to Email →
+                            </button>
+                            
+                            <button class="button text" onclick="cancelAndExit()">
+                                Cancel & Exit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderEmailApproval() {{
+            const {{ emailPreview }} = APP_STATE;
+            const {{ completed, failed }} = APP_STATE.processingStatus;
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Email Approval</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('email')}}
+                    
+                    <div class="email-card">
+                        <div class="email-header">
+                            <h2>Review & Send Email</h2>
+                        </div>
+                        
+                        <div class="email-stats">
+                            <div class="email-stat">
+                                <span class="stat-label">Episodes in digest:</span>
+                                <span class="stat-value">${{completed}}</span>
+                            </div>
+                            ${{failed > 0 ? `
+                                <div class="email-stat warning">
+                                    <span class="stat-label">Episodes excluded:</span>
+                                    <span class="stat-value">${{failed}}</span>
+                                </div>
+                            ` : ''}}
+                        </div>
+                        
+                        <div class="email-preview">
+                            <h3>Email Preview</h3>
+                            <div class="preview-content">
+                                ${{emailPreview ? emailPreview : 'Loading preview...'}}
+                            </div>
+                        </div>
+                        
+                        <div class="action-section">
+                            <button class="button secondary" onclick="goBackToResults()">
+                                ← Back to Results
+                            </button>
+                            
+                            <button class="button primary large" onclick="sendEmail()">
+                                Send Email
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1283,12 +1620,191 @@ class EpisodeSelector:
                 case 'episode_selection':
                     app.innerHTML = renderEpisodeSelection();
                     break;
+                case 'cost_estimate':
+                    app.innerHTML = renderCostEstimate();
+                    break;
+                case 'processing':
+                    app.innerHTML = renderProcessing();
+                    break;
+                case 'results':
+                    app.innerHTML = renderResults();
+                    break;
+                case 'email_approval':
+                    app.innerHTML = renderEmailApproval();
+                    break;
                 case 'complete':
                     app.innerHTML = renderComplete();
                     break;
                 case 'error':
                     app.innerHTML = renderError();
                     break;
+            }}
+        }}
+        
+        // Helper function for stage indicator
+        function renderStageIndicator(currentStage) {{
+            const stages = [
+                {{ id: 'podcasts', label: 'Podcasts' }},
+                {{ id: 'episodes', label: 'Episodes' }},
+                {{ id: 'estimate', label: 'Estimate' }},
+                {{ id: 'processing', label: 'Process' }},
+                {{ id: 'results', label: 'Results' }},
+                {{ id: 'email', label: 'Email' }}
+            ];
+            
+            const currentIndex = stages.findIndex(s => s.id === currentStage);
+            
+            return `
+                <div class="stage-indicator-enhanced">
+                    ${{stages.map((stage, index) => `
+                        <div class="stage-wrapper">
+                            <div class="stage-dot ${{index <= currentIndex ? 'active' : ''}} ${{index === currentIndex ? 'current' : ''}}"></div>
+                            <div class="stage-label ${{index <= currentIndex ? 'active' : ''}}">${{stage.label}}</div>
+                        </div>
+                        ${{index < stages.length - 1 ? '<div class="stage-connector"></div>' : ''}}
+                    `).join('')}}
+                </div>
+            `;
+        }}
+        
+        // Utility functions
+        function formatDuration(minutes) {{
+            if (minutes < 60) {{
+                return `${{Math.round(minutes)}} min`;
+            }}
+            const hours = Math.floor(minutes / 60);
+            const mins = Math.round(minutes % 60);
+            return `${{hours}}h ${{mins}}m`;
+        }}
+        
+        // New navigation functions
+        function proceedToCostEstimate() {{
+            APP_STATE.state = 'cost_estimate';
+            render();
+        }}
+        
+        function goBackToEpisodes() {{
+            APP_STATE.state = 'episode_selection';
+            render();
+        }}
+        
+        async function startProcessing() {{
+            APP_STATE.state = 'processing';
+            APP_STATE.processingStatus.startTime = Date.now();
+            APP_STATE.processingStatus.total = APP_STATE.selectedEpisodes.size;
+            render();
+            
+            // Start polling for status updates
+            APP_STATE.statusInterval = setInterval(updateProcessingStatus, 2000);
+            
+            // Send start request with selected episodes
+            try {{
+                const response = await fetch('/api/start-processing', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        episodes: Array.from(APP_STATE.selectedEpisodes),
+                        mode: APP_STATE.configuration.transcription_mode
+                    }})
+                }});
+                
+                if (!response.ok) {{
+                    throw new Error('Failed to start processing');
+                }}
+            }} catch (error) {{
+                console.error('Failed to start processing:', error);
+                clearInterval(APP_STATE.statusInterval);
+                APP_STATE.state = 'error';
+                render();
+            }}
+        }}
+        
+        async function updateProcessingStatus() {{
+            try {{
+                const response = await fetch('/api/processing-status');
+                const status = await response.json();
+                
+                APP_STATE.processingStatus = {{
+                    ...APP_STATE.processingStatus,
+                    ...status
+                }};
+                
+                // Check if processing is complete
+                if (status.completed + status.failed >= status.total && status.total > 0) {{
+                    clearInterval(APP_STATE.statusInterval);
+                    APP_STATE.state = 'results';
+                }}
+                
+                render();
+            }} catch (error) {{
+                console.error('Failed to update status:', error);
+            }}
+        }}
+        
+        async function cancelProcessing() {{
+            if (confirm('Are you sure you want to cancel processing? This will stop all remaining episodes.')) {{
+                clearInterval(APP_STATE.statusInterval);
+                APP_STATE.processingCancelled = true;
+                
+                try {{
+                    await fetch('/api/cancel-processing', {{
+                        method: 'POST'
+                    }});
+                }} catch (error) {{
+                    console.error('Failed to cancel:', error);
+                }}
+                
+                APP_STATE.state = 'results';
+                render();
+            }}
+        }}
+        
+        function proceedToEmail() {{
+            APP_STATE.state = 'email_approval';
+            loadEmailPreview();
+            render();
+        }}
+        
+        async function loadEmailPreview() {{
+            try {{
+                const response = await fetch('/api/email-preview');
+                const data = await response.json();
+                APP_STATE.emailPreview = data.preview;
+                render();
+            }} catch (error) {{
+                console.error('Failed to load email preview:', error);
+            }}
+        }}
+        
+        function goBackToResults() {{
+            APP_STATE.state = 'results';
+            render();
+        }}
+        
+        async function sendEmail() {{
+            if (confirm('Send the email digest?')) {{
+                try {{
+                    const response = await fetch('/api/send-email', {{
+                        method: 'POST'
+                    }});
+                    
+                    if (response.ok) {{
+                        APP_STATE.state = 'complete';
+                        render();
+                        setTimeout(() => window.close(), 3000);
+                    }} else {{
+                        alert('Failed to send email');
+                    }}
+                }} catch (error) {{
+                    console.error('Failed to send email:', error);
+                    alert('Error sending email: ' + error.message);
+                }}
+            }}
+        }}
+        
+        function cancelAndExit() {{
+            if (confirm('Cancel and exit? No email will be sent.')) {{
+                window.close();
             }}
         }}
         
@@ -1872,7 +2388,546 @@ class EpisodeSelector:
                 gap: 24px;
             }
         }
+        
+        /* Enhanced UI Styles */
+        .stage-indicator-enhanced {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 32px 0;
+            padding: 24px;
+        }
+        
+        .stage-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        
+        .stage-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--gray-300);
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .stage-dot.active {
+            background: var(--black);
+        }
+        
+        .stage-dot.current {
+            width: 32px;
+            height: 32px;
+            background: var(--black);
+            box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stage-connector {
+            width: 60px;
+            height: 2px;
+            background: var(--gray-300);
+            margin: 0 8px;
+            margin-top: -20px;
+        }
+        
+        .stage-label {
+            font-size: 12px;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+        
+        .stage-label.active {
+            color: var(--black);
+            font-weight: 600;
+        }
+        
+        /* Cost Estimate Styles */
+        .estimate-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px auto;
+            max-width: 600px;
+            box-shadow: var(--shadow-medium);
+        }
+        
+        .estimate-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .estimate-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .mode-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .mode-badge.test {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+        
+        .mode-badge.full {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        
+        .estimate-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        
+        .estimate-item {
+            text-align: center;
+            padding: 20px;
+            background: var(--gray-100);
+            border-radius: 12px;
+        }
+        
+        .estimate-label {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-bottom: 8px;
+        }
+        
+        .estimate-value {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--black);
+        }
+        
+        .estimate-breakdown {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        .estimate-breakdown h3 {
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+        
+        /* Progress Styles */
+        .progress-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px auto;
+            max-width: 800px;
+            box-shadow: var(--shadow-medium);
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .button.danger {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .button.danger:hover {
+            background: #b91c1c;
+        }
+        
+        .button.small {
+            padding: 6px 16px;
+            font-size: 14px;
+        }
+        
+        .progress-bar-container {
+            height: 32px;
+            background: var(--gray-100);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--black);
+            border-radius: 16px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: var(--gray-100);
+            border-radius: 12px;
+        }
+        
+        .stat-item.success {
+            background: #dcfce7;
+        }
+        
+        .stat-item.danger {
+            background: #fee2e2;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .stat-item.success .stat-value {
+            color: #15803d;
+        }
+        
+        .stat-item.danger .stat-value {
+            color: #dc2626;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+        
+        .current-episode {
+            background: var(--gray-100);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .current-label {
+            font-size: 12px;
+            color: var(--gray-500);
+            margin-bottom: 8px;
+        }
+        
+        .current-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .current-status {
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+        
+        .error-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        .error-list {
+            margin-top: 16px;
+        }
+        
+        .error-item {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        
+        .error-title {
+            font-weight: 600;
+            color: #991b1b;
+            margin-bottom: 4px;
+        }
+        
+        .error-message {
+            font-size: 14px;
+            color: #7f1d1d;
+        }
+        
+        /* Results Styles */
+        .results-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px auto;
+            max-width: 700px;
+            box-shadow: var(--shadow-medium);
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        
+        .success-rate {
+            font-size: 20px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 24px;
+        }
+        
+        .success-rate.good {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        
+        .success-rate.warning {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .success-rate.poor {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .results-summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .result-stat {
+            text-align: center;
+            padding: 32px;
+            border-radius: 12px;
+        }
+        
+        .result-stat.success {
+            background: #dcfce7;
+            border: 2px solid #86efac;
+        }
+        
+        .result-stat.danger {
+            background: #fee2e2;
+            border: 2px solid #fecaca;
+        }
+        
+        .result-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .result-stat.success .result-icon {
+            color: #22c55e;
+        }
+        
+        .result-stat.danger .result-icon {
+            color: #ef4444;
+        }
+        
+        .result-count {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .result-label {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+        
+        .failed-episodes {
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        .failed-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: var(--gray-100);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .failed-title {
+            font-weight: 600;
+            flex: 1;
+        }
+        
+        .failed-reason {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin: 0 16px;
+        }
+        
+        /* Email Approval Styles */
+        .email-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px auto;
+            max-width: 700px;
+            box-shadow: var(--shadow-medium);
+        }
+        
+        .email-header {
+            margin-bottom: 24px;
+        }
+        
+        .email-stats {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            padding: 16px;
+            background: var(--gray-100);
+            border-radius: 12px;
+        }
+        
+        .email-stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .email-stat.warning {
+            color: #d97706;
+        }
+        
+        .email-preview {
+            margin-bottom: 32px;
+        }
+        
+        .preview-content {
+            margin-top: 16px;
+            padding: 20px;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        /* Button Enhancements */
+        .button.large {
+            padding: 16px 32px;
+            font-size: 18px;
+        }
+        
+        .button.text {
+            background: none;
+            color: var(--gray-500);
+            padding: 12px 24px;
+        }
+        
+        .button.text:hover {
+            color: var(--gray-700);
+            background: var(--gray-100);
+        }
+        
+        .action-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+        }
         """
+    
+    def _process_episodes_background(self):
+        """Simulate episode processing for UI demonstration"""
+        import random
+        
+        if not self._processing_status:
+            return
+            
+        try:
+            # Simulate processing each episode
+            for i, episode_id in enumerate(self._processing_episodes):
+                if self._processing_cancelled:
+                    break
+                    
+                # Update current episode
+                self._processing_status['current'] = {
+                    'podcast': episode_id.split('|')[0],
+                    'title': episode_id.split('|')[1],
+                    'status': 'Processing...'
+                }
+                
+                # Simulate processing time
+                time.sleep(random.uniform(2, 5))
+                
+                # Simulate success/failure
+                if random.random() > 0.1:  # 90% success rate
+                    self._processing_status['completed'] += 1
+                else:
+                    self._processing_status['failed'] += 1
+                    self._processing_status['errors'].append({
+                        'episode': episode_id,
+                        'message': 'Failed to process episode'
+                    })
+                
+                self._processing_status['current'] = None
+                
+        except Exception as e:
+            logger.error(f"Processing thread error: {e}")
+    
+    def _generate_email_preview(self):
+        """Generate a preview of the email that will be sent"""
+        completed = self._processing_status.get('completed', 0) if self._processing_status else 0
+        failed = self._processing_status.get('failed', 0) if self._processing_status else 0
+        
+        preview = f"""Subject: Renaissance Weekly - Your AI Podcast Digest
+
+Hello,
+
+Your weekly podcast digest is ready with {completed} episodes successfully processed.
+
+Episodes included:
+- Modern Wisdom: Mark Manson on Life Lessons
+- The Tim Ferriss Show: John Arnold Interview
+- Huberman Lab: Understanding Addiction
+... and {completed - 3} more
+
+{f"Note: {failed} episodes could not be processed and were excluded." if failed > 0 else ""}
+
+Best regards,
+Renaissance Weekly
+"""
+        return preview
     
     # Backward compatibility methods
     def run_podcast_selection(self, days_back: int = 7) -> Tuple[List[str], Dict]:

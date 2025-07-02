@@ -158,6 +158,10 @@ class RenaissanceWeekly:
             # Default transcription mode (will be updated from UI selection)
             self.current_transcription_mode = 'test'
             
+            # Cancellation support
+            self._processing_cancelled = False
+            self._processing_status = None
+            
             # Initialize global rate limiter info
             logger.info(f"[{self.correlation_id}] 🔧 OpenAI rate limiter configured: 45 requests/minute (with 10% buffer)")
             
@@ -403,6 +407,15 @@ class RenaissanceWeekly:
         """Process episodes with dynamic concurrency based on system resources and OpenAI limits"""
         summaries = []
         
+        # Initialize processing status for UI
+        self._processing_status = {
+            'total': len(selected_episodes),
+            'completed': 0,
+            'failed': 0,
+            'current': None,
+            'errors': []
+        }
+        
         # Get optimal concurrency with OpenAI limit
         openai_concurrency_limit = 3  # Max 3 concurrent OpenAI operations
         max_concurrent = self.concurrency_manager.get_optimal_concurrency(openai_concurrency_limit)
@@ -426,12 +439,17 @@ class RenaissanceWeekly:
             )
             tasks.append(task)
         
+        # DIAGNOSTIC: Log task creation
+        logger.info(f"[{self.correlation_id}] 📋 Created {len(tasks)} tasks for processing")
+        
         # Monitor resource usage periodically
         monitor_task = asyncio.create_task(self._monitor_resources(max_concurrent))
         
         try:
             # Execute all tasks
+            logger.info(f"[{self.correlation_id}] 🚀 Starting asyncio.gather for {len(tasks)} tasks...")
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"[{self.correlation_id}] ✅ asyncio.gather completed with {len(results)} results")
             
             # Process results maintaining order
             for i, result in enumerate(results):
@@ -460,6 +478,20 @@ class RenaissanceWeekly:
         
         # Log processing summary
         process_summary = process_progress.get_summary()
+        
+        # Verify all episodes are accounted for
+        total_processed = process_summary['completed'] + process_summary['failed']
+        if total_processed < process_summary['total_items']:
+            logger.warning(
+                f"[{self.correlation_id}] ⚠️ Not all episodes were processed! "
+                f"Expected: {process_summary['total_items']}, Processed: {total_processed}"
+            )
+            # Log which episodes might be missing
+            if len(results) < len(selected_episodes):
+                logger.error(
+                    f"[{self.correlation_id}] 🚨 Results mismatch: {len(results)} results for {len(selected_episodes)} episodes"
+                )
+        
         logger.info(
             f"[{self.correlation_id}] ✅ Processing complete: "
             f"{process_summary['completed']}/{process_summary['total_items']} episodes succeeded "
@@ -473,10 +505,24 @@ class RenaissanceWeekly:
                                              progress: ProgressTracker, index: int) -> Optional[Dict]:
         """Process single episode with monitoring and error handling"""
         async with semaphore:
+            # Check for cancellation before starting
+            if self._processing_cancelled:
+                logger.info(f"[{self.correlation_id}] Processing cancelled, skipping episode {index+1}")
+                return None
+                
             episode_id = f"{episode.podcast}:{episode.title[:30]}"
+            episode_timeout = 600  # 10 minutes per episode
             
             try:
                 await progress.start_item(episode_id)
+                
+                # Update processing status if available
+                if self._processing_status:
+                    self._processing_status['current'] = {
+                        'podcast': episode.podcast,
+                        'title': episode.title,
+                        'status': 'Processing...'
+                    }
                 
                 # Add retry logic with exponential backoff
                 max_retries = 3
@@ -484,15 +530,45 @@ class RenaissanceWeekly:
                 
                 for attempt in range(max_retries):
                     try:
-                        summary = await self.process_episode(episode)
+                        # Check for cancellation in retry loop
+                        if self._processing_cancelled:
+                            logger.info(f"[{self.correlation_id}] Processing cancelled during episode {index+1}")
+                            return None
+                            
+                        # Add timeout to prevent stuck episodes
+                        logger.debug(f"[{self.correlation_id}] Processing episode {index+1}: {episode_id}")
+                        summary = await asyncio.wait_for(
+                            self.process_episode(episode),
+                            timeout=episode_timeout
+                        )
                         
                         if summary:
                             await progress.complete_item(True)
+                            # Update processing status
+                            if self._processing_status:
+                                self._processing_status['completed'] += 1
+                                self._processing_status['current'] = None
+                            logger.debug(f"[{self.correlation_id}] Episode {index+1} completed successfully")
                             return {"episode": episode, "summary": summary}
                         else:
                             await progress.complete_item(False)
+                            # Update processing status
+                            if self._processing_status:
+                                self._processing_status['failed'] += 1
+                                self._processing_status['current'] = None
+                            logger.debug(f"[{self.correlation_id}] Episode {index+1} completed with no summary")
                             return None
                             
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"[{self.correlation_id}] Episode {index+1} ({episode_id}) timed out after {episode_timeout}s"
+                        )
+                        last_exception = asyncio.TimeoutError(f"Episode processing timed out after {episode_timeout}s")
+                        if attempt < max_retries - 1:
+                            logger.warning(f"[{self.correlation_id}] Retrying episode {index+1}...")
+                            continue
+                        else:
+                            raise last_exception
                     except Exception as e:
                         last_exception = e
                         if attempt < max_retries - 1:
@@ -511,6 +587,16 @@ class RenaissanceWeekly:
                 )
                 await self.exception_aggregator.add_exception(episode_id, e)
                 await progress.complete_item(False)
+                
+                # Update processing status with error
+                if self._processing_status:
+                    self._processing_status['failed'] += 1
+                    self._processing_status['current'] = None
+                    self._processing_status['errors'].append({
+                        'episode': f"{episode.podcast}: {episode.title}",
+                        'message': str(e)[:200]  # Limit error message length
+                    })
+                
                 return None
     
     async def _monitor_resources(self, initial_concurrency: int):
@@ -1059,6 +1145,36 @@ class RenaissanceWeekly:
         if summaries and EMAIL_TO:
             logger.info(f"[{self.correlation_id}] 📧 Sending digest with regenerated summaries...")
             await self._generate_and_send_digest(summaries)
+    
+    def cancel_processing(self):
+        """Cancel ongoing processing"""
+        logger.info(f"[{self.correlation_id}] 🛑 Cancelling processing...")
+        self._processing_cancelled = True
+    
+    def get_processing_status(self):
+        """Get current processing status for UI"""
+        if self._processing_status:
+            return self._processing_status.copy()
+        return {
+            'total': 0,
+            'completed': 0,
+            'failed': 0,
+            'current': None,
+            'errors': []
+        }
+    
+    def generate_email_preview(self):
+        """Generate preview of email content"""
+        # This would use the actual email template
+        # For now, return a simple preview
+        completed = self._processing_status.get('completed', 0) if self._processing_status else 0
+        
+        return f"""Subject: Renaissance Weekly - Your AI Podcast Digest
+
+Your weekly podcast digest is ready with {completed} episodes successfully processed.
+
+This email will include executive summaries of all processed episodes...
+"""
     
     async def cleanup(self):
         """Clean up resources properly"""

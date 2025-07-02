@@ -292,3 +292,34 @@ The system now searches for transcripts in this order:
 - Increased test mode transcription from 5 to 15 minutes for better content coverage
 - Relaxed transcript validation for test mode (1 conversation indicator minimum)
 - Added special handling for test mode audio transcriptions
+
+### Recent Updates (2025-01-02) - Enhanced UI:
+- **Implemented comprehensive UI enhancements for better control and visibility:**
+  - **New Single-Tab Flow**: Seamless progression through 6 stages in one browser tab
+  - **Cost & Time Estimation**: Shows estimated costs and processing time before starting
+  - **Real-Time Progress Monitoring**: Live updates with current episode, success/failure counts
+  - **Early Failure Detection**: Failed episodes appear immediately with error details
+  - **Cancellation Support**: Prominent red "Cancel Processing" button available at all times
+  - **Results Summary**: Visual success rate indicator with detailed failure information
+  - **Email Preview & Approval**: Review email content before sending with final approval step
+  
+- **UI Technical Implementation:**
+  - Added new render functions for each stage (renderCostEstimate, renderProcessing, renderResults, renderEmailApproval)
+  - Enhanced stage indicator showing current position in the flow
+  - New API endpoints: `/api/start-processing`, `/api/processing-status`, `/api/cancel-processing`, `/api/email-preview`, `/api/send-email`
+  - Integrated processing status tracking throughout the backend pipeline
+  - Added cancellation checks at multiple points during episode processing
+  - Maintains existing minimalist design aesthetic with enhanced functionality
+  
+- **Backend Improvements for UI Support:**
+  - Added `_processing_cancelled` flag for graceful cancellation
+  - Real-time status updates with current episode information
+  - Error tracking with detailed failure messages
+  - Processing status persistence across the pipeline
+  - Email preview generation before final sending
+
+- **Fixed Episode Processing Bug:**
+  - Added diagnostic logging to track task creation and completion
+  - Enhanced asyncio.gather monitoring to ensure all episodes complete
+  - Added verification after processing to detect incomplete episode sets
+  - Improved timeout handling to prevent stuck episodes

@@ -1,0 +1,485 @@
+/* Additional CSS for Renaissance Weekly UI enhancements */
+/* Maintains existing minimalist aesthetic */
+
+/* Cost Estimate Styles */
+.estimate-card {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px auto;
+    max-width: 600px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.estimate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.mode-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.mode-badge.test {
+    background: #e8f4f8;
+    color: #0369a1;
+}
+
+.mode-badge.full {
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.estimate-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.estimate-item {
+    text-align: center;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.estimate-label {
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.estimate-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.estimate-breakdown {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 14px;
+}
+
+/* Progress Styles */
+.progress-card {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px auto;
+    max-width: 800px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.button.danger {
+    background: #dc2626;
+    color: white;
+}
+
+.button.danger:hover {
+    background: #b91c1c;
+}
+
+.progress-bar-container {
+    height: 32px;
+    background: #f1f5f9;
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 32px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+    border-radius: 16px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.stat-item.success {
+    background: #f0fdf4;
+}
+
+.stat-item.danger {
+    background: #fef2f2;
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.stat-item.success .stat-value {
+    color: #15803d;
+}
+
+.stat-item.danger .stat-value {
+    color: #dc2626;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.current-episode {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.current-label {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.current-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.current-status {
+    font-size: 14px;
+    color: #3b82f6;
+}
+
+.error-section {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.error-list {
+    margin-top: 16px;
+}
+
+.error-item {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.error-title {
+    font-weight: 600;
+    color: #991b1b;
+    margin-bottom: 4px;
+}
+
+.error-message {
+    font-size: 14px;
+    color: #7f1d1d;
+}
+
+/* Results Styles */
+.results-card {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px auto;
+    max-width: 700px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.success-rate {
+    font-size: 20px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 24px;
+}
+
+.success-rate.good {
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.success-rate.warning {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.success-rate.poor {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.results-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.result-stat {
+    text-align: center;
+    padding: 32px;
+    border-radius: 12px;
+}
+
+.result-stat.success {
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+}
+
+.result-stat.danger {
+    background: #fef2f2;
+    border: 2px solid #fecaca;
+}
+
+.result-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.result-stat.success .result-icon {
+    color: #22c55e;
+}
+
+.result-stat.danger .result-icon {
+    color: #ef4444;
+}
+
+.result-count {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.result-label {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.failed-episodes {
+    margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.failed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.failed-title {
+    font-weight: 600;
+    flex: 1;
+}
+
+.failed-reason {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0 16px;
+}
+
+/* Email Approval Styles */
+.email-card {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px auto;
+    max-width: 700px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.email-header {
+    margin-bottom: 24px;
+}
+
+.email-stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.email-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.email-stat.warning {
+    color: #d97706;
+}
+
+.email-preview {
+    margin-bottom: 32px;
+}
+
+.preview-content {
+    margin-top: 16px;
+    padding: 20px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.email-recipients {
+    margin-bottom: 32px;
+}
+
+.recipient-list {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.recipient {
+    padding: 4px 0;
+    color: #475569;
+}
+
+/* Enhanced Stage Indicator */
+.stage-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 32px 0;
+    padding: 24px;
+}
+
+.stage-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.stage-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.stage-dot.active {
+    background: #3b82f6;
+}
+
+.stage-dot.current {
+    width: 32px;
+    height: 32px;
+    background: #1d4ed8;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.stage-connector {
+    width: 60px;
+    height: 2px;
+    background: #e2e8f0;
+    margin: 0 8px;
+    margin-top: -20px;
+}
+
+.stage-label {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.stage-label.active {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+/* Button Enhancements */
+.button.large {
+    padding: 16px 32px;
+    font-size: 18px;
+}
+
+.button.small {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.button.text {
+    background: none;
+    color: #64748b;
+    padding: 12px 24px;
+}
+
+.button.text:hover {
+    color: #475569;
+    background: #f8fafc;
+}
+
+.action-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #e2e8f0;
+}
