@@ -5168,5 +5168,465 @@
     "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:39:16.796645",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:39:17.554933",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:39:18.237440",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:03.097747",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:09.062726",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Choice Over Reaction | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:21.837813",
+    "component": "audio_transcription",
+    "podcast": "All-In",
+    "episode_title": "Choice Over Reaction | Rick Jordan",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:22.383523",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "The Light Switch Moment | Kim Becker",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:51.525107",
+    "component": "audio_transcription",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:40:51.536211",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Stop Making Failure a Badge of Honor | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:44:01.204276",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:44:01.943186",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:44:02.665169",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:44:44.880099",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:44:58.306482",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Choice Over Reaction | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:45:09.322435",
+    "component": "audio_transcription",
+    "podcast": "All-In",
+    "episode_title": "Choice Over Reaction | Rick Jordan",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:45:09.670419",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "The Light Switch Moment | Kim Becker",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:49:18.892797",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:49:18.922067",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:49:19.482361",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:50:01.297700",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:50:03.872203",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Choice Over Reaction | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:50:06.742528",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "The Light Switch Moment | Kim Becker",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:50:58.299872",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Stop Making Failure a Badge of Honor | Rick Jordan",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:50:58.759351",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:51:07.710008",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The AI Village: Previewing the Giga-Agent Future with Adam Binksmith, Founder of AI Digest",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:51:28.373666",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:51:37.345388",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:51:37.539919",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:51:46.334602",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Bringing The Long Tail Of Markets Onchain",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:52:05.714472",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:52:07.166859",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:52:08.916755",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:52:54.275397",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:53:46.470535",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:54:26.278194",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Airway Sleep Dentistry in the Pediatric Population",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T19:55:38.629978",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "To Crown or Not to Crown: Exploring the Direct Composite Advantage",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:00:57.329331",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Where We Are in the AI Cycle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:00:58.223520",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "The Light Switch Moment | Kim Becker",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:02:06.671068",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:02:06.690474",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:15:50.487132",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:15:51.658334",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:15:51.843939",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:15:55.326704",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:15:57.792403",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Bonus Short from Episode 80 - The Trust Factor: How Trusting Your Driving Abilities Can Boost Confidence on the Road",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:16:22.886004",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
   }
 ]

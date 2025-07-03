@@ -146,6 +146,7 @@ class EpisodeSelector:
                             'has_transcript': ep.transcript_url is not None,
                             'description': ep.description[:200] if ep.description else ''
                         } for ep in parent.episode_cache]
+                        response_data['selected_podcasts'] = parent.selected_podcasts
                     
                     self._send_json(response_data)
                 elif self.path == f'/api/status':
@@ -159,6 +160,27 @@ class EpisodeSelector:
                         })
                     else:
                         self._send_json({'error': False})
+                elif self.path == '/api/processing-status':
+                    # Return current processing status
+                    with parent._status_lock:
+                        status = getattr(parent, '_processing_status', None)
+                        if status is None:
+                            status = {
+                                'total': 0,
+                                'completed': 0,
+                                'failed': 0,
+                                'current': None,
+                                'errors': []
+                            }
+                        # Make a copy to avoid modification during serialization
+                        status_copy = {
+                            'total': status.get('total', 0),
+                            'completed': status.get('completed', 0),
+                            'failed': status.get('failed', 0),
+                            'current': status.get('current'),
+                            'errors': list(status.get('errors', []))
+                        }
+                    self._send_json(status_copy)
                 else:
                     self._send_json({'status': 'error', 'message': 'Not found'})
                     return
@@ -244,26 +266,6 @@ class EpisodeSelector:
                         parent._process_thread.start()
                     
                     self._send_json({'status': 'success'})
-                    
-                elif self.path == '/api/processing-status':
-                    # Return current processing status
-                    with parent._status_lock:
-                        status = getattr(parent, '_processing_status', {
-                            'total': 0,
-                            'completed': 0,
-                            'failed': 0,
-                            'current': None,
-                            'errors': []
-                        })
-                        # Make a copy to avoid modification during serialization
-                        status_copy = {
-                            'total': status.get('total', 0),
-                            'completed': status.get('completed', 0),
-                            'failed': status.get('failed', 0),
-                            'current': status.get('current'),
-                            'errors': list(status.get('errors', []))
-                        }
-                    self._send_json(status_copy)
                     
                 elif self.path == '/api/cancel-processing':
                     # Cancel ongoing processing
@@ -512,10 +514,13 @@ class EpisodeSelector:
     <div id="app"></div>
     
     <script>
+        console.log('Script starting...');
+        
         const APP_STATE = {{
             state: '{self.state}',
             selectedPodcasts: new Set(),
             selectedEpisodes: new Set(),
+            selectedPodcastNames: [],
             configuration: {{
                 lookback_days: {self.configuration.get('lookback_days', 7)},
                 transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
@@ -541,6 +546,8 @@ class EpisodeSelector:
             emailPreview: null,
             processingCancelled: false
         }};
+        
+        console.log('APP_STATE initialized:', APP_STATE);
         
         // Render functions for each state
         function renderPodcastSelection() {{
@@ -659,7 +666,7 @@ class EpisodeSelector:
                 
                 <div class="container">
                     <div class="loading-content" style="margin: 100px auto;">
-                        <div style="font-size: 60px; color: #dc3545; margin-bottom: 20px;">✗</div>
+                        <div style="font-size: 60px; color: var(--gray-700); margin-bottom: 20px;">✗</div>
                         <h2>Something went wrong</h2>
                         <p style="margin-top: 20px; color: #666;">An error occurred while fetching episodes. Please try again.</p>
                         <p style="margin-top: 10px; color: #999; font-size: 14px;">${{APP_STATE.loading_status.error || 'Unknown error'}}</p>
@@ -702,6 +709,16 @@ class EpisodeSelector:
             
             // Sort podcast names alphabetically
             const sortedPodcasts = Object.keys(episodesByPodcast).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            
+            // Find podcasts with no recent episodes
+            const podcastsWithNoEpisodes = [];
+            if (APP_STATE.selectedPodcastNames) {{
+                APP_STATE.selectedPodcastNames.forEach(podcastName => {{
+                    if (!episodesByPodcast[podcastName]) {{
+                        podcastsWithNoEpisodes.push(podcastName);
+                    }}
+                }});
+            }}
             
             return `
                 <div class="header">
@@ -756,6 +773,21 @@ class EpisodeSelector:
                                 </div>
                             </div>
                         `).join('')}}
+                        
+                        ${{podcastsWithNoEpisodes.length > 0 ? `
+                            <div class="episode-section" style="opacity: 0.7;">
+                                <div class="episode-header">
+                                    <h3 class="episode-podcast-name">No Recent Episodes</h3>
+                                    <div class="episode-count">${{podcastsWithNoEpisodes.length}} podcast${{podcastsWithNoEpisodes.length !== 1 ? 's' : ''}}</div>
+                                </div>
+                                <div class="episodes-list" style="padding: 16px; color: #666;">
+                                    <p style="margin-bottom: 8px;">The following podcasts have no episodes in the last ${{APP_STATE.configuration.lookback_days}} days:</p>
+                                    <ul style="margin: 0; padding-left: 20px;">
+                                        ${{podcastsWithNoEpisodes.map(podcast => `<li>${{podcast}}</li>`).join('')}}
+                                    </ul>
+                                </div>
+                            </div>
+                        ` : ''}}
                     </div>
                     
                     <div class="action-bar">
@@ -807,7 +839,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Estimated Cost</div>
-                                <div class="estimate-value">\$${{totalCost.toFixed(2)}}</div>
+                                <div class="estimate-value">$${{totalCost.toFixed(2)}}</div>
                             </div>
                             
                             <div class="estimate-item">
@@ -817,7 +849,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Cost per Episode</div>
-                                <div class="estimate-value">\$${{costPerEpisode.toFixed(2)}}</div>
+                                <div class="estimate-value">$${{costPerEpisode.toFixed(2)}}</div>
                             </div>
                         </div>
                         
@@ -825,19 +857,19 @@ class EpisodeSelector:
                             <h3>Cost Breakdown</h3>
                             <div class="breakdown-item">
                                 <span>Audio Transcription (Whisper API)</span>
-                                <span>\$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
+                                <span>$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Summarization (GPT-4)</span>
-                                <span>\$${{(episodeCount * 0.03).toFixed(2)}}</span>
+                                <span>$${{(episodeCount * 0.03).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Other API Calls</span>
-                                <span>\$${{(episodeCount * 0.01).toFixed(2)}}</span>
+                                <span>$${{(episodeCount * 0.01).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item" style="border-top: 2px solid #e0e0e0; margin-top: 12px; padding-top: 12px; font-weight: bold;">
                                 <span>Total Estimated Cost to Run</span>
-                                <span>\$${{totalCost.toFixed(2)}}</span>
+                                <span>$${{totalCost.toFixed(2)}}</span>
                             </div>
                         </div>
                         
@@ -855,7 +887,20 @@ class EpisodeSelector:
         }}
         
         function renderProcessing() {{
-            const {{ total }} = APP_STATE.processingStatus;
+            const {{ total, completed, failed, current, errors }} = APP_STATE.processingStatus;
+            const progress = total > 0 ? ((completed + failed) / total * 100) : 0;
+            const remaining = total - completed - failed;
+            const estimatedMinutesRemaining = remaining * (APP_STATE.configuration.transcription_mode === 'test' ? 0.5 : 5);
+            
+            // Get selected episodes for display
+            const selectedEpisodesArray = [];
+            if (APP_STATE.selectedEpisodes.size > 0) {{
+                APP_STATE.episodes.forEach(ep => {{
+                    if (APP_STATE.selectedEpisodes.has(ep.id)) {{
+                        selectedEpisodesArray.push(ep);
+                    }}
+                }});
+            }}
             
             return `
                 <div class="header">
@@ -866,40 +911,265 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('processing')}}
                     
-                    <div class="progress-card">
-                        <div class="progress-header">
-                            <h2>Processing ${{total}} Episodes</h2>
-                            <button class="button danger small" onclick="cancelProcessing()">
+                    <div class="progress-overview">
+                        <div class="progress-ring-container">
+                            <svg class="progress-ring" width="120" height="120">
+                                <circle cx="60" cy="60" r="54" fill="none" stroke="var(--gray-200)" stroke-width="8"/>
+                                <circle cx="60" cy="60" r="54" fill="none" stroke="var(--gray-700)" stroke-width="8"
+                                    stroke-dasharray="${{339.292}}"
+                                    stroke-dashoffset="${{339.292 - (339.292 * progress / 100)}}"
+                                    transform="rotate(-90 60 60)"
+                                    style="transition: stroke-dashoffset 0.5s ease"/>
+                            </svg>
+                            <div class="progress-percentage">${{Math.round(progress)}}%</div>
+                        </div>
+                        
+                        <div class="progress-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Completed:</span>
+                                <span class="stat-value">${{completed}} / ${{total}}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Failed:</span>
+                                <span class="stat-value">${{failed}}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Remaining:</span>
+                                <span class="stat-value">${{remaining}}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Est. time:</span>
+                                <span class="stat-value">${{estimatedMinutesRemaining < 60 ? 
+                                    Math.round(estimatedMinutesRemaining) + ' min' : 
+                                    Math.round(estimatedMinutesRemaining / 60) + ' hr'}}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-actions">
+                            <button class="button danger" onclick="cancelProcessing()">
                                 Cancel Processing
                             </button>
                         </div>
-                        
-                        <div class="processing-message">
-                            <div class="spinner"></div>
-                            <p>This will take approximately 10-30 minutes depending on the number of episodes.</p>
-                            <p>You can safely leave this page - processing will continue in the background.</p>
-                        </div>
-                        
-                        <style>
-                            .processing-message {{
-                                text-align: center;
-                                padding: 3rem;
-                            }}
-                            .spinner {{
-                                width: 50px;
-                                height: 50px;
-                                margin: 0 auto 2rem;
-                                border: 4px solid #f3f3f3;
-                                border-top: 4px solid #6366f1;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                            }}
-                            @keyframes spin {{
-                                from {{ transform: rotate(0deg); }}
-                                to {{ transform: rotate(360deg); }}
-                            }}
-                        </style>
                     </div>
+                    
+                    ${{current ? `
+                        <div class="current-episode">
+                            <div class="current-label">Currently processing:</div>
+                            <div class="current-info">
+                                <strong>${{current.podcast}}</strong>
+                                <span>${{current.title}}</span>
+                            </div>
+                        </div>
+                    ` : ''}}
+                    
+                    <div class="episodes-progress-list">
+                        <h3>Episode Status</h3>
+                        ${{selectedEpisodesArray.map(ep => {{
+                            // Determine status
+                            let status = 'pending';
+                            let statusIcon = '○';
+                            let statusClass = 'pending';
+                            let errorMessage = '';
+                            
+                            if (current && current.podcast === ep.podcast && current.title === ep.title) {{
+                                status = 'processing';
+                                statusIcon = '◐';
+                                statusClass = 'processing';
+                            }} else if (errors && errors.find(err => err.episode && err.episode.includes(ep.title))) {{
+                                status = 'failed';
+                                statusIcon = '✗';
+                                statusClass = 'failed';
+                                const error = errors.find(err => err.episode && err.episode.includes(ep.title));
+                                errorMessage = error ? error.message : 'Unknown error';
+                            }} else if (completed > 0) {{
+                                // Simple heuristic - mark as complete if we've processed enough
+                                const processedCount = completed + failed;
+                                const episodeIndex = selectedEpisodesArray.indexOf(ep);
+                                if (episodeIndex < processedCount && !errors.find(err => err.episode && err.episode.includes(ep.title))) {{
+                                    status = 'completed';
+                                    statusIcon = '✓';
+                                    statusClass = 'completed';
+                                }}
+                            }}
+                            
+                            return `
+                                <div class="episode-progress-item ${{statusClass}}">
+                                    <div class="episode-status-icon">${{statusIcon}}</div>
+                                    <div class="episode-info">
+                                        <div class="episode-title">${{ep.title}}</div>
+                                        <div class="episode-podcast">${{ep.podcast}}</div>
+                                        ${{errorMessage ? `<div class="episode-error">${{errorMessage}}</div>` : ''}}
+                                    </div>
+                                </div>
+                            `;
+                        }}).join('')}}
+                    </div>
+                    
+                    <style>
+                        .progress-overview {{
+                            display: flex;
+                            align-items: center;
+                            gap: 48px;
+                            padding: 32px;
+                            background: var(--white);
+                            border: 1px solid var(--gray-200);
+                            border-radius: 12px;
+                            margin-bottom: 32px;
+                        }}
+                        
+                        .progress-ring-container {{
+                            position: relative;
+                            flex-shrink: 0;
+                        }}
+                        
+                        .progress-percentage {{
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            font-size: 20px;
+                            font-weight: 600;
+                            color: var(--black);
+                        }}
+                        
+                        .progress-stats {{
+                            flex: 1;
+                        }}
+                        
+                        .stat-row {{
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 8px 0;
+                            font-size: 14px;
+                        }}
+                        
+                        .stat-label {{
+                            color: var(--gray-600);
+                        }}
+                        
+                        .stat-value {{
+                            font-weight: 600;
+                            color: var(--black);
+                        }}
+                        
+                        .current-episode {{
+                            background: var(--white);
+                            padding: 16px 20px;
+                            border-radius: 8px;
+                            margin-bottom: 24px;
+                            border: 1px solid var(--gray-200);
+                            border-left: 3px solid var(--black);
+                        }}
+                        
+                        .current-label {{
+                            font-size: 12px;
+                            color: var(--gray-600);
+                            margin-bottom: 4px;
+                        }}
+                        
+                        .current-info {{
+                            font-size: 14px;
+                        }}
+                        
+                        .current-info strong {{
+                            color: var(--black);
+                            margin-right: 8px;
+                        }}
+                        
+                        .episodes-progress-list {{
+                            margin-top: 48px;
+                        }}
+                        
+                        .episodes-progress-list h3 {{
+                            font-size: 14px;
+                            font-weight: 600;
+                            margin-bottom: 16px;
+                            color: var(--gray-600);
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                        }}
+                        
+                        .episode-progress-item {{
+                            display: flex;
+                            align-items: flex-start;
+                            gap: 12px;
+                            padding: 12px 16px;
+                            border-radius: 8px;
+                            margin-bottom: 8px;
+                            transition: all 0.3s ease;
+                            background: var(--white);
+                            border: 1px solid var(--gray-200);
+                        }}
+                        
+                        .episode-progress-item.completed {{
+                            opacity: 0.6;
+                        }}
+                        
+                        .episode-progress-item.processing {{
+                            border-color: var(--black);
+                            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                        }}
+                        
+                        .episode-progress-item.failed {{
+                            border-color: var(--gray-400);
+                        }}
+                        
+                        .episode-status-icon {{
+                            font-size: 16px;
+                            width: 20px;
+                            text-align: center;
+                            color: var(--gray-500);
+                        }}
+                        
+                        .episode-progress-item.completed .episode-status-icon {{
+                            color: var(--gray-700);
+                        }}
+                        
+                        .episode-progress-item.processing .episode-status-icon {{
+                            animation: pulse 1.5s ease-in-out infinite;
+                        }}
+                        
+                        .episode-progress-item.failed .episode-status-icon {{
+                            color: var(--black);
+                        }}
+                        
+                        @keyframes pulse {{
+                            0%, 100% {{ opacity: 1; }}
+                            50% {{ opacity: 0.3; }}
+                        }}
+                        
+                        .episode-info {{
+                            flex: 1;
+                        }}
+                        
+                        .episode-title {{
+                            font-size: 14px;
+                            font-weight: 500;
+                            color: var(--black);
+                            margin-bottom: 2px;
+                        }}
+                        
+                        .episode-podcast {{
+                            font-size: 12px;
+                            color: var(--gray-600);
+                        }}
+                        
+                        .episode-error {{
+                            font-size: 12px;
+                            color: var(--gray-700);
+                            margin-top: 4px;
+                            font-style: italic;
+                        }}
+                        
+                        .button.danger {{
+                            background: var(--gray-700);
+                            color: var(--white);
+                        }}
+                        
+                        .button.danger:hover {{
+                            background: var(--black);
+                        }}
+                    </style>
                 </div>
             `;
         }}
@@ -917,47 +1187,47 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('results')}}
                     
-                    <div class="results-card">
-                        <div class="results-header">
-                            <h2>Processing Complete</h2>
-                            <div class="success-rate ${{successRate >= 90 ? 'good' : successRate >= 70 ? 'warning' : 'poor'}}">
+                    <div style="max-width: 800px; margin: 48px auto;">
+                        <div style="text-align: center; margin-bottom: 48px;">
+                            <h2 style="font-size: 28px; font-weight: 600; margin-bottom: 8px;">Processing Complete</h2>
+                            <div style="font-size: 18px; color: ${{successRate >= 90 ? '#007AFF' : successRate >= 70 ? '#FF9500' : '#FF3B30'}};">
                                 ${{successRate}}% Success Rate
                             </div>
                         </div>
                         
-                        <div class="results-summary">
-                            <div class="result-stat success">
-                                <div class="result-icon">✓</div>
-                                <div class="result-count">${{completed}}</div>
-                                <div class="result-label">Successful Episodes</div>
+                        <div style="display: flex; gap: 24px; margin-bottom: 48px;">
+                            <div style="flex: 1; background: #F7F7F7; border-radius: 12px; padding: 32px; text-align: center;">
+                                <div style="font-size: 48px; color: #34C759; margin-bottom: 8px;">✓</div>
+                                <div style="font-size: 36px; font-weight: 600; margin-bottom: 4px;">${{completed}}</div>
+                                <div style="font-size: 16px; color: #666;">Successful Episodes</div>
                             </div>
                             
-                            <div class="result-stat danger">
-                                <div class="result-icon">✗</div>
-                                <div class="result-count">${{failed}}</div>
-                                <div class="result-label">Failed Episodes</div>
+                            <div style="flex: 1; background: #F7F7F7; border-radius: 12px; padding: 32px; text-align: center;">
+                                <div style="font-size: 48px; color: #FF3B30; margin-bottom: 8px;">✗</div>
+                                <div style="font-size: 36px; font-weight: 600; margin-bottom: 4px;">${{failed}}</div>
+                                <div style="font-size: 16px; color: #666;">Failed Episodes</div>
                             </div>
                         </div>
                         
                         ${{failed > 0 ? `
-                            <div class="failed-episodes">
-                                <h3>Failed Episodes</h3>
+                            <div style="background: #FFF5F5; border: 1px solid #FFDDDD; border-radius: 12px; padding: 24px; margin-bottom: 48px;">
+                                <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #FF3B30;">Failed Episodes</h3>
                                 ${{errors.map(err => `
-                                    <div class="failed-item">
-                                        <div class="failed-title">${{err.episode}}</div>
-                                        <div class="failed-reason">${{err.message}}</div>
+                                    <div style="padding: 12px 0; border-bottom: 1px solid #FFDDDD;">
+                                        <div style="font-weight: 500; margin-bottom: 4px;">${{err.episode}}</div>
+                                        <div style="font-size: 14px; color: #666;">${{err.message}}</div>
                                     </div>
                                 `).join('')}}
                             </div>
                         ` : ''}}
                         
-                        <div class="action-section">
-                            <button class="button primary" onclick="proceedToEmail()">
-                                Continue to Email →
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <button class="button secondary" onclick="cancelAndExit()">
+                                Cancel & Exit
                             </button>
                             
-                            <button class="button text" onclick="cancelAndExit()">
-                                Cancel & Exit
+                            <button class="button primary" onclick="proceedToEmail()">
+                                Proceed to Email →
                             </button>
                         </div>
                     </div>
@@ -1000,37 +1270,37 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('email')}}
                     
-                    <div class="email-card" style="max-width: 1000px; margin: 0 auto;">
-                        <div class="email-header">
-                            <h2>Review & Send Email</h2>
+                    <div style="max-width: 1000px; margin: 48px auto;">
+                        <div style="text-align: center; margin-bottom: 32px;">
+                            <h2 style="font-size: 28px; font-weight: 600;">Review & Send Email</h2>
                         </div>
                         
-                        <div class="email-stats">
-                            <div class="email-stat">
-                                <span class="stat-label">Episodes in digest:</span>
-                                <span class="stat-value">${{completed}}</span>
+                        <div style="display: flex; gap: 24px; margin-bottom: 32px; justify-content: center;">
+                            <div style="background: #F7F7F7; border-radius: 12px; padding: 16px 24px; text-align: center;">
+                                <span style="font-size: 14px; color: #666; margin-right: 8px;">Episodes in digest:</span>
+                                <span style="font-size: 18px; font-weight: 600;">${{completed}}</span>
                             </div>
                             ${{failed > 0 ? `
-                                <div class="email-stat warning">
-                                    <span class="stat-label">Episodes excluded:</span>
-                                    <span class="stat-value">${{failed}}</span>
+                                <div style="background: #FFF5F5; border-radius: 12px; padding: 16px 24px; text-align: center;">
+                                    <span style="font-size: 14px; color: #666; margin-right: 8px;">Episodes excluded:</span>
+                                    <span style="font-size: 18px; font-weight: 600; color: #FF3B30;">${{failed}}</span>
                                 </div>
                             ` : ''}}
                         </div>
                         
-                        <div class="email-preview">
-                            <h3>Email Preview</h3>
-                            <div class="preview-content">
+                        <div style="margin-bottom: 32px;">
+                            <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Email Preview</h3>
+                            <div style="background: #F7F7F7; border-radius: 12px; padding: 24px; min-height: 400px;">
                                 ${{previewContent}}
                             </div>
                         </div>
                         
-                        <div class="action-section">
-                            <button class="button secondary" onclick="goBackToResults()">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                            <button class="button secondary" style="font-size: 16px; padding: 12px 24px;" onclick="goBackToResults()">
                                 ← Back to Results
                             </button>
                             
-                            <button class="button primary large" onclick="sendEmail()">
+                            <button class="button primary" style="font-size: 16px; padding: 12px 32px;" onclick="sendEmail()">
                                 Send Email
                             </button>
                         </div>
@@ -1048,7 +1318,7 @@ class EpisodeSelector:
                 
                 <div class="container">
                     <div class="loading-content" style="margin: 100px auto;">
-                        <div style="font-size: 60px; color: #28a745; margin-bottom: 20px;">✓</div>
+                        <div style="font-size: 60px; color: var(--gray-700); margin-bottom: 20px;">✓</div>
                         <h2>Processing ${{APP_STATE.selectedEpisodes.size}} episodes...</h2>
                         <p style="margin-top: 20px; color: #666;">This window will close automatically.</p>
                     </div>
@@ -1466,6 +1736,9 @@ class EpisodeSelector:
                     if (APP_STATE.state === 'loading') {{
                         APP_STATE.state = 'episode_selection';
                         APP_STATE.episodes = stateData.episodes;
+                        if (stateData.selected_podcasts) {{
+                            APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
+                        }}
                         render();
                     }}
                 }} else {{
@@ -1590,6 +1863,9 @@ class EpisodeSelector:
                                 if (APP_STATE.state === 'loading') {{
                                     APP_STATE.state = 'episode_selection';
                                     APP_STATE.episodes = stateData.episodes;
+                                    if (stateData.selected_podcasts) {{
+                                        APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
+                                    }}
                                     render();
                                 }}
                             }} else {{
@@ -1695,13 +1971,32 @@ class EpisodeSelector:
                 }}
             }});
             
+            // List of sources checked for all podcasts
+            const sourcesChecked = [
+                'RSS Feeds',
+                'Apple Podcasts API',
+                'Podcast Index',
+                'YouTube Transcripts',
+                'Publisher Websites',
+                'Spotify API'
+            ];
+            
             // If all podcasts have episodes, show success
             if (missingPodcasts.length === 0) {{
                 return `
                     <div class="verification-banner success">
                         <div class="verification-icon">✓</div>
                         <div class="verification-text">
-                            All selected podcasts have episodes available for the specified time period
+                            <strong>All podcasts verified</strong>
+                            Episodes found for all selected podcasts in the specified time period
+                            <div class="verification-sources">
+                                ${{sourcesChecked.map(source => `
+                                    <span class="verification-source">
+                                        <span class="source-check">✓</span>
+                                        ${{source}}
+                                    </span>
+                                `).join('')}}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1710,15 +2005,22 @@ class EpisodeSelector:
             // Otherwise show warning with missing podcasts
             return `
                 <div class="verification-banner warning">
-                    <div class="verification-icon">⚠️</div>
+                    <div class="verification-icon">!</div>
                     <div class="verification-text">
-                        <strong>Podcast Retrieval Notice:</strong> No episodes found for the following podcasts
-                        in the last ${{APP_STATE.configuration.lookback_days}} days:
+                        <strong>Some podcasts have no recent episodes</strong>
                         <div class="missing-podcasts">
-                            ${{missingPodcasts.map(name => `<span class="missing-podcast">${{name}}</span>`).join(', ')}}
+                            ${{missingPodcasts.join(', ')}}
                         </div>
                         <div class="verification-note">
-                            This could mean no new episodes were published, or there was an issue retrieving them.
+                            No episodes published in the last ${{APP_STATE.configuration.lookback_days}} days
+                        </div>
+                        <div class="verification-sources">
+                            ${{sourcesChecked.map(source => `
+                                <span class="verification-source">
+                                    <span class="source-check">✓</span>
+                                    ${{source}}
+                                </span>
+                            `).join('')}}
                         </div>
                     </div>
                 </div>
@@ -1868,6 +2170,11 @@ class EpisodeSelector:
                     ...status
                 }};
                 
+                // Update the display
+                if (APP_STATE.state === 'processing') {{
+                    render();
+                }}
+                
                 // Check if processing is complete
                 if (status.completed + status.failed >= status.total && status.total > 0) {{
                     clearInterval(APP_STATE.statusInterval);
@@ -1929,7 +2236,11 @@ class EpisodeSelector:
         
         async function loadEmailPreview() {{
             try {{
-                const response = await fetch('/api/email-preview');
+                const response = await fetch('/api/email-preview', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{}})
+                }});
                 const data = await response.json();
                 APP_STATE.emailPreview = data.preview;
                 render();
@@ -2297,38 +2608,101 @@ class EpisodeSelector:
         .verification-banner {
             display: flex;
             gap: 16px;
-            padding: 20px 24px;
-            margin-bottom: 32px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
             border-radius: 12px;
-            font-size: 14px;
+            font-size: 13px;
             align-items: flex-start;
+            background: var(--gray-100);
+            border: none;
+            color: var(--gray-700);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .verification-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0) 100%);
+            pointer-events: none;
         }
         
         .verification-banner.success {
-            background: #f0f9ff;
-            border: 1px solid #0369a1;
-            color: #075985;
+            background: var(--gray-100);
         }
         
         .verification-banner.warning {
-            background: #fef3c7;
-            border: 1px solid #d97706;
-            color: #92400e;
+            background: var(--gray-100);
+            box-shadow: inset 0 0 0 1px var(--gray-300);
         }
         
         .verification-icon {
-            font-size: 20px;
+            width: 20px;
+            height: 20px;
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--gray-300);
+            border-radius: 50%;
+            color: var(--gray-700);
+        }
+        
+        .verification-banner.warning .verification-icon {
+            background: var(--gray-400);
+            color: var(--white);
         }
         
         .verification-text {
             flex: 1;
-            line-height: 1.5;
+            line-height: 1.6;
+        }
+        
+        .verification-text strong {
+            font-weight: 600;
+            color: var(--black);
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .verification-sources {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .verification-source {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--gray-600);
+            background: var(--white);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--gray-200);
+        }
+        
+        .source-check {
+            width: 14px;
+            height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: var(--gray-500);
         }
         
         .missing-podcasts {
-            margin-top: 8px;
-            margin-bottom: 8px;
+            margin: 8px 0;
+            font-weight: 500;
         }
         
         .missing-podcast {
@@ -2337,13 +2711,13 @@ class EpisodeSelector:
             padding: 2px 8px;
             border-radius: 4px;
             margin-right: 8px;
-            font-weight: 500;
         }
         
         .verification-note {
-            margin-top: 8px;
-            font-size: 13px;
-            opacity: 0.8;
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--gray-500);
+            font-weight: 400;
         }
         
         .episode-section {
