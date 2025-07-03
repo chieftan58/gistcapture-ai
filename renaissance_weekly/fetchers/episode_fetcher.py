@@ -417,17 +417,20 @@ class ReliableEpisodeFetcher:
             try:
                 headers = {'User-Agent': ua}
                 
-                # For Art19 feeds, use streaming to handle large feeds
-                if 'art19.com' in feed_url:
+                # First, check if this is a large feed by doing a HEAD request
+                try:
+                    head_response = session.head(feed_url, timeout=5, headers=headers, allow_redirects=True)
+                    content_length = int(head_response.headers.get('content-length', 0))
+                except:
+                    content_length = 0  # Assume unknown size
+                
+                # For large feeds (>10MB), use streaming to handle them efficiently
+                if content_length > 10 * 1024 * 1024 or 'art19.com' in feed_url:
+                    logger.info(f"[{correlation_id}]     Large feed detected: {content_length/1024/1024:.1f}MB, using streaming")
                     response = session.get(feed_url, timeout=15, headers=headers, 
                                          allow_redirects=True, stream=True)
                     
                     if response.status_code == 200:
-                        # Check content length
-                        content_length = int(response.headers.get('content-length', 0))
-                        if content_length > 10 * 1024 * 1024:  # 10MB
-                            logger.info(f"[{correlation_id}]     Large feed detected: {content_length/1024/1024:.1f}MB")
-                        
                         # Read only first 5MB for large feeds
                         max_size = 5 * 1024 * 1024
                         content = b''

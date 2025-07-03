@@ -341,15 +341,34 @@ The system now searches for transcripts in this order:
   - Added verification after processing to detect incomplete episode sets
   - Improved timeout handling to prevent stuck episodes
 
-### Known Issues (2025-01-03):
-- **Episode fetch hanging after We Study Billionaires**: The system fetches all 19 podcasts but may hang on the last one (We Study Billionaires) instead of transitioning to episode selection. Likely related to duplicate RSS fetching via Apple Podcasts.
-- **Processing thread integration**: The UI now triggers real processing but may need additional error handling for edge cases
+### Recent Updates (2025-01-03) - Production Reliability Fixes:
+- **Fixed Large RSS Feed Hanging**:
+  - Now checks content length with HEAD request before downloading
+  - Applies streaming/truncation to ALL feeds >10MB (not just Art19)
+  - Prevents hanging on large feeds like "We Study Billionaires"
+  
+- **Fixed Thread Safety Issues**:
+  - Added `threading.Lock()` for all `_processing_status` updates
+  - Prevents race conditions in multi-threaded UI/processing environment
+  - Thread-safe error list updates
+  
+- **Implemented Proper Task Cancellation**:
+  - Tracks active tasks in `_active_tasks` list
+  - `cancel_processing()` now actually cancels running asyncio tasks
+  - Proper cleanup of task list after processing
+  
+- **Added Email Retry Logic**:
+  - SendGrid emails now retry up to 3 times with exponential backoff
+  - Distinguishes between retryable (5xx) and non-retryable (4xx) errors
+  - Better error logging with response details
+  
+- **Enhanced HTML Email Preview**:
+  - Full HTML preview displayed in iframe (600px height)
+  - Shows actual formatted email as recipients will see it
+  - Falls back to text preview if summaries not ready
+  - Proper CSS styling for preview container
 
-### Known Issues (2025-01-02):
-- **UI State Management**: The UI reverts from cost estimate screen back to episode selection due to persistent server state polling. Temporary fixes applied but needs further debugging:
-  - Added state guards in `waitForEpisodeFetch()` and `startStatusPolling()`
-  - Issue: Server continues returning `state: 'episode_selection'` causing client reversion
-  - Workaround: Quick progression through screens still works
-- **Fixed Issues**:
-  - JavaScript regex SyntaxWarnings in selection.py (escaped backslashes)
-  - Double dollar signs ($$) in cost estimate screen display
+### Known Issues (2025-01-03):
+- **Episode fetch hanging after We Study Billionaires**: FIXED - Was due to large RSS feeds
+- **UI State Management**: FIXED - Added server state synchronization
+- **Processing thread integration**: The UI now triggers real processing with proper error handling

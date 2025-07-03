@@ -161,6 +161,8 @@ class RenaissanceWeekly:
             # Cancellation support
             self._processing_cancelled = False
             self._processing_status = None
+            self._status_lock = threading.Lock()  # Thread-safe status updates
+            self._active_tasks = []  # Track active tasks for cancellation
             
             # Initialize global rate limiter info
             logger.info(f"[{self.correlation_id}] 🔧 OpenAI rate limiter configured: 45 requests/minute (with 10% buffer)")
@@ -439,6 +441,9 @@ class RenaissanceWeekly:
             )
             tasks.append(task)
         
+        # Store active tasks for cancellation support
+        self._active_tasks = tasks
+        
         # DIAGNOSTIC: Log task creation
         logger.info(f"[{self.correlation_id}] 📋 Created {len(tasks)} tasks for processing")
         
@@ -475,6 +480,9 @@ class RenaissanceWeekly:
                 await monitor_task
             except asyncio.CancelledError:
                 pass
+            
+            # Clear active tasks list
+            self._active_tasks = []
         
         # Log processing summary
         process_summary = process_progress.get_summary()
@@ -531,13 +539,14 @@ class RenaissanceWeekly:
             try:
                 await progress.start_item(episode_id)
                 
-                # Update processing status if available
+                # Update processing status if available (thread-safe)
                 if self._processing_status:
-                    self._processing_status['current'] = {
-                        'podcast': episode.podcast,
-                        'title': episode.title,
-                        'status': 'Processing...'
-                    }
+                    with self._status_lock:
+                        self._processing_status['current'] = {
+                            'podcast': episode.podcast,
+                            'title': episode.title,
+                            'status': 'Processing...'
+                        }
                 
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -563,10 +572,11 @@ class RenaissanceWeekly:
                         
                         if summary:
                             await progress.complete_item(True)
-                            # Update processing status
+                            # Update processing status (thread-safe)
                             if self._processing_status:
-                                self._processing_status['completed'] += 1
-                                self._processing_status['current'] = None
+                                with self._status_lock:
+                                    self._processing_status['completed'] += 1
+                                    self._processing_status['current'] = None
                             
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -575,10 +585,11 @@ class RenaissanceWeekly:
                             return {"episode": episode, "summary": summary}
                         else:
                             await progress.complete_item(False)
-                            # Update processing status
+                            # Update processing status (thread-safe)
                             if self._processing_status:
-                                self._processing_status['failed'] += 1
-                                self._processing_status['current'] = None
+                                with self._status_lock:
+                                    self._processing_status['failed'] += 1
+                                    self._processing_status['current'] = None
                             
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -615,18 +626,21 @@ class RenaissanceWeekly:
                 await self.exception_aggregator.add_exception(episode_id, e)
                 await progress.complete_item(False)
                 
-                # Update processing status with error
+                # Update processing status with error (thread-safe)
                 if self._processing_status:
-                    self._processing_status['failed'] += 1
-                    self._processing_status['current'] = None
+                    with self._status_lock:
+                        self._processing_status['failed'] += 1
+                        self._processing_status['current'] = None
                 
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
                     self._progress_callback(episode, 'failed', e)
-                    self._processing_status['errors'].append({
-                        'episode': f"{episode.podcast}: {episode.title}",
-                        'message': str(e)[:200]  # Limit error message length
-                    })
+                    if self._processing_status:
+                        with self._status_lock:
+                            self._processing_status['errors'].append({
+                                'episode': f"{episode.podcast}: {episode.title}",
+                                'message': str(e)[:200]  # Limit error message length
+                            })
                 
                 return None
     
@@ -1181,6 +1195,14 @@ class RenaissanceWeekly:
         """Cancel ongoing processing"""
         logger.info(f"[{self.correlation_id}] 🛑 Cancelling processing...")
         self._processing_cancelled = True
+        
+        # Cancel all active tasks
+        if self._active_tasks:
+            logger.info(f"[{self.correlation_id}] 🛑 Cancelling {len(self._active_tasks)} active tasks...")
+            for task in self._active_tasks:
+                if not task.done():
+                    task.cancel()
+            self._active_tasks = []
     
     def get_processing_status(self):
         """Get current processing status for UI"""

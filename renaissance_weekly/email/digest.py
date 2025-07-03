@@ -2,6 +2,7 @@
 
 import os
 import re
+import time
 from datetime import datetime
 from typing import List, Dict
 from html import escape
@@ -60,19 +61,62 @@ class EmailDigest:
                 logger.info("  Email would be sent in normal operation")
                 return True
             
-            # Send email
-            response = sendgrid_client.send(message)
+            # Send email with retry logic
+            max_retries = 3
+            retry_delay = 1  # Start with 1 second
             
-            if response.status_code == 202:
-                logger.info("✅ Email sent successfully!")
-                return True
-            else:
-                logger.error(f"Email failed: {response.status_code}")
-                return False
+            for attempt in range(max_retries):
+                try:
+                    response = sendgrid_client.send(message)
+                    
+                    if response.status_code == 202:
+                        logger.info("✅ Email sent successfully!")
+                        return True
+                    else:
+                        logger.error(f"Email failed with status {response.status_code}")
+                        if hasattr(response, 'body'):
+                            logger.error(f"Response body: {response.body}")
+                        
+                        # Don't retry on client errors (4xx)
+                        if 400 <= response.status_code < 500:
+                            logger.error("Client error - not retrying")
+                            return False
+                            
+                except Exception as e:
+                    logger.error(f"Email attempt {attempt + 1} failed: {e}")
+                    
+                # If not the last attempt, wait before retrying
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+            
+            logger.error(f"Email failed after {max_retries} attempts")
+            return False
                 
         except Exception as e:
-            logger.error(f"Email error: {e}")
+            logger.error(f"Email setup error: {e}")
             return False
+    
+    def generate_html_preview(self, summaries: List[Dict]) -> str:
+        """Generate HTML preview content (without full HTML document structure)"""
+        # Extract episodes and summary texts
+        episodes = [s["episode"] for s in summaries]
+        summary_texts = [s["summary"] for s in summaries]
+        
+        # Generate the full HTML content
+        full_html = self.create_substack_style_email(summary_texts, episodes)
+        
+        # Extract just the body content for preview
+        # Remove DOCTYPE and html/head tags for iframe display
+        import re
+        body_match = re.search(r'<body[^>]*>(.*?)</body>', full_html, re.DOTALL)
+        if body_match:
+            body_content = body_match.group(1)
+            # Wrap in a container div for proper styling in iframe
+            return f'<div style="padding: 20px; background: white;">{body_content}</div>'
+        
+        return full_html  # Fallback to full HTML if extraction fails
     
     def create_substack_style_email(self, summaries: List[str], episodes: List[Episode]) -> str:
         """Create clean HTML email with Gmail-compatible table of contents and better structure"""

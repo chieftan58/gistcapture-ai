@@ -265,6 +265,15 @@ class EpisodeSelector:
                     preview = parent._generate_email_preview()
                     self._send_json({'preview': preview})
                     
+                elif self.path == '/api/update-state':
+                    # Update server state to match client state
+                    new_state = data.get('state')
+                    if new_state in ['cost_estimate', 'processing', 'results', 'email_approval']:
+                        parent.state = new_state
+                        self._send_json({'status': 'success', 'state': parent.state})
+                    else:
+                        self._send_json({'status': 'error', 'message': 'Invalid state'})
+                    
                 elif self.path == '/api/send-email':
                     # Mark email as approved and ready to send
                     parent._email_approved = True
@@ -971,6 +980,28 @@ class EpisodeSelector:
             const {{ emailPreview }} = APP_STATE;
             const {{ completed, failed }} = APP_STATE.processingStatus;
             
+            // Handle both old text format and new object format
+            let previewContent = '';
+            if (emailPreview) {{
+                if (typeof emailPreview === 'object' && emailPreview.type === 'html') {{
+                    // HTML preview - render in iframe for isolation
+                    previewContent = `
+                        <iframe 
+                            id="email-preview-iframe"
+                            style="width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 4px; background: white;"
+                            srcdoc="${{emailPreview.content.replace(/"/g, '&quot;')}}"
+                        ></iframe>`;
+                }} else if (typeof emailPreview === 'object' && emailPreview.type === 'text') {{
+                    // Text preview
+                    previewContent = `<pre style="white-space: pre-wrap; font-family: inherit;">${{emailPreview.content}}</pre>`;
+                }} else {{
+                    // Legacy text format
+                    previewContent = `<pre style="white-space: pre-wrap; font-family: inherit;">${{emailPreview}}</pre>`;
+                }}
+            }} else {{
+                previewContent = 'Loading preview...';
+            }}
+            
             return `
                 <div class="header">
                     <div class="logo">RW</div>
@@ -980,7 +1011,7 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('email')}}
                     
-                    <div class="email-card">
+                    <div class="email-card" style="max-width: 1000px; margin: 0 auto;">
                         <div class="email-header">
                             <h2>Review & Send Email</h2>
                         </div>
@@ -1001,7 +1032,7 @@ class EpisodeSelector:
                         <div class="email-preview">
                             <h3>Email Preview</h3>
                             <div class="preview-content">
-                                ${{emailPreview ? emailPreview : 'Loading preview...'}}
+                                ${{previewContent}}
                             </div>
                         </div>
                         
@@ -1673,7 +1704,7 @@ class EpisodeSelector:
         }}
         
         // New navigation functions
-        function proceedToCostEstimate() {{
+        async function proceedToCostEstimate() {{
             // Stop any ongoing polling
             if (APP_STATE.statusInterval) {{
                 clearInterval(APP_STATE.statusInterval);
@@ -1686,18 +1717,44 @@ class EpisodeSelector:
                 APP_STATE.globalPollInterval = null;
             }}
             
+            // Update server state to prevent reversion
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'cost_estimate'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
             console.log('Moving to cost estimate stage');
             APP_STATE.state = 'cost_estimate';
             render();
         }}
         
-        function goBackToEpisodes() {{
+        async function goBackToEpisodes() {{
+            // Update server state when going back
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'episode_selection'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
             APP_STATE.state = 'episode_selection';
             
             // Restart global polling when returning to server-controlled state
             if (!APP_STATE.globalPollInterval) {{
                 APP_STATE.globalPollInterval = setInterval(async () => {{
-                    const serverControlledStates = ['podcast_selection', 'loading', 'episode_selection'];
+                    const serverControlledStates = ['podcast_selection', 'loading'];
+                    // Only include episode_selection if we haven't loaded episodes yet
+                    if (APP_STATE.episodes.length === 0) {{
+                        serverControlledStates.push('episode_selection');
+                    }}
                     
                     if (!serverControlledStates.includes(APP_STATE.state) || 
                         APP_STATE.state === 'complete' || 
@@ -1728,6 +1785,17 @@ class EpisodeSelector:
         }}
         
         async function startProcessing() {{
+            // Update server state
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'processing'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
             APP_STATE.state = 'processing';
             APP_STATE.processingStatus.startTime = Date.now();
             APP_STATE.processingStatus.total = APP_STATE.selectedEpisodes.size;
@@ -1771,6 +1839,18 @@ class EpisodeSelector:
                 // Check if processing is complete
                 if (status.completed + status.failed >= status.total && status.total > 0) {{
                     clearInterval(APP_STATE.statusInterval);
+                    
+                    // Update server state
+                    try {{
+                        await fetch('/api/update-state', {{
+                            method: 'POST',
+                            headers: {{'Content-Type': 'application/json'}},
+                            body: JSON.stringify({{state: 'results'}})
+                        }});
+                    }} catch (e) {{
+                        console.error('Failed to update server state:', e);
+                    }}
+                    
                     APP_STATE.state = 'results';
                 }}
                 
@@ -1798,7 +1878,18 @@ class EpisodeSelector:
             }}
         }}
         
-        function proceedToEmail() {{
+        async function proceedToEmail() {{
+            // Update server state
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'email_approval'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
             APP_STATE.state = 'email_approval';
             loadEmailPreview();
             render();
@@ -1815,7 +1906,18 @@ class EpisodeSelector:
             }}
         }}
         
-        function goBackToResults() {{
+        async function goBackToResults() {{
+            // Update server state
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'results'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
             APP_STATE.state = 'results';
             render();
         }}
@@ -1854,7 +1956,11 @@ class EpisodeSelector:
         setTimeout(() => {{
             APP_STATE.globalPollInterval = setInterval(async () => {{
                 // Only poll server state when in server-controlled states
-                const serverControlledStates = ['podcast_selection', 'loading', 'episode_selection'];
+                const serverControlledStates = ['podcast_selection', 'loading'];
+                // Only include episode_selection if we haven't loaded episodes yet
+                if (APP_STATE.state === 'episode_selection' && APP_STATE.episodes.length === 0) {{
+                    serverControlledStates.push('episode_selection');
+                }}
                 
                 if (!serverControlledStates.includes(APP_STATE.state) || 
                     APP_STATE.state === 'complete' || 
@@ -2883,15 +2989,27 @@ class EpisodeSelector:
         
         .preview-content {
             margin-top: 16px;
-            padding: 20px;
-            background: var(--gray-100);
+            background: white;
             border: 1px solid var(--gray-200);
             border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .preview-content pre {
+            padding: 20px;
+            margin: 0;
+            background: var(--gray-100);
             font-family: monospace;
             font-size: 13px;
             line-height: 1.6;
             max-height: 300px;
             overflow-y: auto;
+        }
+        
+        .preview-content iframe {
+            display: block;
+            width: 100%;
+            border: none;
         }
         
         /* Button Enhancements */
@@ -3006,36 +3124,45 @@ class EpisodeSelector:
         completed = self._processing_status.get('completed', 0) if self._processing_status else 0
         failed = self._processing_status.get('failed', 0) if self._processing_status else 0
         
-        # Build episode list from actual summaries
-        episode_list = []
+        # Check if we have summaries to preview
         if hasattr(self, '_processed_summaries') and self._processed_summaries:
-            for item in self._processed_summaries[:5]:  # Show first 5
-                episode = item['episode']
-                episode_list.append(f"- {episode.podcast}: {episode.title}")
+            # Generate HTML preview using EmailDigest
+            from ..email.digest import EmailDigest
+            email_digest = EmailDigest()
+            html_preview = email_digest.generate_html_preview(self._processed_summaries)
             
-            if len(self._processed_summaries) > 5:
-                episode_list.append(f"... and {len(self._processed_summaries) - 5} more")
+            # Return both text and HTML versions
+            return {
+                'type': 'html',
+                'content': html_preview,
+                'stats': {
+                    'completed': completed,
+                    'failed': failed
+                }
+            }
         else:
-            # Fallback if no summaries yet
-            episode_list = ["Episodes are being processed..."]
-        
-        episodes_text = '\n'.join(episode_list)
-        
-        preview = f"""Subject: Renaissance Weekly - Your AI Podcast Digest
+            # Fallback text preview if no summaries yet
+            preview_text = f"""Subject: Renaissance Weekly - Your AI Podcast Digest
 
 Hello,
 
 Your weekly podcast digest is ready with {completed} episodes successfully processed.
 
-Episodes included:
-{episodes_text}
-
 {f"Note: {failed} episodes could not be processed and were excluded." if failed > 0 else ""}
+
+Processing is still in progress...
 
 Best regards,
 Renaissance Weekly
 """
-        return preview
+            return {
+                'type': 'text',
+                'content': preview_text,
+                'stats': {
+                    'completed': completed,
+                    'failed': failed
+                }
+            }
     
     # Backward compatibility methods
     def run_podcast_selection(self, days_back: int = 7) -> Tuple[List[str], Dict]:
