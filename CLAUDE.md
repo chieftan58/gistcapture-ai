@@ -392,3 +392,37 @@ The system now searches for transcripts in this order:
   - Added Apple Podcasts verification banner on episode selection
   - Fixed thread safety with proper locking for status updates
   - Fixed CSS syntax errors in f-strings (escaped curly braces)
+
+### Recent Updates (2025-01-03) - Major UI/UX Improvements:
+- **Fixed Progress Screen Updates**:
+  - Moved `/api/processing-status` endpoint from POST to GET handler
+  - Progress screen now shows real-time updates instead of static 0%
+  - Displays current episode being processed, success/failure counts
+
+- **Apple-like Results Screen**:
+  - Clean, centered layout with proper typography
+  - Large stat cards with iOS colors (green #34C759, red #FF3B30)
+  - Changed "Continue to Email" to "Proceed to Email"
+  - Swapped button positions - secondary on left, primary on right
+
+- **Fixed Email Preview & Approval**:
+  - Fixed loading issue - JavaScript was calling endpoint as GET but defined as POST
+  - Consistent button sizing with explicit font-size and padding
+  - Fixed oversized episode count - now inline text at 18px instead of huge number
+  - Enhanced HTML email preview in iframe with proper styling
+
+- **Display Podcasts with No Recent Episodes**:
+  - Added section showing podcasts that have no episodes in selected timeframe
+  - Listed at bottom of episode selection in grayed-out section
+  - Shows which podcasts were checked but had no recent content
+
+- **Fixed Email Sending After Approval**:
+  - Changed completion message from "Processing X episodes..." to "Sending email digest to [email]..."
+  - UI now passes `email_approved` flag and `final_summaries` to avoid re-processing
+  - App detects email approval and sends immediately without duplicate processing
+  - Email actually sends now instead of just closing the window
+
+- **Code Quality**:
+  - Fixed invalid escape sequences (changed `\$` to `$` in f-strings)
+  - Added EMAIL_TO import for proper email display
+  - Improved thread safety and error handling

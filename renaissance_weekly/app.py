@@ -229,6 +229,25 @@ class RenaissanceWeekly:
             logger.info(f"[{self.correlation_id}] 📅 Lookback period: {configuration['lookback_days']} days")
             logger.info(f"[{self.correlation_id}] 🔧 Transcription mode: {configuration['transcription_mode']}")
             
+            # Check if email was already approved (UI completed full flow)
+            if configuration.get('email_approved') and configuration.get('final_summaries'):
+                logger.info(f"[{self.correlation_id}] 📧 Email already approved - sending digest directly")
+                summaries = configuration['final_summaries']
+                
+                # Send email digest
+                await pipeline_progress.start_item("Email Delivery")
+                if self.email_digest.send_digest(summaries):
+                    logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly digest sent successfully!")
+                    await pipeline_progress.complete_item(True)
+                else:
+                    logger.error(f"[{self.correlation_id}] ❌ Failed to send email digest")
+                    await pipeline_progress.complete_item(False)
+                
+                # Skip processing stages
+                total_time = time.time() - start_time
+                logger.info(f"\n[{self.correlation_id}] ✨ Email sent in {total_time:.1f} seconds")
+                return
+            
             # Cost estimation and warning for full mode
             if configuration['transcription_mode'] == 'full':
                 estimated_cost = self._estimate_processing_cost(selected_episodes)

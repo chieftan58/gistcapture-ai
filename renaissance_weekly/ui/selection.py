@@ -15,7 +15,7 @@ from datetime import datetime
 from collections import defaultdict
 
 from ..models import Episode
-from ..config import PODCAST_CONFIGS, TESTING_MODE
+from ..config import PODCAST_CONFIGS, TESTING_MODE, EMAIL_TO
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -111,6 +111,13 @@ class EpisodeSelector:
         self._shutdown_server()
         
         logger.info(f"[{self._correlation_id}] ✅ Selection complete: {len(selected_episodes)} episodes")
+        
+        # Check if email was approved
+        if self._email_approved and hasattr(self, '_final_summaries'):
+            logger.info(f"[{self._correlation_id}] 📧 Email approved - returning with summaries")
+            self.configuration['email_approved'] = True
+            self.configuration['final_summaries'] = self._final_summaries
+        
         return selected_episodes, self.configuration
     
     def _create_unified_server(self, port: int) -> HTTPServer:
@@ -1310,16 +1317,19 @@ class EpisodeSelector:
         }}
         
         function renderComplete() {{
+            // Get email from configuration or use default
+            const emailTo = '{EMAIL_TO or "your email"}';
+            
             return `
                 <div class="header">
                     <div class="logo">RW</div>
-                    <div class="header-text">Selection Complete</div>
+                    <div class="header-text">Email Sent</div>
                 </div>
                 
                 <div class="container">
                     <div class="loading-content" style="margin: 100px auto;">
-                        <div style="font-size: 60px; color: var(--gray-700); margin-bottom: 20px;">✓</div>
-                        <h2>Processing ${{APP_STATE.selectedEpisodes.size}} episodes...</h2>
+                        <div style="font-size: 60px; color: #34C759; margin-bottom: 20px;">✓</div>
+                        <h2>Sending email digest to ${{emailTo}}...</h2>
                         <p style="margin-top: 20px; color: #666;">This window will close automatically.</p>
                     </div>
                 </div>

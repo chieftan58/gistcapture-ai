@@ -5628,5 +5628,15 @@
     "error_message": "Failed to transcribe audio",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-03T20:35:34.658662",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
   }
 ]
