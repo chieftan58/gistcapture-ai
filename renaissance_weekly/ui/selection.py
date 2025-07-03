@@ -42,6 +42,7 @@ class EpisodeSelector:
         self._processing_status = None
         self._processing_episodes = []
         self._processing_mode = 'test'
+        self._last_episode_dates = {}
         self._processing_cancelled = False
         self._email_approved = False
         self._process_thread = None
@@ -154,6 +155,14 @@ class EpisodeSelector:
                             'description': ep.description[:200] if ep.description else ''
                         } for ep in parent.episode_cache]
                         response_data['selected_podcasts'] = parent.selected_podcasts
+                        # Convert datetime objects to ISO format strings
+                        last_dates = {}
+                        for podcast, date in parent._last_episode_dates.items():
+                            if date:
+                                last_dates[podcast] = date.isoformat() if hasattr(date, 'isoformat') else str(date)
+                            else:
+                                last_dates[podcast] = None
+                        response_data['last_episode_dates'] = last_dates
                     
                     self._send_json(response_data)
                 elif self.path == f'/api/status':
@@ -528,6 +537,7 @@ class EpisodeSelector:
             selectedPodcasts: new Set(),
             selectedEpisodes: new Set(),
             selectedPodcastNames: [],
+            lastEpisodeDates: {{}},
             configuration: {{
                 lookback_days: {self.configuration.get('lookback_days', 7)},
                 transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
@@ -768,7 +778,7 @@ class EpisodeSelector:
                                 </div>
                                 <div class="episodes-list">
                                     ${{episodesByPodcast[podcast].map(ep => `
-                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" id="episode-${{ep.id.replace(/[|:]/g, '_')}}" onclick="toggleEpisode('${{ep.id}}')">
+                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" id="episode-${{ep.id.replace(/[|:]/g, '_')}}" onclick="toggleEpisode('${{ep.id.replace(/'/g, "\\'").replace(/"/g, '\\"')}}')">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">
                                                 <div class="episode-title">${{formatEpisodeTitle(ep.title)}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
@@ -790,7 +800,16 @@ class EpisodeSelector:
                                 <div class="episodes-list" style="padding: 16px; color: #666;">
                                     <p style="margin-bottom: 8px;">The following podcasts have no episodes in the last ${{APP_STATE.configuration.lookback_days}} days:</p>
                                     <ul style="margin: 0; padding-left: 20px;">
-                                        ${{podcastsWithNoEpisodes.map(podcast => `<li>${{podcast}}</li>`).join('')}}
+                                        ${{podcastsWithNoEpisodes.map(podcast => {{
+                                            const lastDate = APP_STATE.lastEpisodeDates && APP_STATE.lastEpisodeDates[podcast];
+                                            if (lastDate) {{
+                                                const date = new Date(lastDate);
+                                                const daysAgo = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
+                                                return `<li>${{podcast}} <span style="color: #999; font-size: 0.9em;">(last episode: ${{daysAgo}} days ago)</span></li>`;
+                                            }} else {{
+                                                return `<li>${{podcast}} <span style="color: #999; font-size: 0.9em;">(no episodes found)</span></li>`;
+                                            }}
+                                        }}).join('')}}
                                     </ul>
                                 </div>
                             </div>
@@ -1749,6 +1768,9 @@ class EpisodeSelector:
                         if (stateData.selected_podcasts) {{
                             APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
                         }}
+                        if (stateData.last_episode_dates) {{
+                            APP_STATE.lastEpisodeDates = stateData.last_episode_dates;
+                        }}
                         render();
                     }}
                 }} else {{
@@ -1875,6 +1897,9 @@ class EpisodeSelector:
                                     APP_STATE.episodes = stateData.episodes;
                                     if (stateData.selected_podcasts) {{
                                         APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
+                                    }}
+                                    if (stateData.last_episode_dates) {{
+                                        APP_STATE.lastEpisodeDates = stateData.last_episode_dates;
                                     }}
                                     render();
                                 }}

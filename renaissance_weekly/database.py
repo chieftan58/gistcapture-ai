@@ -364,6 +364,44 @@ class PodcastDatabase:
             logger.error(f"Database error getting episodes without transcripts: {e}")
             return []
     
+    def get_last_episode_dates(self, podcast_names: List[str]) -> Dict[str, Optional[datetime]]:
+        """Get the most recent episode date for each podcast"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Create placeholders for IN clause
+                placeholders = ','.join(['?' for _ in podcast_names])
+                
+                cursor.execute(f"""
+                    SELECT podcast, MAX(published) as last_published
+                    FROM episodes
+                    WHERE podcast IN ({placeholders})
+                    GROUP BY podcast
+                """, podcast_names)
+                
+                results = cursor.fetchall()
+                
+                # Convert to dictionary with datetime objects
+                last_dates = {}
+                for podcast, date_str in results:
+                    if date_str:
+                        # Parse the ISO format date string
+                        last_dates[podcast] = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    else:
+                        last_dates[podcast] = None
+                
+                # Add None for podcasts not found in results
+                for podcast_name in podcast_names:
+                    if podcast_name not in last_dates:
+                        last_dates[podcast_name] = None
+                
+                return last_dates
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting last episode dates: {e}")
+            return {name: None for name in podcast_names}
+    
     def clear_old_episodes(self, days_to_keep: int = 30):
         """Clear episodes older than specified days"""
         try:

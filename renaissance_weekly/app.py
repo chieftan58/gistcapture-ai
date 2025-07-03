@@ -8,7 +8,7 @@ import traceback
 import time
 from pathlib import Path
 from typing import List, Optional, Dict, Callable, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 from .config import (
@@ -364,6 +364,7 @@ class RenaissanceWeekly:
                                       progress_callback: Callable) -> List[Episode]:
         """Fetch episodes for selected podcasts with progress updates"""
         all_episodes = []
+        podcasts_with_no_recent_episodes = []
         
         logger.info(f"[{self.correlation_id}] 📡 Starting to fetch episodes from {len(podcast_names)} podcasts...")
         logger.info(f"[{self.correlation_id}] 📅 Looking back {days_back} days")
@@ -408,6 +409,7 @@ class RenaissanceWeekly:
                     await fetch_progress.complete_item(True)
                 else:
                     logger.info(f"[{self.correlation_id}]   📅 {podcast_name}: No episodes in the last {days_back} days")
+                    podcasts_with_no_recent_episodes.append(podcast_name)
                     await fetch_progress.complete_item(True)
                     
             except Exception as e:
@@ -430,6 +432,25 @@ class RenaissanceWeekly:
                 f"[{self.correlation_id}] 📊 Fetch complete: All {podcasts_checked} podcasts checked successfully, "
                 f"{len(all_episodes)} total episodes"
             )
+        
+        # Get last episode dates for podcasts with no recent episodes
+        last_episode_dates = {}
+        if podcasts_with_no_recent_episodes:
+            logger.info(f"[{self.correlation_id}] 📅 Getting last episode dates for {len(podcasts_with_no_recent_episodes)} podcasts...")
+            last_episode_dates = self.db.get_last_episode_dates(podcasts_with_no_recent_episodes)
+            
+            # Log the results
+            for podcast_name in podcasts_with_no_recent_episodes:
+                last_date = last_episode_dates.get(podcast_name)
+                if last_date:
+                    days_ago = (datetime.now(timezone.utc) - last_date).days
+                    logger.info(f"[{self.correlation_id}]   📅 {podcast_name}: Last episode was {days_ago} days ago ({last_date.strftime('%Y-%m-%d')})")
+                else:
+                    logger.info(f"[{self.correlation_id}]   📅 {podcast_name}: No episodes found in database")
+        
+        # Store the last episode dates in the selector for UI access
+        if hasattr(self, 'selector') and self.selector:
+            self.selector._last_episode_dates = last_episode_dates
         
         return all_episodes
     

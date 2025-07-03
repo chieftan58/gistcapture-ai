@@ -426,3 +426,8 @@ The system now searches for transcripts in this order:
   - Fixed invalid escape sequences (changed `\$` to `$` in f-strings)
   - Added EMAIL_TO import for proper email display
   - Improved thread safety and error handling
+
+### Recent Updates (2025-01-03) - Latest Fixes:
+- **Updated CLAUDE.md**: Added comprehensive documentation of all recent updates and fixes
+- **Tracking Modified Files**: Updated app.py, database.py, podcast_index.py (both), and selection.py
+- **Monitoring Stats**: Updated monitoring data for failures and performance metrics

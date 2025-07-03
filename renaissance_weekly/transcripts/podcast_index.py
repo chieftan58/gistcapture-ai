@@ -61,7 +61,8 @@ class PodcastIndexAPI:
                 "max": 5
             }
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/search/byterm"
                 async with session.get(url, headers=headers, params=params) as response:
                     if response.status == 200:
@@ -98,7 +99,8 @@ class PodcastIndexAPI:
                 "fulltext": "true"  # Include full episode data
             }
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/episodes/byfeedid"
                 async with session.get(url, headers=headers, params=params) as response:
                     if response.status == 200:
@@ -163,7 +165,8 @@ class PodcastIndexAPI:
                 "max": 10
             }
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/search/byterm"
                 async with session.get(url, headers=headers, params=params) as response:
                     if response.status == 200:
@@ -214,7 +217,8 @@ class PodcastIndexAPI:
         try:
             headers = self._get_auth_headers()
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/podcasts/live"
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:

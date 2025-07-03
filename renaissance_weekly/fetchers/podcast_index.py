@@ -44,7 +44,8 @@ class PodcastIndexClient:
             url = f"{self.base_url}/search/byterm"
             params = {"q": podcast_name, "val": "podcast"}
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url, headers=headers, params=params) as resp:
                     if resp.status == 200:
                         data = await resp.json()
@@ -65,7 +66,8 @@ class PodcastIndexClient:
             url = f"{self.base_url}/episodes/byfeedid"
             params = {"id": feed_id, "max": max_results}
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url, headers=headers, params=params) as resp:
                     if resp.status == 200:
                         data = await resp.json()
