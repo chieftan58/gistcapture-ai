@@ -501,6 +501,21 @@ class RenaissanceWeekly:
         
         return summaries
     
+    async def _process_episodes_with_progress(self, selected_episodes: List[Episode], progress_callback: Callable) -> List[Dict]:
+        """Process episodes with progress callback for UI updates"""
+        summaries = []
+        
+        # Store the callback
+        self._progress_callback = progress_callback
+        
+        try:
+            # Process using existing method
+            summaries = await self._process_episodes_with_resource_management(selected_episodes)
+        finally:
+            self._progress_callback = None
+            
+        return summaries
+    
     async def _process_episode_with_monitoring(self, episode: Episode, semaphore: asyncio.Semaphore, 
                                              progress: ProgressTracker, index: int) -> Optional[Dict]:
         """Process single episode with monitoring and error handling"""
@@ -523,6 +538,10 @@ class RenaissanceWeekly:
                         'title': episode.title,
                         'status': 'Processing...'
                     }
+                
+                # Call progress callback if available
+                if hasattr(self, '_progress_callback') and self._progress_callback:
+                    self._progress_callback(episode, 'processing')
                 
                 # Add retry logic with exponential backoff
                 max_retries = 3
@@ -548,6 +567,10 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 self._processing_status['completed'] += 1
                                 self._processing_status['current'] = None
+                            
+                            # Call progress callback if available
+                            if hasattr(self, '_progress_callback') and self._progress_callback:
+                                self._progress_callback(episode, 'completed')
                             logger.debug(f"[{self.correlation_id}] Episode {index+1} completed successfully")
                             return {"episode": episode, "summary": summary}
                         else:
@@ -556,6 +579,10 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 self._processing_status['failed'] += 1
                                 self._processing_status['current'] = None
+                            
+                            # Call progress callback if available
+                            if hasattr(self, '_progress_callback') and self._progress_callback:
+                                self._progress_callback(episode, 'failed')
                             logger.debug(f"[{self.correlation_id}] Episode {index+1} completed with no summary")
                             return None
                             
@@ -592,6 +619,10 @@ class RenaissanceWeekly:
                 if self._processing_status:
                     self._processing_status['failed'] += 1
                     self._processing_status['current'] = None
+                
+                # Call progress callback if available
+                if hasattr(self, '_progress_callback') and self._progress_callback:
+                    self._progress_callback(episode, 'failed', e)
                     self._processing_status['errors'].append({
                         'episode': f"{episode.podcast}: {episode.title}",
                         'message': str(e)[:200]  # Limit error message length

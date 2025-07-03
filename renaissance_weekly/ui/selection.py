@@ -235,7 +235,7 @@ class EpisodeSelector:
                     parent._processing_cancelled = False
                     
                     # Start actual processing in background
-                    if not hasattr(parent, '_process_thread') or not parent._process_thread.is_alive():
+                    if not hasattr(parent, '_process_thread') or parent._process_thread is None or not parent._process_thread.is_alive():
                         parent._process_thread = threading.Thread(
                             target=parent._process_episodes_background,
                             daemon=True
@@ -269,6 +269,11 @@ class EpisodeSelector:
                     # Mark email as approved and ready to send
                     parent._email_approved = True
                     parent.state = "complete"
+                    
+                    # Store the processed summaries for the main app
+                    if hasattr(parent, '_processed_summaries'):
+                        parent._final_summaries = parent._processed_summaries
+                    
                     self._send_json({'status': 'success'})
                     
                     # Signal completion after response is sent
@@ -499,6 +504,7 @@ class EpisodeSelector:
             episodes: [],
             statusInterval: null,
             errorCheckInterval: null,
+            globalPollInterval: null,
             processingStatus: {{
                 total: 0,
                 completed: 0,
@@ -528,22 +534,7 @@ class EpisodeSelector:
                 </div>
                 
                 <div class="container">
-                    <div class="stage-indicator">
-                        <div class="stage-wrapper">
-                            <div class="stage-dot active"></div>
-                            <div class="stage-label active">Podcasts</div>
-                        </div>
-                        <div class="stage-connector"></div>
-                        <div class="stage-wrapper">
-                            <div class="stage-dot"></div>
-                            <div class="stage-label">Episodes</div>
-                        </div>
-                        <div class="stage-connector"></div>
-                        <div class="stage-wrapper">
-                            <div class="stage-dot"></div>
-                            <div class="stage-label">Process</div>
-                        </div>
-                    </div>
+                    ${{renderStageIndicator('podcasts')}}
                     
                     <div class="config-section">
                         <div class="config-row">
@@ -700,22 +691,7 @@ class EpisodeSelector:
                 </div>
                 
                 <div class="container">
-                    <div class="stage-indicator">
-                        <div class="stage-wrapper">
-                            <div class="stage-dot" style="background: var(--black);"></div>
-                            <div class="stage-label" style="color: var(--gray-600);">Podcasts</div>
-                        </div>
-                        <div class="stage-connector"></div>
-                        <div class="stage-wrapper">
-                            <div class="stage-dot active"></div>
-                            <div class="stage-label active">Episodes</div>
-                        </div>
-                        <div class="stage-connector"></div>
-                        <div class="stage-wrapper">
-                            <div class="stage-dot"></div>
-                            <div class="stage-label">Process</div>
-                        </div>
-                    </div>
+                    ${{renderStageIndicator('episodes')}}
                     
                     <div class="stats-bar">
                         <div class="stat">
@@ -1703,12 +1679,51 @@ class EpisodeSelector:
                 clearInterval(APP_STATE.statusInterval);
                 APP_STATE.statusInterval = null;
             }}
+            
+            // Stop global polling when moving to client-controlled states
+            if (APP_STATE.globalPollInterval) {{
+                clearInterval(APP_STATE.globalPollInterval);
+                APP_STATE.globalPollInterval = null;
+            }}
+            
+            console.log('Moving to cost estimate stage');
             APP_STATE.state = 'cost_estimate';
             render();
         }}
         
         function goBackToEpisodes() {{
             APP_STATE.state = 'episode_selection';
+            
+            // Restart global polling when returning to server-controlled state
+            if (!APP_STATE.globalPollInterval) {{
+                APP_STATE.globalPollInterval = setInterval(async () => {{
+                    const serverControlledStates = ['podcast_selection', 'loading', 'episode_selection'];
+                    
+                    if (!serverControlledStates.includes(APP_STATE.state) || 
+                        APP_STATE.state === 'complete' || 
+                        APP_STATE.state === 'error') {{
+                        return;
+                    }}
+                    
+                    try {{
+                        const response = await fetch('/api/state');
+                        const data = await response.json();
+                        
+                        if (serverControlledStates.includes(APP_STATE.state)) {{
+                            if (data.state !== APP_STATE.state || (data.episodes && data.episodes.length > 0 && APP_STATE.episodes.length === 0)) {{
+                                APP_STATE.state = data.state;
+                                if (data.episodes) {{
+                                    APP_STATE.episodes = data.episodes;
+                                }}
+                                render();
+                            }}
+                        }}
+                    }} catch (e) {{
+                        console.error('State polling error:', e);
+                    }}
+                }}, 1000);
+            }}
+            
             render();
         }}
         
@@ -1837,17 +1852,32 @@ class EpisodeSelector:
         
         // Start checking for state updates after a brief delay
         setTimeout(() => {{
-            setInterval(async () => {{
-                if (APP_STATE.state !== 'loading' && APP_STATE.state !== 'complete' && APP_STATE.state !== 'error') {{
+            APP_STATE.globalPollInterval = setInterval(async () => {{
+                // Only poll server state when in server-controlled states
+                const serverControlledStates = ['podcast_selection', 'loading', 'episode_selection'];
+                
+                if (!serverControlledStates.includes(APP_STATE.state) || 
+                    APP_STATE.state === 'complete' || 
+                    APP_STATE.state === 'error') {{
+                    return;
+                }}
+                
+                try {{
                     const response = await fetch('/api/state');
                     const data = await response.json();
-                    if (data.state !== APP_STATE.state || (data.episodes && data.episodes.length > 0 && APP_STATE.episodes.length === 0)) {{
-                        APP_STATE.state = data.state;
-                        if (data.episodes) {{
-                            APP_STATE.episodes = data.episodes;
+                    
+                    // Only update if we're still in a server-controlled state
+                    if (serverControlledStates.includes(APP_STATE.state)) {{
+                        if (data.state !== APP_STATE.state || (data.episodes && data.episodes.length > 0 && APP_STATE.episodes.length === 0)) {{
+                            APP_STATE.state = data.state;
+                            if (data.episodes) {{
+                                APP_STATE.episodes = data.episodes;
+                            }}
+                            render();
                         }}
-                        render();
                     }}
+                }} catch (e) {{
+                    console.error('State polling error:', e);
                 }}
             }}, 1000);
         }}, 500);
@@ -2430,8 +2460,8 @@ class EpisodeSelector:
         }
         
         .stage-dot {
-            width: 24px;
-            height: 24px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: var(--gray-300);
             margin-bottom: 8px;
@@ -2443,8 +2473,8 @@ class EpisodeSelector:
         }
         
         .stage-dot.current {
-            width: 32px;
-            height: 32px;
+            width: 16px;
+            height: 16px;
             background: var(--black);
             box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
         }
@@ -2892,47 +2922,104 @@ class EpisodeSelector:
         """
     
     def _process_episodes_background(self):
-        """Simulate episode processing for UI demonstration"""
-        import random
-        
+        """Process episodes using the real processing pipeline"""
         if not self._processing_status:
             return
             
         try:
-            # Simulate processing each episode
-            for i, episode_id in enumerate(self._processing_episodes):
-                if self._processing_cancelled:
-                    break
+            # Import the main app to use its processing logic
+            from renaissance_weekly.app import RenaissanceWeekly
+            
+            # Create a new app instance for processing
+            app = RenaissanceWeekly()
+            
+            # Map episode IDs back to Episode objects
+            episode_map = {}
+            for ep in self.episode_cache:
+                ep_id = f"{ep.podcast}|{ep.title}|{ep.published}"
+                episode_map[ep_id] = ep
+            
+            selected_episodes = []
+            for ep_id in self._processing_episodes:
+                if ep_id in episode_map:
+                    selected_episodes.append(episode_map[ep_id])
+            
+            if not selected_episodes:
+                logger.error("No episodes found for processing")
+                return
+            
+            # Store configuration for processing
+            app.current_transcription_mode = self._processing_mode
+            app.concurrency_manager.is_full_mode = (self._processing_mode == 'full')
+            
+            # Create event loop for async processing
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # Define progress callback
+                def progress_callback(episode, status, error=None):
+                    if self._processing_cancelled:
+                        return False  # Signal to stop processing
                     
-                # Update current episode
-                self._processing_status['current'] = {
-                    'podcast': episode_id.split('|')[0],
-                    'title': episode_id.split('|')[1],
-                    'status': 'Processing...'
-                }
+                    if status == 'processing':
+                        self._processing_status['current'] = {
+                            'podcast': episode.podcast,
+                            'title': episode.title,
+                            'status': 'Processing...'
+                        }
+                    elif status == 'completed':
+                        self._processing_status['completed'] += 1
+                        self._processing_status['current'] = None
+                    elif status == 'failed':
+                        self._processing_status['failed'] += 1
+                        self._processing_status['errors'].append({
+                            'episode': f"{episode.podcast}|{episode.title}",
+                            'message': str(error) if error else 'Failed to process episode'
+                        })
+                        self._processing_status['current'] = None
+                    
+                    return True  # Continue processing
                 
-                # Simulate processing time
-                time.sleep(random.uniform(2, 5))
+                # Process episodes with progress tracking
+                summaries = loop.run_until_complete(
+                    app._process_episodes_with_progress(selected_episodes, progress_callback)
+                )
                 
-                # Simulate success/failure
-                if random.random() > 0.1:  # 90% success rate
-                    self._processing_status['completed'] += 1
-                else:
-                    self._processing_status['failed'] += 1
-                    self._processing_status['errors'].append({
-                        'episode': episode_id,
-                        'message': 'Failed to process episode'
-                    })
+                # Store summaries for email generation
+                self._processed_summaries = summaries
                 
-                self._processing_status['current'] = None
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
                 
         except Exception as e:
-            logger.error(f"Processing thread error: {e}")
+            logger.error(f"Processing thread error: {e}", exc_info=True)
+            self._processing_status['failed'] = len(self._processing_episodes)
+            self._processing_status['errors'].append({
+                'episode': 'all',
+                'message': f'Processing error: {str(e)}'
+            })
     
     def _generate_email_preview(self):
         """Generate a preview of the email that will be sent"""
         completed = self._processing_status.get('completed', 0) if self._processing_status else 0
         failed = self._processing_status.get('failed', 0) if self._processing_status else 0
+        
+        # Build episode list from actual summaries
+        episode_list = []
+        if hasattr(self, '_processed_summaries') and self._processed_summaries:
+            for item in self._processed_summaries[:5]:  # Show first 5
+                episode = item['episode']
+                episode_list.append(f"- {episode.podcast}: {episode.title}")
+            
+            if len(self._processed_summaries) > 5:
+                episode_list.append(f"... and {len(self._processed_summaries) - 5} more")
+        else:
+            # Fallback if no summaries yet
+            episode_list = ["Episodes are being processed..."]
+        
+        episodes_text = '\n'.join(episode_list)
         
         preview = f"""Subject: Renaissance Weekly - Your AI Podcast Digest
 
@@ -2941,10 +3028,7 @@ Hello,
 Your weekly podcast digest is ready with {completed} episodes successfully processed.
 
 Episodes included:
-- Modern Wisdom: Mark Manson on Life Lessons
-- The Tim Ferriss Show: John Arnold Interview
-- Huberman Lab: Understanding Addiction
-... and {completed - 3} more
+{episodes_text}
 
 {f"Note: {failed} episodes could not be processed and were excluded." if failed > 0 else ""}
 

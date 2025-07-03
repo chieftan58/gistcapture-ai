@@ -293,6 +293,23 @@ The system now searches for transcripts in this order:
 - Relaxed transcript validation for test mode (1 conversation indicator minimum)
 - Added special handling for test mode audio transcriptions
 
+### Recent Updates (2025-01-03) - Fixed Tim Ferriss Feed Issues:
+- **Discovered root cause of Tim Ferriss hanging**: RSS feed has grown to 29MB (enormous!)
+- **Implemented streaming solution for large feeds**:
+  - Detects feeds over 10MB and logs warning
+  - Streams content instead of loading all at once
+  - Truncates at 5MB to get recent episodes without hanging
+  - Successfully processes Tim Ferriss in ~7 seconds instead of hanging for 4+ minutes
+- **Fixed UI state management glitch**:
+  - Global polling was overwriting client state when moving to cost estimate
+  - Added proper state guards to prevent server state from overwriting client navigation
+  - Enhanced stage indicator dots (reduced from 24px to 12px)
+- **Connected real episode processing to UI**:
+  - Replaced simulation with actual processing pipeline
+  - UI now shows real progress as episodes are transcribed/summarized
+  - Added progress callbacks from app.py to UI
+  - Email preview shows actual processed episodes
+
 ### Recent Updates (2025-01-02) - Enhanced UI:
 - **Implemented comprehensive UI enhancements for better control and visibility:**
   - **New Single-Tab Flow**: Seamless progression through 6 stages in one browser tab
@@ -323,6 +340,10 @@ The system now searches for transcripts in this order:
   - Enhanced asyncio.gather monitoring to ensure all episodes complete
   - Added verification after processing to detect incomplete episode sets
   - Improved timeout handling to prevent stuck episodes
+
+### Known Issues (2025-01-03):
+- **Episode fetch hanging after We Study Billionaires**: The system fetches all 19 podcasts but may hang on the last one (We Study Billionaires) instead of transitioning to episode selection. Likely related to duplicate RSS fetching via Apple Podcasts.
+- **Processing thread integration**: The UI now triggers real processing but may need additional error handling for edge cases
 
 ### Known Issues (2025-01-02):
 - **UI State Management**: The UI reverts from cost estimate screen back to episode selection due to persistent server state polling. Temporary fixes applied but needs further debugging:

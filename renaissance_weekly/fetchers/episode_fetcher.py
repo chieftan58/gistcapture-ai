@@ -416,23 +416,49 @@ class ReliableEpisodeFetcher:
         for ua in user_agents:
             try:
                 headers = {'User-Agent': ua}
-                response = session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
                 
-                if response.status_code == 200:
-                    episodes = self._parse_rss_feed(response.content, podcast_name, days_back, correlation_id)
-                    if episodes:
-                        # Cache this feed URL as successful
-                        if podcast_name not in self.discovered_feeds_cache:
-                            self.discovered_feeds_cache[podcast_name] = []
-                        if feed_url not in self.discovered_feeds_cache[podcast_name]:
-                            self.discovered_feeds_cache[podcast_name].append(feed_url)
-                    return episodes
-                elif response.status_code == 403:
-                    logger.debug(f"[{correlation_id}]     403 with UA: {ua[:30]}...")
-                    continue
+                # For Art19 feeds, use streaming to handle large feeds
+                if 'art19.com' in feed_url:
+                    response = session.get(feed_url, timeout=15, headers=headers, 
+                                         allow_redirects=True, stream=True)
+                    
+                    if response.status_code == 200:
+                        # Check content length
+                        content_length = int(response.headers.get('content-length', 0))
+                        if content_length > 10 * 1024 * 1024:  # 10MB
+                            logger.info(f"[{correlation_id}]     Large feed detected: {content_length/1024/1024:.1f}MB")
+                        
+                        # Read only first 5MB for large feeds
+                        max_size = 5 * 1024 * 1024
+                        content = b''
+                        for chunk in response.iter_content(chunk_size=8192):
+                            content += chunk
+                            if len(content) > max_size:
+                                logger.info(f"[{correlation_id}]     Truncating large feed at {max_size/1024/1024}MB")
+                                break
+                        response.close()
+                        
+                        episodes = self._parse_rss_feed(content, podcast_name, days_back, correlation_id)
+                        if episodes:
+                            return episodes
                 else:
-                    logger.warning(f"[{correlation_id}]     HTTP {response.status_code}")
-                    break
+                    response = session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
+                    
+                    if response.status_code == 200:
+                        episodes = self._parse_rss_feed(response.content, podcast_name, days_back, correlation_id)
+                        if episodes:
+                            # Cache this feed URL as successful
+                            if podcast_name not in self.discovered_feeds_cache:
+                                self.discovered_feeds_cache[podcast_name] = []
+                            if feed_url not in self.discovered_feeds_cache[podcast_name]:
+                                self.discovered_feeds_cache[podcast_name].append(feed_url)
+                            return episodes
+                    elif response.status_code == 403:
+                        logger.debug(f"[{correlation_id}]     403 with UA: {ua[:30]}...")
+                        continue
+                    else:
+                        logger.warning(f"[{correlation_id}]     HTTP {response.status_code}")
+                        break
                     
             except requests.Timeout:
                 logger.warning(f"[{correlation_id}]     Timeout with UA: {ua[:30]}...")
