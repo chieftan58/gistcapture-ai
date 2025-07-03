@@ -372,3 +372,23 @@ The system now searches for transcripts in this order:
 - **Episode fetch hanging after We Study Billionaires**: FIXED - Was due to large RSS feeds
 - **UI State Management**: FIXED - Added server state synchronization
 - **Processing thread integration**: The UI now triggers real processing with proper error handling
+
+### Recent Updates (2025-01-03) - Fixed RSS Feed Fetching Issues:
+- **Fixed hanging on large RSS feeds (Tim Ferriss, Odd Lots, Market Huddle)**:
+  - Previous complex streaming logic was causing more problems than it solved
+  - Reverted to simple approach with universal 5MB size limit
+  - All feeds now use streaming download with max 5MB (enough for recent episodes)
+  - Removed special handling for specific domains - one approach for all feeds
+  
+- **Key improvements**:
+  - Universal streaming with 5MB limit prevents memory issues and timeouts
+  - Recent episodes are at the beginning of RSS feeds, so 5MB is sufficient
+  - Simplified code with no special cases = fewer bugs
+  - Fixed feedparser timeout increased from 10s to 20s for large feed parsing
+  
+- **UI Fixes**:
+  - Fixed asyncio shutdown race condition by removing 10-minute timeout
+  - Simplified progress tracking to just show spinner
+  - Added Apple Podcasts verification banner on episode selection
+  - Fixed thread safety with proper locking for status updates
+  - Fixed CSS syntax errors in f-strings (escaped curly braces)

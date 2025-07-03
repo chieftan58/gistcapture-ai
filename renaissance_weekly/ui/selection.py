@@ -45,6 +45,7 @@ class EpisodeSelector:
         self._processing_cancelled = False
         self._email_approved = False
         self._process_thread = None
+        self._status_lock = threading.Lock()
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
@@ -80,10 +81,9 @@ class EpisodeSelector:
         
         # Wait for completion
         logger.info(f"[{self._correlation_id}] ⏳ Waiting for selection process to complete...")
-        if self._selection_complete.wait(timeout=600):  # 10 minute timeout
-            logger.info(f"[{self._correlation_id}] ✅ Selection event received")
-        else:
-            logger.warning(f"[{self._correlation_id}] ⏰ Selection timeout")
+        # Wait indefinitely for selection - user controls when to proceed
+        self._selection_complete.wait()
+        logger.info(f"[{self._correlation_id}] ✅ Selection event received")
         
         # Check for fetch exceptions
         if self._fetch_exception:
@@ -223,13 +223,14 @@ class EpisodeSelector:
                     
                 elif self.path == '/api/start-processing':
                     # Start processing with the selected episodes
-                    parent._processing_status = {
-                        'total': len(data.get('episodes', [])),
-                        'completed': 0,
-                        'failed': 0,
-                        'current': None,
-                        'errors': []
-                    }
+                    with parent._status_lock:
+                        parent._processing_status = {
+                            'total': len(data.get('episodes', [])),
+                            'completed': 0,
+                            'failed': 0,
+                            'current': None,
+                            'errors': []
+                        }
                     parent._processing_episodes = data.get('episodes', [])
                     parent._processing_mode = data.get('mode', 'test')
                     parent._processing_cancelled = False
@@ -246,14 +247,23 @@ class EpisodeSelector:
                     
                 elif self.path == '/api/processing-status':
                     # Return current processing status
-                    status = getattr(parent, '_processing_status', {
-                        'total': 0,
-                        'completed': 0,
-                        'failed': 0,
-                        'current': None,
-                        'errors': []
-                    })
-                    self._send_json(status)
+                    with parent._status_lock:
+                        status = getattr(parent, '_processing_status', {
+                            'total': 0,
+                            'completed': 0,
+                            'failed': 0,
+                            'current': None,
+                            'errors': []
+                        })
+                        # Make a copy to avoid modification during serialization
+                        status_copy = {
+                            'total': status.get('total', 0),
+                            'completed': status.get('completed', 0),
+                            'failed': status.get('failed', 0),
+                            'current': status.get('current'),
+                            'errors': list(status.get('errors', []))
+                        }
+                    self._send_json(status_copy)
                     
                 elif self.path == '/api/cancel-processing':
                     # Cancel ongoing processing
@@ -702,6 +712,8 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('episodes')}}
                     
+                    ${{renderVerificationBanner()}}
+                    
                     <div class="stats-bar">
                         <div class="stat">
                             <div class="stat-value">${{APP_STATE.configuration.lookback_days}}</div>
@@ -795,7 +807,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Estimated Cost</div>
-                                <div class="estimate-value">${{totalCost.toFixed(2)}}</div>
+                                <div class="estimate-value">\$${{totalCost.toFixed(2)}}</div>
                             </div>
                             
                             <div class="estimate-item">
@@ -805,7 +817,7 @@ class EpisodeSelector:
                             
                             <div class="estimate-item">
                                 <div class="estimate-label">Cost per Episode</div>
-                                <div class="estimate-value">~${{costPerEpisode.toFixed(2)}}</div>
+                                <div class="estimate-value">\$${{costPerEpisode.toFixed(2)}}</div>
                             </div>
                         </div>
                         
@@ -813,15 +825,19 @@ class EpisodeSelector:
                             <h3>Cost Breakdown</h3>
                             <div class="breakdown-item">
                                 <span>Audio Transcription (Whisper API)</span>
-                                <span>${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
+                                <span>\$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Summarization (GPT-4)</span>
-                                <span>${{(episodeCount * 0.03).toFixed(2)}}</span>
+                                <span>\$${{(episodeCount * 0.03).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
                                 <span>Other API Calls</span>
-                                <span>${{(episodeCount * 0.01).toFixed(2)}}</span>
+                                <span>\$${{(episodeCount * 0.01).toFixed(2)}}</span>
+                            </div>
+                            <div class="breakdown-item" style="border-top: 2px solid #e0e0e0; margin-top: 12px; padding-top: 12px; font-weight: bold;">
+                                <span>Total Estimated Cost to Run</span>
+                                <span>\$${{totalCost.toFixed(2)}}</span>
                             </div>
                         </div>
                         
@@ -839,11 +855,7 @@ class EpisodeSelector:
         }}
         
         function renderProcessing() {{
-            const {{ total, completed, failed, current, startTime, errors }} = APP_STATE.processingStatus;
-            const progress = total > 0 ? (completed + failed) / total * 100 : 0;
-            const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
-            const rate = completed > 0 ? elapsed / completed : 0;
-            const remaining = (total - completed - failed) * rate;
+            const {{ total }} = APP_STATE.processingStatus;
             
             return `
                 <div class="header">
@@ -856,60 +868,37 @@ class EpisodeSelector:
                     
                     <div class="progress-card">
                         <div class="progress-header">
-                            <h2>Processing Progress</h2>
+                            <h2>Processing ${{total}} Episodes</h2>
                             <button class="button danger small" onclick="cancelProcessing()">
                                 Cancel Processing
                             </button>
                         </div>
                         
-                        <div class="progress-bar-container">
-                            <div class="progress-bar" style="width: ${{progress}}%"></div>
-                            <div class="progress-text">${{completed + failed}}/${{total}} episodes</div>
+                        <div class="processing-message">
+                            <div class="spinner"></div>
+                            <p>This will take approximately 10-30 minutes depending on the number of episodes.</p>
+                            <p>You can safely leave this page - processing will continue in the background.</p>
                         </div>
                         
-                        <div class="stats-grid">
-                            <div class="stat-item success">
-                                <div class="stat-value">${{completed}}</div>
-                                <div class="stat-label">Successful</div>
-                            </div>
-                            
-                            <div class="stat-item danger">
-                                <div class="stat-value">${{failed}}</div>
-                                <div class="stat-label">Failed</div>
-                            </div>
-                            
-                            <div class="stat-item">
-                                <div class="stat-value">${{formatDuration(elapsed / 60)}}</div>
-                                <div class="stat-label">Elapsed</div>
-                            </div>
-                            
-                            <div class="stat-item">
-                                <div class="stat-value">${{formatDuration(remaining / 60)}}</div>
-                                <div class="stat-label">Remaining</div>
-                            </div>
-                        </div>
-                        
-                        ${{current ? `
-                            <div class="current-episode">
-                                <div class="current-label">Currently Processing:</div>
-                                <div class="current-title">${{current.podcast}}: ${{current.title}}</div>
-                                <div class="current-status">${{current.status}}</div>
-                            </div>
-                        ` : ''}}
-                        
-                        ${{errors.length > 0 ? `
-                            <div class="error-section">
-                                <h3>Failed Episodes</h3>
-                                <div class="error-list">
-                                    ${{errors.map(err => `
-                                        <div class="error-item">
-                                            <div class="error-title">${{err.episode}}</div>
-                                            <div class="error-message">${{err.message}}</div>
-                                        </div>
-                                    `).join('')}}
-                                </div>
-                            </div>
-                        ` : ''}}
+                        <style>
+                            .processing-message {{
+                                text-align: center;
+                                padding: 3rem;
+                            }}
+                            .spinner {{
+                                width: 50px;
+                                height: 50px;
+                                margin: 0 auto 2rem;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #6366f1;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }}
+                            @keyframes spin {{
+                                from {{ transform: rotate(0deg); }}
+                                to {{ transform: rotate(360deg); }}
+                            }}
+                        </style>
                     </div>
                 </div>
             `;
@@ -1693,6 +1682,49 @@ class EpisodeSelector:
             `;
         }}
         
+        // Helper function for Apple Podcasts verification banner
+        function renderVerificationBanner() {{
+            // Check which podcasts were selected vs what episodes we found
+            const foundPodcasts = new Set(APP_STATE.episodes.map(ep => ep.podcast));
+            const missingPodcasts = [];
+            
+            // Check each selected podcast
+            APP_STATE.selectedPodcasts.forEach(podcastName => {{
+                if (!foundPodcasts.has(podcastName)) {{
+                    missingPodcasts.push(podcastName);
+                }}
+            }});
+            
+            // If all podcasts have episodes, show success
+            if (missingPodcasts.length === 0) {{
+                return `
+                    <div class="verification-banner success">
+                        <div class="verification-icon">✓</div>
+                        <div class="verification-text">
+                            All selected podcasts have episodes available for the specified time period
+                        </div>
+                    </div>
+                `;
+            }}
+            
+            // Otherwise show warning with missing podcasts
+            return `
+                <div class="verification-banner warning">
+                    <div class="verification-icon">⚠️</div>
+                    <div class="verification-text">
+                        <strong>Podcast Retrieval Notice:</strong> No episodes found for the following podcasts
+                        in the last ${{APP_STATE.configuration.lookback_days}} days:
+                        <div class="missing-podcasts">
+                            ${{missingPodcasts.map(name => `<span class="missing-podcast">${{name}}</span>`).join(', ')}}
+                        </div>
+                        <div class="verification-note">
+                            This could mean no new episodes were published, or there was an issue retrieving them.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
         // Utility functions
         function formatDuration(minutes) {{
             if (minutes < 60) {{
@@ -2262,6 +2294,58 @@ class EpisodeSelector:
             color: var(--gray-700);
         }
         
+        .verification-banner {
+            display: flex;
+            gap: 16px;
+            padding: 20px 24px;
+            margin-bottom: 32px;
+            border-radius: 12px;
+            font-size: 14px;
+            align-items: flex-start;
+        }
+        
+        .verification-banner.success {
+            background: #f0f9ff;
+            border: 1px solid #0369a1;
+            color: #075985;
+        }
+        
+        .verification-banner.warning {
+            background: #fef3c7;
+            border: 1px solid #d97706;
+            color: #92400e;
+        }
+        
+        .verification-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .verification-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+        
+        .missing-podcasts {
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .missing-podcast {
+            display: inline-block;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 8px;
+            font-weight: 500;
+        }
+        
+        .verification-note {
+            margin-top: 8px;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+        
         .episode-section {
             margin-bottom: 48px;
         }
@@ -2517,8 +2601,8 @@ class EpisodeSelector:
         }
         
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.5); opacity: 0.5; }
+            from { transform: scale(1); opacity: 1; }
+            to { transform: scale(1.5); opacity: 0.5; }
         }
         
         @media (max-width: 768px) {
@@ -3080,22 +3164,23 @@ class EpisodeSelector:
                     if self._processing_cancelled:
                         return False  # Signal to stop processing
                     
-                    if status == 'processing':
-                        self._processing_status['current'] = {
-                            'podcast': episode.podcast,
-                            'title': episode.title,
-                            'status': 'Processing...'
-                        }
-                    elif status == 'completed':
-                        self._processing_status['completed'] += 1
-                        self._processing_status['current'] = None
-                    elif status == 'failed':
-                        self._processing_status['failed'] += 1
-                        self._processing_status['errors'].append({
-                            'episode': f"{episode.podcast}|{episode.title}",
-                            'message': str(error) if error else 'Failed to process episode'
-                        })
-                        self._processing_status['current'] = None
+                    with self._status_lock:
+                        if status == 'processing':
+                            self._processing_status['current'] = {
+                                'podcast': episode.podcast,
+                                'title': episode.title,
+                                'status': 'Processing...'
+                            }
+                        elif status == 'completed':
+                            self._processing_status['completed'] += 1
+                            self._processing_status['current'] = None
+                        elif status == 'failed':
+                            self._processing_status['failed'] += 1
+                            self._processing_status['errors'].append({
+                                'episode': f"{episode.podcast}|{episode.title}",
+                                'message': str(error) if error else 'Failed to process episode'
+                            })
+                            self._processing_status['current'] = None
                     
                     return True  # Continue processing
                 
@@ -3113,11 +3198,12 @@ class EpisodeSelector:
                 
         except Exception as e:
             logger.error(f"Processing thread error: {e}", exc_info=True)
-            self._processing_status['failed'] = len(self._processing_episodes)
-            self._processing_status['errors'].append({
-                'episode': 'all',
-                'message': f'Processing error: {str(e)}'
-            })
+            with self._status_lock:
+                self._processing_status['failed'] = len(self._processing_episodes)
+                self._processing_status['errors'].append({
+                    'episode': 'all',
+                    'message': f'Processing error: {str(e)}'
+                })
     
     def _generate_email_preview(self):
         """Generate a preview of the email that will be sent"""

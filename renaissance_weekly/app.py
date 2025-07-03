@@ -388,8 +388,8 @@ class RenaissanceWeekly:
                     
                     await fetch_progress.complete_item(True)
                 else:
-                    logger.warning(f"[{self.correlation_id}]   ⚠️ {podcast_name}: No episodes found")
-                    await fetch_progress.complete_item(False)
+                    logger.info(f"[{self.correlation_id}]   📅 {podcast_name}: No episodes in the last {days_back} days")
+                    await fetch_progress.complete_item(True)
                     
             except Exception as e:
                 logger.error(f"[{self.correlation_id}]   ❌ {podcast_name}: Failed to fetch episodes - {e}")
@@ -398,10 +398,19 @@ class RenaissanceWeekly:
         
         # Log fetch summary
         fetch_summary = fetch_progress.get_summary()
-        logger.info(
-            f"[{self.correlation_id}] 📊 Fetch complete: {fetch_summary['completed']}/{fetch_summary['total_items']} successful, "
-            f"{len(all_episodes)} total episodes"
-        )
+        actual_failures = fetch_summary['failed']
+        podcasts_checked = fetch_summary['total_items']
+        
+        if actual_failures > 0:
+            logger.info(
+                f"[{self.correlation_id}] 📊 Fetch complete: {podcasts_checked - actual_failures}/{podcasts_checked} successful, "
+                f"{actual_failures} failed, {len(all_episodes)} total episodes"
+            )
+        else:
+            logger.info(
+                f"[{self.correlation_id}] 📊 Fetch complete: All {podcasts_checked} podcasts checked successfully, "
+                f"{len(all_episodes)} total episodes"
+            )
         
         return all_episodes
     

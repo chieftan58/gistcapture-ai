@@ -288,12 +288,17 @@ class ReliableEpisodeFetcher:
         if final_episodes:
             logger.info(f"[{correlation_id}] ✅ Found {len(final_episodes)} unique episodes via: {', '.join(methods_tried)}")
         else:
-            logger.error(f"[{correlation_id}] ❌ Could not fetch episodes for {podcast_name} from any source")
-            logger.error(f"[{correlation_id}]    Methods tried: {', '.join(methods_tried)}")
-            
-            # Last resort: Manual intervention suggestion
-            logger.warning(f"[{correlation_id}] 💡 Manual intervention needed for {podcast_name}")
-            logger.warning(f"[{correlation_id}]    Consider checking the Apple ID or adding more identifiers to podcasts.yaml")
+            # Check if we successfully accessed feeds but found no episodes in the date range
+            if methods_tried and 'RSS feeds' in methods_tried:
+                logger.info(f"[{correlation_id}] 📅 No episodes found for {podcast_name} in the last {days_back} days")
+                logger.info(f"[{correlation_id}]    Successfully checked: {', '.join(methods_tried)}")
+            else:
+                logger.error(f"[{correlation_id}] ❌ Could not fetch episodes for {podcast_name} from any source")
+                logger.error(f"[{correlation_id}]    Methods tried: {', '.join(methods_tried)}")
+                
+                # Last resort: Manual intervention suggestion
+                logger.warning(f"[{correlation_id}] 💡 Manual intervention needed for {podcast_name}")
+                logger.warning(f"[{correlation_id}]    Consider checking the Apple ID or adding more identifiers to podcasts.yaml")
         
         return final_episodes
     
@@ -417,38 +422,25 @@ class ReliableEpisodeFetcher:
             try:
                 headers = {'User-Agent': ua}
                 
-                # First, check if this is a large feed by doing a HEAD request
-                try:
-                    head_response = session.head(feed_url, timeout=5, headers=headers, allow_redirects=True)
-                    content_length = int(head_response.headers.get('content-length', 0))
-                except:
-                    content_length = 0  # Assume unknown size
+                # Universal streaming approach with size limit
+                response = session.get(feed_url, timeout=20, headers=headers, allow_redirects=True, stream=True)
                 
-                # For large feeds (>10MB), use streaming to handle them efficiently
-                if content_length > 10 * 1024 * 1024 or 'art19.com' in feed_url:
-                    logger.info(f"[{correlation_id}]     Large feed detected: {content_length/1024/1024:.1f}MB, using streaming")
-                    response = session.get(feed_url, timeout=15, headers=headers, 
-                                         allow_redirects=True, stream=True)
+                if response.status_code == 200:
+                    # Read content in chunks up to 5MB
+                    content = b''
+                    max_size = 5 * 1024 * 1024  # 5MB should be enough for any feed with recent episodes
                     
-                    if response.status_code == 200:
-                        # Read only first 5MB for large feeds
-                        max_size = 5 * 1024 * 1024
-                        content = b''
-                        for chunk in response.iter_content(chunk_size=8192):
-                            content += chunk
-                            if len(content) > max_size:
-                                logger.info(f"[{correlation_id}]     Truncating large feed at {max_size/1024/1024}MB")
-                                break
-                        response.close()
-                        
+                    for chunk in response.iter_content(chunk_size=8192):
+                        content += chunk
+                        if len(content) >= max_size:
+                            logger.info(f"[{correlation_id}]     Reached 5MB limit for feed, stopping download")
+                            break
+                    
+                    response.close()
+                    
+                    # Parse whatever we got
+                    if content:
                         episodes = self._parse_rss_feed(content, podcast_name, days_back, correlation_id)
-                        if episodes:
-                            return episodes
-                else:
-                    response = session.get(feed_url, timeout=15, headers=headers, allow_redirects=True)
-                    
-                    if response.status_code == 200:
-                        episodes = self._parse_rss_feed(response.content, podcast_name, days_back, correlation_id)
                         if episodes:
                             # Cache this feed URL as successful
                             if podcast_name not in self.discovered_feeds_cache:
@@ -472,7 +464,7 @@ class ReliableEpisodeFetcher:
         
         return []
     
-    def _parse_feed_with_timeout(self, content: bytes, correlation_id: str, timeout: int = 10):
+    def _parse_feed_with_timeout(self, content: bytes, correlation_id: str, timeout: int = 20):
         """Parse feedparser content with timeout protection"""
         import feedparser
         
