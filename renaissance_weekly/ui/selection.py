@@ -200,7 +200,7 @@ class EpisodeSelector:
                                 'total': 0,
                                 'completed': 0,
                                 'failed': 0,
-                                'current': None,
+                                'currently_processing': [],
                                 'errors': []
                             }
                         # Make a copy to avoid modification during serialization
@@ -208,7 +208,7 @@ class EpisodeSelector:
                             'total': status.get('total', 0),
                             'completed': status.get('completed', 0),
                             'failed': status.get('failed', 0),
-                            'current': status.get('current'),
+                            'currently_processing': list(status.get('currently_processing', [])),
                             'errors': list(status.get('errors', []))
                         }
                     self._send_json(status_copy)
@@ -281,7 +281,7 @@ class EpisodeSelector:
                             'total': len(data.get('episodes', [])),
                             'completed': 0,
                             'failed': 0,
-                            'current': None,
+                            'currently_processing': [],
                             'errors': []
                         }
                     parent._processing_episodes = data.get('episodes', [])
@@ -582,7 +582,7 @@ class EpisodeSelector:
                 total: 0,
                 completed: 0,
                 failed: 0,
-                current: null,
+                currently_processing: [],
                 startTime: null,
                 errors: []
             }},
@@ -761,16 +761,18 @@ class EpisodeSelector:
             
             // Find podcasts with no recent episodes
             const podcastsWithNoEpisodes = [];
-            if (APP_STATE.selectedPodcastNames) {{
+            if (APP_STATE.selectedPodcastNames && APP_STATE.selectedPodcastNames.length > 0) {{
                 APP_STATE.selectedPodcastNames.forEach(podcastName => {{
                     if (!episodesByPodcast[podcastName]) {{
                         podcastsWithNoEpisodes.push(podcastName);
                     }}
                 }});
             }}
-            console.log('Podcasts with no episodes:', podcastsWithNoEpisodes);
-            console.log('Last episode info available:', APP_STATE.lastEpisodeInfo);
-            console.log('Selected podcast names:', APP_STATE.selectedPodcastNames);
+            console.log('Episode selection debug:');
+            console.log('  - Episodes by podcast:', Object.keys(episodesByPodcast));
+            console.log('  - Selected podcast names:', APP_STATE.selectedPodcastNames);
+            console.log('  - Podcasts with no episodes:', podcastsWithNoEpisodes);
+            console.log('  - Last episode info available:', APP_STATE.lastEpisodeInfo);
             
             // Debug: Log what lastEpisodeInfo contains for each podcast with no episodes
             podcastsWithNoEpisodes.forEach(podcast => {{
@@ -787,7 +789,44 @@ class EpisodeSelector:
                 <div class="container">
                     ${{renderStageIndicator('episodes')}}
                     
-                    ${{renderVerificationBanner()}}
+                    ${{(function() {{
+                        // Calculate and show verification banner
+                        const foundPodcasts = new Set(Object.keys(episodesByPodcast));
+                        const missingPodcasts = [];
+                        
+                        if (APP_STATE.selectedPodcastNames && APP_STATE.selectedPodcastNames.length > 0) {{
+                            APP_STATE.selectedPodcastNames.forEach(podcastName => {{
+                                if (!foundPodcasts.has(podcastName)) {{
+                                    missingPodcasts.push(podcastName);
+                                }}
+                            }});
+                            
+                            if (missingPodcasts.length > 0) {{
+                                return `
+                                    <div class="verification-banner warning">
+                                        <div class="verification-icon">!</div>
+                                        <div class="verification-text">
+                                            <strong>Some podcasts have no recent episodes</strong>
+                                            <div style="margin-top: 8px; font-weight: normal;">
+                                                Missing: ${{missingPodcasts.map(podcast => `<span class="missing-podcast">${{podcast}}</span>`).join(' ')}}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }} else {{
+                                return `
+                                    <div class="verification-banner success">
+                                        <div class="verification-icon">✓</div>
+                                        <div class="verification-text">
+                                            <strong>All podcasts verified</strong>
+                                            Episodes found for all selected podcasts in the specified time period
+                                        </div>
+                                    </div>
+                                `;
+                            }}
+                        }}
+                        return ''; // No banner if no selected podcasts data
+                    }})()}}
                     
                     <div class="stats-bar">
                         <div class="stat">
@@ -795,8 +834,12 @@ class EpisodeSelector:
                             <div class="stat-label">Days</div>
                         </div>
                         <div class="stat">
+                            <div class="stat-value">${{APP_STATE.selectedPodcastNames ? APP_STATE.selectedPodcastNames.length : 0}}</div>
+                            <div class="stat-label">Podcasts Selected</div>
+                        </div>
+                        <div class="stat">
                             <div class="stat-value">${{Object.keys(episodesByPodcast).length}}</div>
-                            <div class="stat-label">Podcasts</div>
+                            <div class="stat-label">Podcasts with Episodes</div>
                         </div>
                         <div class="stat">
                             <div class="stat-value">${{APP_STATE.episodes.length}}</div>
@@ -959,7 +1002,7 @@ class EpisodeSelector:
         }}
         
         function renderProcessing() {{
-            const {{ total, completed, failed, current, errors }} = APP_STATE.processingStatus;
+            const {{ total, completed, failed, currently_processing = [], errors }} = APP_STATE.processingStatus;
             const progress = total > 0 ? ((completed + failed) / total * 100) : 0;
             const remaining = total - completed - failed;
             const estimatedMinutesRemaining = remaining * (APP_STATE.configuration.transcription_mode === 'test' ? 0.5 : 5);
@@ -1024,13 +1067,19 @@ class EpisodeSelector:
                         </div>
                     </div>
                     
-                    ${{current ? `
+                    ${{currently_processing.length > 0 ? `
                         <div class="current-episode">
-                            <div class="current-label">Currently processing:</div>
-                            <div class="current-info">
-                                <strong>${{current.podcast}}</strong>
-                                <span>${{current.title}}</span>
-                            </div>
+                            <div class="current-label">Currently processing (${{currently_processing.length}}):</div>
+                            ${{currently_processing.map(episodeKey => {{
+                                const [podcast, ...titleParts] = episodeKey.split(':');
+                                const title = titleParts.join(':');
+                                return `
+                                    <div class="current-info">
+                                        <strong>${{podcast}}</strong>
+                                        <span>${{title}}</span>
+                                    </div>
+                                `;
+                            }}).join('')}}
                         </div>
                     ` : ''}}
                     
@@ -1043,7 +1092,8 @@ class EpisodeSelector:
                             let statusClass = 'pending';
                             let errorMessage = '';
                             
-                            if (current && current.podcast === ep.podcast && current.title === ep.title) {{
+                            const episodeKey = `${{ep.podcast}}:${{ep.title}}`;
+                            if (currently_processing.includes(episodeKey)) {{
                                 status = 'processing';
                                 statusIcon = '◐';
                                 statusClass = 'processing';
@@ -1141,6 +1191,11 @@ class EpisodeSelector:
                         
                         .current-info {{
                             font-size: 14px;
+                            margin-bottom: 8px;
+                        }}
+                        
+                        .current-info:last-child {{
+                            margin-bottom: 0;
                         }}
                         
                         .current-info strong {{
@@ -1738,6 +1793,8 @@ class EpisodeSelector:
             }});
             
             if (response.ok) {{
+                // Store the selected podcast names immediately so they're available in all subsequent states
+                APP_STATE.selectedPodcastNames = Array.from(APP_STATE.selectedPodcasts);
                 APP_STATE.state = 'loading';
                 render();
                 startStatusPolling();
@@ -2101,6 +2158,12 @@ class EpisodeSelector:
                 'Spotify API'
             ];
             
+            // If we don't have selected podcast names yet, don't show banner
+            if (!APP_STATE.selectedPodcastNames || APP_STATE.selectedPodcastNames.length === 0) {{
+                console.log('  - Not showing banner: selectedPodcastNames is empty');
+                return '';
+            }}
+            
             // If all podcasts have episodes, show success
             if (missingPodcasts.length === 0) {{
                 return `
@@ -2120,26 +2183,8 @@ class EpisodeSelector:
                     <div class="verification-icon">!</div>
                     <div class="verification-text">
                         <strong>Some podcasts have no recent episodes</strong>
-                        <div class="missing-podcasts">
-                            ${{missingPodcasts.map(podcast => {{
-                                const episodeInfo = APP_STATE.lastEpisodeInfo && APP_STATE.lastEpisodeInfo[podcast];
-                                if (episodeInfo && episodeInfo.date) {{
-                                    const date = new Date(episodeInfo.date);
-                                    const daysAgo = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
-                                    const dateStr = date.toLocaleDateString('en-US', {{ month: 'long', day: 'numeric', year: 'numeric' }});
-                                    return `
-                                        <div style="margin: 8px 0;">
-                                            <strong>${{podcast}}</strong><br>
-                                            <span style="color: #666; font-size: 0.9em;">
-                                                Last episode: ${{dateStr}} (${{daysAgo}} days ago)<br>
-                                                "${{episodeInfo.title}}"
-                                            </span>
-                                        </div>
-                                    `;
-                                }} else {{
-                                    return `<div style="margin: 8px 0;"><strong>${{podcast}}</strong> <span style="color: #666; font-size: 0.9em;">(no episodes found)</span></div>`;
-                                }}
-                            }}).join('')}}
+                        <div style="margin-top: 8px; font-weight: normal;">
+                            Missing: ${{missingPodcasts.map(podcast => `<span class="missing-podcast">${{podcast}}</span>`).join(' ')}}
                         </div>
                     </div>
                 </div>
@@ -2692,14 +2737,14 @@ class EpisodeSelector:
         
         .stats-bar {
             display: flex;
-            gap: 80px;
+            gap: 60px;
             margin-bottom: 64px;
             padding-bottom: 48px;
             border-bottom: 1px solid var(--gray-200);
         }
         
         .stat {
-            text-align: left;
+            text-align: center;
         }
         
         .stat-value {
@@ -3659,21 +3704,21 @@ class EpisodeSelector:
                     
                     with self._status_lock:
                         if status == 'processing':
-                            self._processing_status['current'] = {
-                                'podcast': episode.podcast,
-                                'title': episode.title,
-                                'status': 'Processing...'
-                            }
+                            self._processing_status['currently_processing'].append(f"{episode.podcast}:{episode.title}")
                         elif status == 'completed':
                             self._processing_status['completed'] += 1
-                            self._processing_status['current'] = None
+                            episode_key = f"{episode.podcast}:{episode.title}"
+                            if episode_key in self._processing_status['currently_processing']:
+                                self._processing_status['currently_processing'].remove(episode_key)
                         elif status == 'failed':
                             self._processing_status['failed'] += 1
                             self._processing_status['errors'].append({
                                 'episode': f"{episode.podcast}|{episode.title}",
                                 'message': str(error) if error else 'Failed to process episode'
                             })
-                            self._processing_status['current'] = None
+                            episode_key = f"{episode.podcast}:{episode.title}"
+                            if episode_key in self._processing_status['currently_processing']:
+                                self._processing_status['currently_processing'].remove(episode_key)
                     
                     return True  # Continue processing
                 

@@ -5948,5 +5948,655 @@
     "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:24:58.070660",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:24:58.086292",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:24:59.057232",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:25:44.345442",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Big Beautiful Bill, Elon/Trump, Dollar Down Big, Harvard's Money Problems, Figma IPO",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:25:50.773377",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:27:07.324945",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:27:09.219827",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:27:09.397291",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:27:45.807988",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:27:47.621104",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The AI Village: Previewing the Giga-Agent Future with Adam Binksmith, Founder of AI Digest",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:28:36.449423",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:29:29.646157",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "All Roads Lead To Debasement | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:30:05.897987",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Bringing The Long Tail Of Markets Onchain",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:31:06.346544",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:31:42.817063",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:31:45.289912",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:32:25.227179",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:32:25.236238",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:33:15.255919",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #487 Larry McDonald: The Great Migration To Hard Assets",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:34:04.126409",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:35:53.750093",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:35:59.303305",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:36:43.242939",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:36:59.861455",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:37:26.417792",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Why Chronic Disease is Exploding w/ Daniel Schmachtenberger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:37:53.041363",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:44:54.825205",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:44:55.673038",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:44:55.686044",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:45:46.431078",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Big Beautiful Bill, Elon/Trump, Dollar Down Big, Harvard's Money Problems, Figma IPO",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:46:32.683732",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:51:04.653057",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:51:07.969463",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:51:08.161021",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:51:39.889715",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:51:41.870556",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The AI Village: Previewing the Giga-Agent Future with Adam Binksmith, Founder of AI Digest",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:52:33.607817",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:53:13.429219",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Why I don\u2019t think AGI is right around the corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:53:15.724661",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/167473378/0ead83b47a8cb303be6052f0ec919fb7",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:53:15.925463",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/167473378/0ead83b47a8cb303be6052f0ec919fb7",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:53:45.123722",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Why I don\u2019t think AGI is right around the corner",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:53:46.595890",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "All Roads Lead To Debasement | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:54:30.276682",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Bringing The Long Tail Of Markets Onchain",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:54:55.052390",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:55:22.335795",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:56:11.981840",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:56:31.830385",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:56:53.998354",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:57:39.393960",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:57:39.403661",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:58:16.728818",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #487 Larry McDonald: The Great Migration To Hard Assets",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:58:37.594084",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:59:03.572506",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:59:13.613594",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T18:59:40.570493",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:00:00.622028",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:00:11.228242",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Why Chronic Disease is Exploding w/ Daniel Schmachtenberger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:00:48.708547",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:01:41.879184",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:01:41.888912",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "#355 \u2013 Skincare strategies, the science of facial aging, and cosmetic-intervention guidance\u00a0| Tanuj Nakra, M.D. & Suzan Obagi, M.D.",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:06:05.173962",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:07:00.940959",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:07:29.559256",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:07:51.532252",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-04T19:09:40.577589",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
   }
 ]

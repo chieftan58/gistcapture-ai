@@ -56,6 +56,16 @@ class AudioSourceFinder:
         """
         sources = []
         
+        # Special handling for Substack podcasts - prioritize YouTube
+        if episode.audio_url and 'substack.com' in episode.audio_url:
+            logger.info(f"🎯 Substack podcast detected ({episode.podcast}), prioritizing YouTube...")
+            
+            # Try YouTube first for Substack podcasts
+            youtube_url = await self._find_youtube_version(episode)
+            if youtube_url:
+                sources.append(youtube_url)
+                logger.info(f"✅ Found YouTube version for Substack podcast")
+        
         # 1. Platform-specific searches (HIGHEST PRIORITY)
         logger.info(f"🔍 Searching platform APIs for: {episode.title[:50]}...")
         platform_sources = await self._find_platform_specific_sources(episode, podcast_config)
@@ -226,6 +236,22 @@ class AudioSourceFinder:
         # Extract key information
         podcast_name = episode.podcast
         title = episode.title
+        
+        # Special handling for American Optimist
+        if podcast_name == "American Optimist":
+            # American Optimist often posts on Joe Lonsdale's YouTube channel
+            # Format: "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance"
+            ep_match = re.search(r'Ep\s*(\d+):\s*(.+)', title)
+            if ep_match:
+                ep_num = ep_match.group(1)
+                ep_title = ep_match.group(2)
+                # Search for Joe Lonsdale's channel specifically
+                queries.append(f'"Joe Lonsdale" "{ep_title}"')
+                queries.append(f'Joe Lonsdale American Optimist {ep_num}')
+                queries.append(f'"American Optimist" "{ep_title}"')
+            else:
+                queries.append(f'Joe Lonsdale "{title}"')
+            return queries[:3]
         
         # Remove common patterns that make search less effective
         # Remove episode numbers

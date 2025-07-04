@@ -495,3 +495,47 @@ The system now searches for transcripts in this order:
   - UI banner rendering has timing issue preventing proper display
 - **Workaround**: Check browser console for debug output showing which podcasts had no episodes found
 - **Proper Fix Needed**: Either delay initial render until data loads, or force banner re-render after data arrives
+
+### Recent Updates (2025-01-04) - Performance Analysis & Optimization Plan:
+
+#### Current Performance Bottlenecks:
+1. **Total Processing Time**: ~6 hours for 36 episodes
+   - Audio Downloads: 1-2 hours (sequential, fighting Cloudflare)
+   - Transcript Search: ~1 hour (checking multiple sources)
+   - Audio Transcription: ~2 hours (3 concurrent via Whisper API)
+   - GPT-4 Summarization: 1-2 hours (artificially limited to 3 concurrent)
+
+2. **Critical Issue Found**: 
+   - Single OpenAI semaphore used for BOTH Whisper (3 RPM) and GPT-4 (60+ RPM)
+   - This artificially limits GPT-4 to 3 concurrent requests instead of 20+
+   - Leaving ~85% of GPT-4 capacity unused
+
+#### Optimization Plan:
+
+**Phase 1 - Quick Win (Immediate):**
+- Separate Whisper and GPT-4 rate limits
+- Change from single `_openai_semaphore` to:
+  - `whisper_semaphore = asyncio.Semaphore(3)` for transcription
+  - `gpt4_semaphore = asyncio.Semaphore(20)` for summarization
+- Expected improvement: Reduce summarization from 2 hours to 20 minutes
+
+**Phase 2 - Third-Party Transcription (After AssemblyAI setup):**
+- Switch to AssemblyAI (32 concurrent requests vs 3)
+- $50 free credit, similar cost to OpenAI
+- Expected improvement: Reduce transcription from 2 hours to 15 minutes
+
+**Phase 3 - Full Pipeline Optimization (Future):**
+- Parallelize audio downloads (10 concurrent)
+- Pipeline stages (download → transcribe → summarize in parallel)
+- Expected total time: ~45 minutes for full pipeline
+
+#### American Optimist Fix (2025-01-04):
+- Issue: Substack/Cloudflare protection blocking downloads
+- Solution: Prioritize YouTube search for Substack podcasts
+- Added specific YouTube search queries for Joe Lonsdale's channel
+- Bypasses Cloudflare by using YouTube as audio source
+
+#### UI Processing Improvements (2025-01-04):
+- Fixed parallel processing display to show all currently processing episodes
+- Changed from single 'current' to 'currently_processing' set
+- Shows accurate count and list of episodes being processed simultaneously

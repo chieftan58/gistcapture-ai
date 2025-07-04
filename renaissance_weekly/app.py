@@ -463,7 +463,7 @@ class RenaissanceWeekly:
             'total': len(selected_episodes),
             'completed': 0,
             'failed': 0,
-            'current': None,
+            'currently_processing': set(),  # Track multiple episodes being processed
             'errors': []
         }
         
@@ -501,7 +501,7 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 📋 Created {len(tasks)} tasks for processing")
         
         # Monitor resource usage periodically
-        monitor_task = asyncio.create_task(self._monitor_resources(max_concurrent))
+        monitor_task = asyncio.create_task(self._monitor_resources(general_concurrency))
         
         try:
             # Execute all tasks
@@ -595,11 +595,7 @@ class RenaissanceWeekly:
                 # Update processing status if available (thread-safe)
                 if self._processing_status:
                     with self._status_lock:
-                        self._processing_status['current'] = {
-                            'podcast': episode.podcast,
-                            'title': episode.title,
-                            'status': 'Processing...'
-                        }
+                        self._processing_status['currently_processing'].add(f"{episode.podcast}:{episode.title}")
                 
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -629,7 +625,7 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 with self._status_lock:
                                     self._processing_status['completed'] += 1
-                                    self._processing_status['current'] = None
+                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
                             
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -642,7 +638,7 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 with self._status_lock:
                                     self._processing_status['failed'] += 1
-                                    self._processing_status['current'] = None
+                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
                             
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -683,7 +679,7 @@ class RenaissanceWeekly:
                 if self._processing_status:
                     with self._status_lock:
                         self._processing_status['failed'] += 1
-                        self._processing_status['current'] = None
+                        self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
                 
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
