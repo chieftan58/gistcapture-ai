@@ -431,3 +431,45 @@ The system now searches for transcripts in this order:
 - **Updated CLAUDE.md**: Added comprehensive documentation of all recent updates and fixes
 - **Tracking Modified Files**: Updated app.py, database.py, podcast_index.py (both), and selection.py
 - **Monitoring Stats**: Updated monitoring data for failures and performance metrics
+
+### Recent Updates (2025-01-04) - Fixed Wrong Podcast Episodes:
+- **Discovered Major Issue**: Multi-platform search and PodcastIndex were returning episodes from wrong podcasts
+  - All-In was getting 21 episodes instead of 1 (news podcast episodes like "jobs report", "Trump", etc.)
+  - The Drive was getting 71 episodes (sports radio show "THE DRIVE with Stoerner & Hughley")
+  - Founders was getting 47 episodes (various unrelated podcasts)
+  - Issue: When < 3 episodes found, aggressive search methods return ANY podcast with similar name
+- **Implemented Fix**:
+  - Disabled multi-platform search in episode_fetcher.py (lines 251-258)
+  - Disabled PodcastIndex search in episode_fetcher.py (lines 260-267)
+  - Added TODO comments to implement proper podcast validation before re-enabling
+- **Database Cleanup**: Removed incorrect episodes from affected podcasts
+- **Results**: All-In now correctly shows 1 episode from June 28th (6 days ago)
+- **Next Steps**: Need to implement podcast name/ID validation for search methods
+
+### Recent Updates (2025-01-04) - UI Enhancements:
+- **Enhanced Episode Selection UI**:
+  - Last episode dates are dynamically retrieved from database (not hardcoded)
+  - Shows formatted date and days ago for podcasts with no recent episodes
+  - Example: "Last episode: January 2, 2025 (2 days ago)"
+  - Improved formatting with bold podcast names and indented episode details
+- **Episode Description Improvements**:
+  - Already implemented comprehensive description formatting
+  - Extracts host/guest information from titles and descriptions
+  - Shows structured info: "Host: X. Guest: Y. Topic: Z"
+  - Falls back to generating descriptions from title when original is too short
+- **American Optimist Fix**:
+  - Issue: Substack/Cloudflare protection causing 403 errors
+  - Solution: Enhanced Substack fetcher already exists but needs integration
+  - Workaround: Uses alternative platforms (YouTube, Apple, Spotify) before Substack
+
+### Recent Updates (2025-01-04) - Fixed Concurrency Bottleneck:
+- **Identified Issue**: Final episodes timing out due to semaphore bottleneck
+  - Previous: Only 3 concurrent tasks allowed (matching OpenAI limit)
+  - Problem: Tasks hold semaphore while waiting for Whisper API rate limits
+  - Result: Deadlock where all 3 slots wait for rate limits, blocking remaining tasks
+- **Implemented Fix**:
+  - Increased general concurrency to 10 tasks (for transcript fetch, downloads, etc.)
+  - Kept OpenAI API limit at 3 concurrent requests
+  - Created separate semaphores: general_semaphore (10) and _openai_semaphore (3)
+  - Result: Non-API operations can proceed while API calls are rate-limited
+- **Expected Outcome**: All 34 episodes will now complete without timeouts

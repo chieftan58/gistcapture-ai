@@ -2,7 +2,7 @@
 
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
@@ -387,7 +387,11 @@ class PodcastDatabase:
                 for podcast, date_str in results:
                     if date_str:
                         # Parse the ISO format date string
-                        last_dates[podcast] = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        # Ensure timezone awareness
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        last_dates[podcast] = dt
                     else:
                         last_dates[podcast] = None
                 

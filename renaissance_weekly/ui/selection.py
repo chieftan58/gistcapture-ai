@@ -802,12 +802,13 @@ class EpisodeSelector:
                                     <ul style="margin: 0; padding-left: 20px;">
                                         ${{podcastsWithNoEpisodes.map(podcast => {{
                                             const lastDate = APP_STATE.lastEpisodeDates && APP_STATE.lastEpisodeDates[podcast];
+                                            const lastEpisodeInfo = getLastEpisodeInfo(podcast);
                                             if (lastDate) {{
                                                 const date = new Date(lastDate);
                                                 const daysAgo = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
-                                                return `<li>${{podcast}} <span style="color: #999; font-size: 0.9em;">(last episode: ${{daysAgo}} days ago)</span></li>`;
+                                                return `<li><strong>${{podcast}}</strong><br><span style="color: #999; font-size: 0.9em; margin-left: 20px;">Last episode: ${{lastEpisodeInfo.dateStr}} (${{daysAgo}} days ago)</span></li>`;
                                             }} else {{
-                                                return `<li>${{podcast}} <span style="color: #999; font-size: 0.9em;">(no episodes found)</span></li>`;
+                                                return `<li><strong>${{podcast}}</strong> <span style="color: #999; font-size: 0.9em;">(no episodes found)</span></li>`;
                                             }}
                                         }}).join('')}}
                                     </ul>
@@ -1582,6 +1583,23 @@ class EpisodeSelector:
                 'A16Z': 'Technology and startup insights.'
             }};
             return contexts[podcast] || '';
+        }}
+        
+        function getLastEpisodeInfo(podcastName) {{
+            // Use the date from APP_STATE if available (dynamically retrieved from database)
+            const lastDate = APP_STATE.lastEpisodeDates && APP_STATE.lastEpisodeDates[podcastName];
+            if (lastDate) {{
+                const date = new Date(lastDate);
+                return {{
+                    title: 'Last episode',
+                    dateStr: date.toLocaleDateString('en-US', {{ month: 'long', day: 'numeric', year: 'numeric' }})
+                }};
+            }}
+            
+            return {{
+                title: 'Unknown',
+                dateStr: 'Unknown'
+            }};
         }}
         
         function togglePodcast(name) {{

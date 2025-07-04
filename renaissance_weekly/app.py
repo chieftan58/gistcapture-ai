@@ -469,23 +469,27 @@ class RenaissanceWeekly:
         
         # Get optimal concurrency with OpenAI limit
         openai_concurrency_limit = 3  # Max 3 concurrent OpenAI operations
-        max_concurrent = self.concurrency_manager.get_optimal_concurrency(openai_concurrency_limit)
+        # Allow more concurrent tasks for transcript fetching and other non-API operations
+        general_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Up to 10 concurrent tasks
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {max_concurrent} (OpenAI limit: {openai_concurrency_limit})")
+        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {general_concurrency} (OpenAI API limit: {openai_concurrency_limit})")
         
         # Progress tracker for processing
         process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
         
-        # Create semaphore for concurrency control
-        semaphore = asyncio.Semaphore(max_concurrent)
+        # Create semaphores for different types of operations
+        # General semaphore for overall concurrency (transcript fetch, processing, etc.)
+        general_semaphore = asyncio.Semaphore(general_concurrency)
+        # Separate semaphore for OpenAI API calls (both Whisper and GPT)
+        self._openai_semaphore = asyncio.Semaphore(openai_concurrency_limit)
         
         # Create tasks with enhanced error handling
         tasks = []
         for i, episode in enumerate(selected_episodes):
             task = asyncio.create_task(
                 self._process_episode_with_monitoring(
-                    episode, semaphore, process_progress, i
+                    episode, general_semaphore, process_progress, i
                 )
             )
             tasks.append(task)

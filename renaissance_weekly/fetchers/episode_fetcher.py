@@ -249,18 +249,22 @@ class ReliableEpisodeFetcher:
                 all_episodes[self._episode_key(ep)] = ep
         
         # Method 4: Search for podcast across multiple platforms
-        if len(all_episodes) < 3:  # If we have very few episodes
-            methods_tried.append("Multi-platform search")
-            episodes = await self._multi_platform_search(podcast_name, days_back, correlation_id)
-            for ep in episodes:
-                all_episodes[self._episode_key(ep)] = ep
+        # DISABLED: This is returning episodes from wrong podcasts with similar names
+        # TODO: Add validation to ensure episodes are from the correct podcast
+        # if len(all_episodes) < 3:  # If we have very few episodes
+        #     methods_tried.append("Multi-platform search")
+        #     episodes = await self._multi_platform_search(podcast_name, days_back, correlation_id)
+        #     for ep in episodes:
+        #         all_episodes[self._episode_key(ep)] = ep
         
         # Method 5: Try PodcastIndex
-        if len(all_episodes) < 5:  # Still need more episodes
-            methods_tried.append("PodcastIndex")
-            episodes = await self._try_podcast_index(podcast_name, days_back, correlation_id)
-            for ep in episodes:
-                all_episodes[self._episode_key(ep)] = ep
+        # DISABLED: This is returning episodes from wrong podcasts with similar names
+        # TODO: Add validation to ensure the podcast returned matches the expected podcast
+        # if len(all_episodes) < 5:  # Still need more episodes
+        #     methods_tried.append("PodcastIndex")
+        #     episodes = await self._try_podcast_index(podcast_name, days_back, correlation_id)
+        #     for ep in episodes:
+        #         all_episodes[self._episode_key(ep)] = ep
         
         # Method 6: Try web scraping (only if website is provided)
         if podcast_config.get("website") and len(all_episodes) < 5:
