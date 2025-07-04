@@ -1828,12 +1828,14 @@ class EpisodeSelector:
                 
                 if (stateData.state === 'episode_selection' && stateData.episodes) {{
                     console.log(`Episodes ready! Transitioning with ${{stateData.episodes.length}} episodes`);
+                    console.log('Selected podcasts from server:', stateData.selected_podcasts);
                     // Only update state if we're still in loading state
                     if (APP_STATE.state === 'loading') {{
                         APP_STATE.state = 'episode_selection';
                         APP_STATE.episodes = stateData.episodes;
                         if (stateData.selected_podcasts) {{
                             APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
+                            console.log('Updated selectedPodcastNames:', APP_STATE.selectedPodcastNames);
                         }}
                         if (stateData.last_episode_info) {{
                             APP_STATE.lastEpisodeInfo = stateData.last_episode_info;
@@ -2076,11 +2078,17 @@ class EpisodeSelector:
             
             // Check each selected podcast
             if (APP_STATE.selectedPodcastNames && APP_STATE.selectedPodcastNames.length > 0) {{
+                console.log('  - Checking for missing podcasts:');
                 APP_STATE.selectedPodcastNames.forEach(podcastName => {{
                     if (!foundPodcasts.has(podcastName)) {{
+                        console.log(`    ❌ ${{podcastName}} - NO episodes found`);
                         missingPodcasts.push(podcastName);
+                    }} else {{
+                        console.log(`    ✓ ${{podcastName}} - episodes found`);
                     }}
                 }});
+            }} else {{
+                console.log('  - WARNING: selectedPodcastNames is empty, cannot check for missing podcasts');
             }}
             
             // List of sources checked for all podcasts
@@ -2101,14 +2109,6 @@ class EpisodeSelector:
                         <div class="verification-text">
                             <strong>All podcasts verified</strong>
                             Episodes found for all selected podcasts in the specified time period
-                            <div class="verification-sources">
-                                ${{sourcesChecked.map(source => `
-                                    <span class="verification-source">
-                                        <span class="source-check">✓</span>
-                                        ${{source}}
-                                    </span>
-                                `).join('')}}
-                            </div>
                         </div>
                     </div>
                 `;

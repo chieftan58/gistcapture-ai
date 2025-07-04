@@ -473,3 +473,25 @@ The system now searches for transcripts in this order:
   - Created separate semaphores: general_semaphore (10) and _openai_semaphore (3)
   - Result: Non-API operations can proceed while API calls are rate-limited
 - **Expected Outcome**: All 34 episodes will now complete without timeouts
+
+### Recent Updates (2025-01-04) - UI Verification Banner Issues:
+- **Issue**: "Some podcasts have no recent episodes" banner not showing when podcasts like BG2 Pod and Market Huddle have no episodes
+- **Root Cause**: Timing issue where `selectedPodcastNames` array is empty when banner first renders
+  - Banner renders twice: first with empty data, second after data loads
+  - The check for missing podcasts happens before the selected podcast names are populated
+  - Results in "All podcasts verified" banner showing instead of listing missing podcasts
+- **Debug Findings**:
+  - System correctly identifies that only 16 of 19 selected podcasts have episodes
+  - BG2 Pod (last episode June 21, 2024) and Market Huddle (last episode June 20, 2024) correctly have no recent episodes
+  - Dwarkesh Podcast may have new episode not yet in RSS feeds
+- **Attempted Fixes**:
+  - Added `get_last_episode_info()` method to database.py to fetch episode dates and titles
+  - Enhanced UI to display last episode info in the banner
+  - Added debug logging to trace data flow
+  - Modified episode descriptions to show Host/Guest/Topic on separate lines with proper capitalization
+- **Current Status**: 
+  - Episode fetching works correctly (finds no episodes for podcasts that haven't published recently)
+  - Database method returns correct last episode dates and titles
+  - UI banner rendering has timing issue preventing proper display
+- **Workaround**: Check browser console for debug output showing which podcasts had no episodes found
+- **Proper Fix Needed**: Either delay initial render until data loads, or force banner re-render after data arrives
