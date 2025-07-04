@@ -539,3 +539,17 @@ The system now searches for transcripts in this order:
 - Fixed parallel processing display to show all currently processing episodes
 - Changed from single 'current' to 'currently_processing' set
 - Shows accurate count and list of episodes being processed simultaneously
+
+### Phase 1 Optimization Implementation (2025-01-04):
+
+**Issue**: Single semaphore limiting both Whisper and GPT-4 to 3 concurrent requests
+**Solution**: Separated into two semaphores:
+- `_whisper_semaphore`: 3 concurrent (Whisper API limit)
+- `_gpt4_semaphore`: 20 concurrent (GPT-4 higher limit)
+
+**Implementation Note**: The transcriber and summarizer components handle their own internal rate limiting via `openai_rate_limiter`. The semaphore separation at the app.py level ensures proper concurrency control at the pipeline level.
+
+**Expected Impact**: 
+- Summarization can now run 20 concurrent requests instead of 3
+- Should reduce summarization time from ~2 hours to ~20-30 minutes
+- Total pipeline time should drop from 6 hours to ~3-4 hours

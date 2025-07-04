@@ -467,13 +467,16 @@ class RenaissanceWeekly:
             'errors': []
         }
         
-        # Get optimal concurrency with OpenAI limit
-        openai_concurrency_limit = 3  # Max 3 concurrent OpenAI operations
+        # Get optimal concurrency with separate limits for different services
+        whisper_concurrency_limit = 3  # Whisper API: 3 requests per minute
+        gpt4_concurrency_limit = 20  # GPT-4 API: Much higher limit (check your tier)
         # Allow more concurrent tasks for transcript fetching and other non-API operations
         general_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Up to 10 concurrent tasks
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {general_concurrency} (OpenAI API limit: {openai_concurrency_limit})")
+        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {general_concurrency}")
+        logger.info(f"[{self.correlation_id}] 🎙️  Whisper API limit: {whisper_concurrency_limit} concurrent")
+        logger.info(f"[{self.correlation_id}] 🤖  GPT-4 API limit: {gpt4_concurrency_limit} concurrent")
         
         # Progress tracker for processing
         process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
@@ -481,8 +484,9 @@ class RenaissanceWeekly:
         # Create semaphores for different types of operations
         # General semaphore for overall concurrency (transcript fetch, processing, etc.)
         general_semaphore = asyncio.Semaphore(general_concurrency)
-        # Separate semaphore for OpenAI API calls (both Whisper and GPT)
-        self._openai_semaphore = asyncio.Semaphore(openai_concurrency_limit)
+        # Separate semaphores for different OpenAI services
+        self._whisper_semaphore = asyncio.Semaphore(whisper_concurrency_limit)
+        self._gpt4_semaphore = asyncio.Semaphore(gpt4_concurrency_limit)
         
         # Create tasks with enhanced error handling
         tasks = []
