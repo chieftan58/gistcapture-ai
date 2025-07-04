@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 class EpisodeSelector:
     """Single-page selection UI with seamless state transitions"""
     
-    def __init__(self):
+    def __init__(self, db=None):
         self.state = "podcast_selection"
         self.selected_podcasts = []
         self.configuration = {}
@@ -42,10 +42,11 @@ class EpisodeSelector:
         self._processing_status = None
         self._processing_episodes = []
         self._processing_mode = 'test'
-        self._last_episode_dates = {}
+        self._last_episode_info = {}
         self._processing_cancelled = False
         self._email_approved = False
         self._process_thread = None
+        self.db = db
         self._status_lock = threading.Lock()
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
@@ -152,17 +153,31 @@ class EpisodeSelector:
                             'published': ep.published.isoformat() if hasattr(ep.published, 'isoformat') else str(ep.published),
                             'duration': ep.duration,
                             'has_transcript': ep.transcript_url is not None,
-                            'description': ep.description[:200] if ep.description else ''
+                            'description': ep.description if ep.description else ''
                         } for ep in parent.episode_cache]
                         response_data['selected_podcasts'] = parent.selected_podcasts
-                        # Convert datetime objects to ISO format strings
-                        last_dates = {}
-                        for podcast, date in parent._last_episode_dates.items():
-                            if date:
-                                last_dates[podcast] = date.isoformat() if hasattr(date, 'isoformat') else str(date)
+                        # Convert episode info with datetime objects to ISO format strings
+                        last_info = {}
+                        if hasattr(parent, '_last_episode_info') and parent._last_episode_info:
+                            logger.info(f"[{parent._correlation_id}] 📋 Processing {len(parent._last_episode_info)} last episode info items")
+                            for podcast, info in parent._last_episode_info.items():
+                                if info and info.get('date'):
+                                    last_info[podcast] = {
+                                        'date': info['date'].isoformat() if hasattr(info['date'], 'isoformat') else str(info['date']),
+                                        'title': info.get('title', 'Unknown')
+                                    }
+                                else:
+                                    last_info[podcast] = None
+                        else:
+                            logger.warning(f"[{parent._correlation_id}] ⚠️ No _last_episode_info available on parent")
+                        
+                        logger.info(f"[{parent._correlation_id}] 📤 Sending last_episode_info to client: {len(last_info)} items")
+                        for podcast, info in last_info.items():
+                            if info:
+                                logger.info(f"[{parent._correlation_id}]   ✓ {podcast}: has data")
                             else:
-                                last_dates[podcast] = None
-                        response_data['last_episode_dates'] = last_dates
+                                logger.info(f"[{parent._correlation_id}]   ✗ {podcast}: None")
+                        response_data['last_episode_info'] = last_info
                     
                     self._send_json(response_data)
                 elif self.path == f'/api/status':
@@ -427,6 +442,23 @@ class EpisodeSelector:
                 self.episode_cache = episodes
                 logger.info(f"[{self._correlation_id}] 📦 Stored {len(episodes)} episodes in cache")
                 
+                # Fetch last episode info for all selected podcasts
+                if self.db and self.selected_podcasts:
+                    try:
+                        logger.info(f"[{self._correlation_id}] 🔍 Fetching last episode info for selected podcasts: {self.selected_podcasts}")
+                        self._last_episode_info = self.db.get_last_episode_info(self.selected_podcasts)
+                        logger.info(f"[{self._correlation_id}] 📅 Fetched last episode info for {len(self._last_episode_info)} podcasts")
+                        # Log the actual data for debugging
+                        logger.info(f"[{self._correlation_id}] 📊 Last episode info data:")
+                        for podcast, info in self._last_episode_info.items():
+                            if info:
+                                logger.info(f"[{self._correlation_id}]   ✓ {podcast}: {info['date']} - {info['title'][:50]}...")
+                            else:
+                                logger.info(f"[{self._correlation_id}]   ✗ {podcast}: No episode info found")
+                    except Exception as e:
+                        logger.error(f"[{self._correlation_id}] ❌ Failed to fetch last episode info: {e}")
+                        self._last_episode_info = {}
+                
                 # Update state to episode_selection
                 old_state = self.state
                 self.state = "episode_selection"
@@ -537,7 +569,7 @@ class EpisodeSelector:
             selectedPodcasts: new Set(),
             selectedEpisodes: new Set(),
             selectedPodcastNames: [],
-            lastEpisodeDates: {{}},
+            lastEpisodeInfo: {{}},
             configuration: {{
                 lookback_days: {self.configuration.get('lookback_days', 7)},
                 transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
@@ -736,6 +768,15 @@ class EpisodeSelector:
                     }}
                 }});
             }}
+            console.log('Podcasts with no episodes:', podcastsWithNoEpisodes);
+            console.log('Last episode info available:', APP_STATE.lastEpisodeInfo);
+            console.log('Selected podcast names:', APP_STATE.selectedPodcastNames);
+            
+            // Debug: Log what lastEpisodeInfo contains for each podcast with no episodes
+            podcastsWithNoEpisodes.forEach(podcast => {{
+                const info = APP_STATE.lastEpisodeInfo && APP_STATE.lastEpisodeInfo[podcast];
+                console.log(`Last episode info for "${{podcast}}":`, info);
+            }});
             
             return `
                 <div class="header">
@@ -801,12 +842,16 @@ class EpisodeSelector:
                                     <p style="margin-bottom: 8px;">The following podcasts have no episodes in the last ${{APP_STATE.configuration.lookback_days}} days:</p>
                                     <ul style="margin: 0; padding-left: 20px;">
                                         ${{podcastsWithNoEpisodes.map(podcast => {{
-                                            const lastDate = APP_STATE.lastEpisodeDates && APP_STATE.lastEpisodeDates[podcast];
-                                            const lastEpisodeInfo = getLastEpisodeInfo(podcast);
-                                            if (lastDate) {{
-                                                const date = new Date(lastDate);
+                                            const episodeInfo = APP_STATE.lastEpisodeInfo && APP_STATE.lastEpisodeInfo[podcast];
+                                            if (episodeInfo && episodeInfo.date) {{
+                                                const date = new Date(episodeInfo.date);
                                                 const daysAgo = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
-                                                return `<li><strong>${{podcast}}</strong><br><span style="color: #999; font-size: 0.9em; margin-left: 20px;">Last episode: ${{lastEpisodeInfo.dateStr}} (${{daysAgo}} days ago)</span></li>`;
+                                                const dateStr = date.toLocaleDateString('en-US', {{ month: 'long', day: 'numeric', year: 'numeric' }});
+                                                return `<li><strong>${{podcast}}</strong><br>
+                                                    <span style="color: #999; font-size: 0.9em; margin-left: 20px;">
+                                                        Last episode: ${{dateStr}} (${{daysAgo}} days ago)<br>
+                                                        <span style="margin-left: 20px;">"${{episodeInfo.title}}"</span>
+                                                    </span></li>`;
                                             }} else {{
                                                 return `<li><strong>${{podcast}}</strong> <span style="color: #999; font-size: 0.9em;">(no episodes found)</span></li>`;
                                             }}
@@ -1417,14 +1462,14 @@ class EpisodeSelector:
             // Add podcast-specific host info
             const hostInfo = getHostForPodcast(podcastName);
             if (hostInfo) {{
-                structuredDesc += `Host: ${{hostInfo}}. `;
+                structuredDesc += `<strong>Host:</strong> ${{hostInfo}}<br>`;
             }} else if (hostMatch && hostMatch[1]) {{
-                structuredDesc += `Host: ${{hostMatch[1].trim()}}. `;
+                structuredDesc += `<strong>Host:</strong> ${{hostMatch[1].trim()}}<br>`;
             }}
             
             // Add guest info
             if (guestName) {{
-                structuredDesc += `Guest: ${{guestName}}. `;
+                structuredDesc += `<strong>Guest:</strong> ${{guestName}}<br>`;
             }}
             
             // Extract main topic - look for key phrases
@@ -1461,7 +1506,9 @@ class EpisodeSelector:
             }}
             
             if (topic) {{
-                structuredDesc += `Topic: ${{topic}}. `;
+                // Capitalize first letter of each sentence
+                const capitalizedTopic = topic.replace(/(^\\w|\\.\\s+\\w)/g, letter => letter.toUpperCase());
+                structuredDesc += `<strong>Topic:</strong> ${{capitalizedTopic}}<br>`;
             }}
             
             // If we have good structured content, use it
@@ -1473,10 +1520,10 @@ class EpisodeSelector:
                     !s.match(/follow us/i) && 
                     !s.match(/support the show/i) &&
                     s.length > 20
-                ).slice(0, 2);
+                ).slice(0, 4);
                 
                 if (relevantSentences.length > 0) {{
-                    structuredDesc += relevantSentences.join(' ').trim();
+                    structuredDesc += '<br>' + relevantSentences.join(' ').trim();
                 }}
                 
                 return structuredDesc;
@@ -1488,9 +1535,15 @@ class EpisodeSelector:
                 !s.match(/subscribe/i) && 
                 !s.match(/follow us/i) && 
                 !s.match(/support the show/i)
-            ).slice(0, 5);
+            );
             
-            return cleanSentences.join(' ').trim() || description.substring(0, 400) + '...';
+            // Ensure we have a full paragraph worth of content
+            const fullDescription = cleanSentences.join(' ').trim();
+            if (fullDescription.length < 150 && description.length > fullDescription.length) {{
+                // If filtered description is too short, use the original but clean it up
+                return description.replace(/\\s+/g, ' ').trim();
+            }}
+            return fullDescription || description;
         }}
         
         function generateDescriptionFromTitle(title, podcast) {{
@@ -1499,7 +1552,7 @@ class EpisodeSelector:
             // Get host info
             const host = getHostForPodcast(podcast);
             if (host) {{
-                desc += `Host: ${{host}}. `;
+                desc += `<strong>Host:</strong> ${{host}}<br>`;
             }}
             
             // Extract guest from title
@@ -1508,7 +1561,7 @@ class EpisodeSelector:
                               title.match(/[-–—]\\s*([A-Z][a-zA-Z\\s]+?)(?:\\s*[-–—|,]|$)/);
             
             if (guestMatch && guestMatch[1]) {{
-                desc += `Guest: ${{guestMatch[1].trim()}}. `;
+                desc += `<strong>Guest:</strong> ${{guestMatch[1].trim()}}<br>`;
             }}
             
             // Extract topic from title
@@ -1523,16 +1576,28 @@ class EpisodeSelector:
             topic = topic.replace(/^\\s*[-–—|:]\\s*/, '').trim();
             
             if (topic && topic.length > 10) {{
-                desc += `Topic: ${{topic}}. `;
+                // Capitalize first letter of each sentence
+                const capitalizedTopic = topic.replace(/(^\\w|\\.\\s+\\w)/g, letter => letter.toUpperCase());
+                desc += `<strong>Topic:</strong> ${{capitalizedTopic}}<br>`;
             }}
             
-            // Add podcast-specific context
+            // Always add podcast-specific context for better understanding
             const context = getPodcastContext(podcast);
-            if (context && desc.length < 200) {{
-                desc += context;
+            if (context) {{
+                desc += `<br>This episode of ${{podcast}} explores ${{context.toLowerCase()}} `;
+                
+                // Add more context based on the topic
+                if (topic && topic.length > 10) {{
+                    desc += `The discussion focuses on ${{topic.toLowerCase()}}, providing insights and perspectives relevant to the show's core themes.`;
+                }}
             }}
             
-            return desc || 'Episode information not available. Check title for details.';
+            // Ensure we have a full paragraph
+            if (desc.length < 100) {{
+                desc += `Episode details extracted from the title. Full description may be available in the original podcast feed.`;
+            }}
+            
+            return desc;
         }}
         
         function getHostForPodcast(podcast) {{
@@ -1585,22 +1650,6 @@ class EpisodeSelector:
             return contexts[podcast] || '';
         }}
         
-        function getLastEpisodeInfo(podcastName) {{
-            // Use the date from APP_STATE if available (dynamically retrieved from database)
-            const lastDate = APP_STATE.lastEpisodeDates && APP_STATE.lastEpisodeDates[podcastName];
-            if (lastDate) {{
-                const date = new Date(lastDate);
-                return {{
-                    title: 'Last episode',
-                    dateStr: date.toLocaleDateString('en-US', {{ month: 'long', day: 'numeric', year: 'numeric' }})
-                }};
-            }}
-            
-            return {{
-                title: 'Unknown',
-                dateStr: 'Unknown'
-            }};
-        }}
         
         function togglePodcast(name) {{
             const card = event.currentTarget;
@@ -1786,8 +1835,9 @@ class EpisodeSelector:
                         if (stateData.selected_podcasts) {{
                             APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
                         }}
-                        if (stateData.last_episode_dates) {{
-                            APP_STATE.lastEpisodeDates = stateData.last_episode_dates;
+                        if (stateData.last_episode_info) {{
+                            APP_STATE.lastEpisodeInfo = stateData.last_episode_info;
+                            console.log('Last episode info received:', APP_STATE.lastEpisodeInfo);
                         }}
                         render();
                     }}
@@ -1916,8 +1966,8 @@ class EpisodeSelector:
                                     if (stateData.selected_podcasts) {{
                                         APP_STATE.selectedPodcastNames = stateData.selected_podcasts;
                                     }}
-                                    if (stateData.last_episode_dates) {{
-                                        APP_STATE.lastEpisodeDates = stateData.last_episode_dates;
+                                    if (stateData.last_episode_info) {{
+                                        APP_STATE.lastEpisodeInfo = stateData.last_episode_info;
                                     }}
                                     render();
                                 }}
@@ -2013,16 +2063,25 @@ class EpisodeSelector:
         
         // Helper function for Apple Podcasts verification banner
         function renderVerificationBanner() {{
+            console.log('Rendering verification banner.');
+            console.log('  - Last episode info:', APP_STATE.lastEpisodeInfo);
+            console.log('  - Selected podcast names:', APP_STATE.selectedPodcastNames);
+            console.log('  - Episodes:', APP_STATE.episodes.length);
+            
             // Check which podcasts were selected vs what episodes we found
             const foundPodcasts = new Set(APP_STATE.episodes.map(ep => ep.podcast));
+            console.log('  - Found podcasts:', Array.from(foundPodcasts));
+            
             const missingPodcasts = [];
             
             // Check each selected podcast
-            APP_STATE.selectedPodcasts.forEach(podcastName => {{
-                if (!foundPodcasts.has(podcastName)) {{
-                    missingPodcasts.push(podcastName);
-                }}
-            }});
+            if (APP_STATE.selectedPodcastNames && APP_STATE.selectedPodcastNames.length > 0) {{
+                APP_STATE.selectedPodcastNames.forEach(podcastName => {{
+                    if (!foundPodcasts.has(podcastName)) {{
+                        missingPodcasts.push(podcastName);
+                    }}
+                }});
+            }}
             
             // List of sources checked for all podcasts
             const sourcesChecked = [
@@ -2062,18 +2121,25 @@ class EpisodeSelector:
                     <div class="verification-text">
                         <strong>Some podcasts have no recent episodes</strong>
                         <div class="missing-podcasts">
-                            ${{missingPodcasts.join(', ')}}
-                        </div>
-                        <div class="verification-note">
-                            No episodes published in the last ${{APP_STATE.configuration.lookback_days}} days
-                        </div>
-                        <div class="verification-sources">
-                            ${{sourcesChecked.map(source => `
-                                <span class="verification-source">
-                                    <span class="source-check">✓</span>
-                                    ${{source}}
-                                </span>
-                            `).join('')}}
+                            ${{missingPodcasts.map(podcast => {{
+                                const episodeInfo = APP_STATE.lastEpisodeInfo && APP_STATE.lastEpisodeInfo[podcast];
+                                if (episodeInfo && episodeInfo.date) {{
+                                    const date = new Date(episodeInfo.date);
+                                    const daysAgo = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
+                                    const dateStr = date.toLocaleDateString('en-US', {{ month: 'long', day: 'numeric', year: 'numeric' }});
+                                    return `
+                                        <div style="margin: 8px 0;">
+                                            <strong>${{podcast}}</strong><br>
+                                            <span style="color: #666; font-size: 0.9em;">
+                                                Last episode: ${{dateStr}} (${{daysAgo}} days ago)<br>
+                                                "${{episodeInfo.title}}"
+                                            </span>
+                                        </div>
+                                    `;
+                                }} else {{
+                                    return `<div style="margin: 8px 0;"><strong>${{podcast}}</strong> <span style="color: #666; font-size: 0.9em;">(no episodes found)</span></div>`;
+                                }}
+                            }}).join('')}}
                         </div>
                     </div>
                 </div>

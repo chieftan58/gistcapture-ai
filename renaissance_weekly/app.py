@@ -148,7 +148,7 @@ class RenaissanceWeekly:
             self.transcript_finder = TranscriptFinder(self.db)
             self.transcriber = AudioTranscriber()
             self.summarizer = Summarizer()
-            self.selector = EpisodeSelector()
+            self.selector = EpisodeSelector(db=self.db)
             self.email_digest = EmailDigest()
             
             # Resource management
@@ -1053,25 +1053,37 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 🧪 TEST MODE: Fetching episodes only")
         
         # Select podcasts
-        selector = EpisodeSelector(correlation_id=self.correlation_id)
-        selected_podcasts, config = await selector.select_podcasts_ui()
+        selector = EpisodeSelector(db=self.db)
         
-        if not selected_podcasts:
-            logger.info("No podcasts selected")
+        # Create a simple fetch callback
+        async def fetch_episodes_test(podcast_names, days, progress_callback):
+            since_date = datetime.now() - timedelta(days=days)
+            return await self._fetch_episodes_with_retry(
+                podcast_names, 
+                since_date,
+                lambda e: e  # No filtering
+            )
+        
+        def fetch_callback(podcast_names, days, progress_callback):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    fetch_episodes_test(podcast_names, days, progress_callback)
+                )
+                return result
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
+        
+        selected_episodes, config = selector.run_complete_selection(days_back, fetch_callback)
+        
+        if not selected_episodes:
+            logger.info("No episodes selected")
             return
         
-        # Fetch episodes
-        since_date = datetime.now() - timedelta(days=days_back)
-        logger.info(f"[{self.correlation_id}] 📡 Fetching episodes since {since_date.date()}")
-        
-        episodes = await self._fetch_episodes_with_retry(
-            selected_podcasts, 
-            since_date,
-            lambda e: e  # No filtering
-        )
-        
-        logger.info(f"[{self.correlation_id}] ✅ Fetched {len(episodes)} episodes")
-        for episode in episodes[:10]:  # Show first 10
+        logger.info(f"[{self.correlation_id}] ✅ Selected {len(selected_episodes)} episodes")
+        for episode in selected_episodes[:10]:  # Show first 10
             logger.info(f"  - {episode.podcast}: {episode.title}")
     
     async def test_summarize_only(self, transcript_file: str):

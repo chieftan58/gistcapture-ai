@@ -4,7 +4,7 @@ import sqlite3
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Any
 
 from .models import Episode, TranscriptSource
 from .config import DB_PATH
@@ -404,6 +404,56 @@ class PodcastDatabase:
                 
         except sqlite3.Error as e:
             logger.error(f"Database error getting last episode dates: {e}")
+            return {name: None for name in podcast_names}
+    
+    def get_last_episode_info(self, podcast_names: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+        """Get the most recent episode info (date and title) for each podcast"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Create placeholders for IN clause
+                placeholders = ','.join(['?' for _ in podcast_names])
+                
+                # Use a subquery to get the most recent episode for each podcast
+                cursor.execute(f"""
+                    SELECT e.podcast, e.published, e.title
+                    FROM episodes e
+                    INNER JOIN (
+                        SELECT podcast, MAX(published) as max_published
+                        FROM episodes
+                        WHERE podcast IN ({placeholders})
+                        GROUP BY podcast
+                    ) latest ON e.podcast = latest.podcast AND e.published = latest.max_published
+                """, podcast_names)
+                
+                results = cursor.fetchall()
+                
+                # Convert to dictionary with episode info
+                last_episodes = {}
+                for podcast, date_str, title in results:
+                    if date_str:
+                        # Parse the ISO format date string
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        # Ensure timezone awareness
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        last_episodes[podcast] = {
+                            'date': dt,
+                            'title': title
+                        }
+                    else:
+                        last_episodes[podcast] = None
+                
+                # Add None for podcasts not found in results
+                for podcast_name in podcast_names:
+                    if podcast_name not in last_episodes:
+                        last_episodes[podcast_name] = None
+                
+                return last_episodes
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting last episode info: {e}")
             return {name: None for name in podcast_names}
     
     def clear_old_episodes(self, days_to_keep: int = 30):
