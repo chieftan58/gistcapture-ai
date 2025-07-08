@@ -430,17 +430,49 @@ class ReliableEpisodeFetcher:
                 response = session.get(feed_url, timeout=20, headers=headers, allow_redirects=True, stream=True)
                 
                 if response.status_code == 200:
-                    # Read content in chunks up to 5MB
+                    # Smart RSS parsing - only download what we need
                     content = b''
-                    max_size = 5 * 1024 * 1024  # 5MB should be enough for any feed with recent episodes
+                    # Most RSS feeds have recent episodes first, so we only need a small portion
+                    # 500KB is enough to get 10-15 recent episodes from most feeds
+                    initial_size = 500 * 1024  # 500KB initial chunk
+                    max_size = 2 * 1024 * 1024  # 2MB absolute max (even for huge feeds)
+                    
+                    # Track if we have enough complete episodes
+                    item_count = 0
+                    complete_items = 0
                     
                     for chunk in response.iter_content(chunk_size=8192):
                         content += chunk
+                        
+                        # Count opening and closing item tags
+                        chunk_str = chunk.decode('utf-8', errors='ignore')
+                        item_count += chunk_str.count('<item>')
+                        complete_items += chunk_str.count('</item>')
+                        
+                        # Stop if we have at least 5 complete episodes
+                        if complete_items >= 5 and len(content) >= initial_size:
+                            logger.info(f"[{correlation_id}]     Got {complete_items} complete episodes in {len(content)/1024:.0f}KB")
+                            break
+                            
+                        # Absolute limit to prevent downloading huge feeds
                         if len(content) >= max_size:
-                            logger.info(f"[{correlation_id}]     Reached 5MB limit for feed, stopping download")
+                            logger.info(f"[{correlation_id}]     Reached max size limit ({max_size/(1024*1024):.1f}MB) with {complete_items} complete episodes")
                             break
                     
                     response.close()
+                    
+                    # Ensure XML is properly closed if we stopped mid-stream
+                    if content and complete_items < item_count:
+                        # Find the last complete </item> tag
+                        last_item_end = content.rfind(b'</item>')
+                        if last_item_end > 0:
+                            # Truncate to last complete item and close the XML
+                            content = content[:last_item_end + 7]  # +7 for '</item>'
+                            # Add closing tags if needed
+                            if b'</channel>' not in content:
+                                content += b'\n</channel>'
+                            if b'</rss>' not in content:
+                                content += b'\n</rss>'
                     
                     # Parse whatever we got
                     if content:

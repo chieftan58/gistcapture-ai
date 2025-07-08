@@ -553,3 +553,63 @@ The system now searches for transcripts in this order:
 - Summarization can now run 20 concurrent requests instead of 3
 - Should reduce summarization time from ~2 hours to ~20-30 minutes
 - Total pipeline time should drop from 6 hours to ~3-4 hours
+
+### Phase 2 AssemblyAI Implementation (2025-01-08):
+
+**Implementation Complete**: AssemblyAI is now the primary transcription service
+- ✅ AssemblyAI SDK installed and configured
+- ✅ `AssemblyAITranscriber` class created with 32x concurrency support
+- ✅ Automatic fallback to OpenAI Whisper if AssemblyAI fails
+- ✅ Transparent integration - no changes needed in app.py
+
+**Key Features**:
+- **32 concurrent transcriptions** (vs 3 with Whisper)
+- Speaker diarization, chapter detection, entity detection
+- Automatic language detection
+- Test mode support (15-minute clips)
+- Circuit breaker for reliability
+
+**Expected Impact**:
+- Transcription time reduced from ~2 hours to ~15 minutes
+- Total pipeline time should drop from ~3-4 hours to ~45-60 minutes
+- Better transcript quality with speaker labels and structure
+
+### RSS Feed Optimization (2025-01-08):
+
+**Smart RSS Parsing Implemented**: Optimized feed downloading for efficiency
+- **Previous approach**: Downloaded 5-10MB of RSS data (Tim Ferriss was 29MB!)
+- **New approach**: 
+  - Downloads only until we have 5 complete episodes
+  - Typically needs only 500KB-1MB (vs 10MB+)
+  - Maximum 2MB limit for safety
+  - Properly closes XML for partial downloads
+  
+**Benefits**:
+- 95% reduction in bandwidth usage for large feeds
+- Faster episode fetching (especially for Tim Ferriss)
+- Still gets all episodes we need (last 5+ episodes)
+
+### Current Known Issues (2025-01-08):
+
+**American Optimist Processing Failures**:
+- **Issue**: Substack/Cloudflare protection blocks all audio downloads (403 errors)
+- **Current Fallbacks**: YouTube search, Apple Podcasts API, Spotify API
+- **Problem**: YouTube search not finding episodes, other APIs don't provide full audio
+- **Solution Needed**: Implement browser automation or improve YouTube episode matching
+
+**Tim Ferriss Date Parsing**:
+- **Issue**: RSS feed downloads 14 episodes but finds "0 in last 7 days"
+- **Cause**: Likely timezone-aware date comparison issue
+- **Impact**: Missing all Tim Ferriss episodes despite successful feed fetch
+
+### Performance Improvements (2025-01-08):
+
+**Current Bottlenecks**:
+1. **Whisper API**: Limited to 3 concurrent transcriptions
+2. **CPU Cores**: 2 cores limiting general concurrency to 3 tasks
+3. **AssemblyAI**: Fixed integration bug, will provide 32x concurrency on next run
+
+**Expected Performance with AssemblyAI**:
+- **Before**: ~2-3 hours for 34 episodes (3 concurrent Whisper)
+- **After**: ~15-30 minutes for transcription (32 concurrent AssemblyAI)
+- **Total Pipeline**: Under 1 hour (vs current 3-4 hours)

@@ -1,4 +1,4 @@
-"""Audio transcription using OpenAI Whisper API with robust downloading"""
+"""Audio transcription using AssemblyAI (primary) or OpenAI Whisper (fallback) with robust downloading"""
 
 import os
 import asyncio
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class AudioTranscriber:
-    """Transcribe podcast audio using OpenAI Whisper with robust downloading"""
+    """Transcribe podcast audio using AssemblyAI (primary) or OpenAI Whisper (fallback)"""
     
     def __init__(self):
         self.max_retries = 5  # Increased from 3
@@ -42,6 +42,16 @@ class AudioTranscriber:
         self.temp_files = set()  # Track temp files for cleanup
         self._current_mode = 'test'  # Default mode, updated per episode
         
+        # Initialize AssemblyAI transcriber if API key is available
+        self.assemblyai_transcriber = None
+        if os.getenv('ASSEMBLYAI_API_KEY'):
+            try:
+                from .assemblyai_transcriber import AssemblyAITranscriber
+                self.assemblyai_transcriber = AssemblyAITranscriber()
+                logger.info("✅ AssemblyAI transcriber initialized (32x concurrency)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize AssemblyAI: {e}")
+                
         # Circuit breaker for OpenAI API with special rate limit handling
         self.openai_circuit_breaker = CircuitBreaker(
             failure_threshold=5,
@@ -174,8 +184,23 @@ class AudioTranscriber:
             if not await self._validate_with_ffprobe(audio_file, correlation_id):
                 logger.warning(f"[{correlation_id}] FFprobe validation failed, but continuing")
             
-            # Transcribe with Whisper
-            transcript = await self._transcribe_with_whisper(audio_file, correlation_id)
+            # Try AssemblyAI first if available
+            transcript = None
+            if self.assemblyai_transcriber:
+                try:
+                    logger.info(f"[{correlation_id}] 🚀 Using AssemblyAI for transcription (32x concurrency)")
+                    transcript = await self.assemblyai_transcriber.transcribe_episode(
+                        episode, audio_file, self._current_mode
+                    )
+                    if transcript:
+                        logger.info(f"[{correlation_id}] ✅ AssemblyAI transcription successful")
+                except Exception as e:
+                    logger.warning(f"[{correlation_id}] AssemblyAI failed, falling back to Whisper: {e}")
+            
+            # Fall back to Whisper if AssemblyAI failed or unavailable
+            if not transcript:
+                logger.info(f"[{correlation_id}] Using OpenAI Whisper for transcription")
+                transcript = await self._transcribe_with_whisper(audio_file, correlation_id)
             
             # Stream processing: delete audio file immediately after successful transcription
             if transcript and self._current_mode == 'full':
