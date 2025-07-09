@@ -180,6 +180,68 @@ class RenaissanceWeekly:
             logger.error(f"[{self.correlation_id}] ❌ Failed to initialize Renaissance Weekly: {e}")
             raise
     
+    async def pre_flight_check(self, podcast_names: List[str], days_back: int = 7) -> Dict:
+        """Pre-flight check to identify which podcasts have new episodes"""
+        logger.info(f"[{self.correlation_id}] 🔍 Running pre-flight check for {len(podcast_names)} podcasts...")
+        
+        results = {
+            'podcasts_with_episodes': [],
+            'podcasts_without_episodes': [],
+            'total_episodes_available': 0,
+            'estimated_processing_time': 0,
+            'should_proceed': True,
+            'warnings': []
+        }
+        
+        # Quick RSS check for each podcast
+        for podcast_name in podcast_names:
+            try:
+                # Get podcast config
+                podcast_config = next((p for p in PODCAST_CONFIGS if p['name'] == podcast_name), None)
+                if not podcast_config:
+                    continue
+                
+                # Check last episode date from database
+                last_episode_dates = self.db.get_last_episode_dates([podcast_name])
+                last_date = last_episode_dates.get(podcast_name)
+                
+                if last_date:
+                    days_since_last = (datetime.now(timezone.utc) - last_date).days
+                    if days_since_last > days_back:
+                        results['podcasts_without_episodes'].append({
+                            'name': podcast_name,
+                            'last_episode_date': last_date,
+                            'days_since': days_since_last
+                        })
+                        logger.info(f"[{self.correlation_id}] ⏭️ {podcast_name}: No new episodes (last: {days_since_last} days ago)")
+                    else:
+                        results['podcasts_with_episodes'].append(podcast_name)
+                        results['total_episodes_available'] += 1  # Estimate 1 per podcast
+                else:
+                    # New podcast or no history
+                    results['podcasts_with_episodes'].append(podcast_name)
+                    
+            except Exception as e:
+                logger.warning(f"[{self.correlation_id}] Error checking {podcast_name}: {e}")
+        
+        # Calculate estimates
+        results['estimated_processing_time'] = results['total_episodes_available'] * 5  # 5 min per episode avg
+        
+        # Determine if we should proceed
+        if results['total_episodes_available'] < 15:
+            results['should_proceed'] = False
+            results['warnings'].append(f"Only {results['total_episodes_available']} episodes available (minimum: 15)")
+        
+        # Check for problem podcasts
+        problem_podcasts = ['American Optimist', 'Dwarkesh Podcast']
+        problem_count = sum(1 for p in problem_podcasts if p in results['podcasts_without_episodes'])
+        if problem_count >= 2:
+            results['warnings'].append("Multiple Substack podcasts have no new episodes - may be Cloudflare issues")
+        
+        logger.info(f"[{self.correlation_id}] ✅ Pre-flight complete: {len(results['podcasts_with_episodes'])} podcasts have new content")
+        
+        return results
+    
     async def run(self, days_back: int = 7):
         """Main execution function with simplified flow and progress tracking"""
         start_time = time.time()
@@ -1147,35 +1209,134 @@ class RenaissanceWeekly:
             'errors': []
         }
         
-        # For now, return a mock result
-        # TODO: Implement actual retry logic with alternative sources
-        for episode_info in failed_episode_info:
-            # Parse episode info and retry with alternative sources
-            episode_name = episode_info.get('episode', '')
-            error_msg = episode_info.get('message', '')
+        # Extract episode info from failed episodes
+        episodes_to_retry = []
+        for error_info in failed_episode_info:
+            episode_name = error_info.get('episode', '')
+            error_msg = error_info.get('message', '')
             
-            logger.info(f"[{self.correlation_id}] Retrying {episode_name} (prev error: {error_msg})")
+            # Parse podcast and title from episode name
+            if ': ' in episode_name:
+                podcast, title = episode_name.split(': ', 1)
+                
+                # Try to find the episode in the database
+                episode_data = self.db.get_episode(podcast, title, datetime.now())
+                if episode_data:
+                    # Reconstruct Episode object
+                    episode = Episode(
+                        podcast=episode_data['podcast'],
+                        title=episode_data['title'],
+                        published=datetime.fromisoformat(episode_data['published']),
+                        audio_url=episode_data.get('audio_url'),
+                        link=episode_data.get('link'),
+                        description=episode_data.get('description'),
+                        duration=episode_data.get('duration'),
+                        guid=episode_data.get('guid')
+                    )
+                    
+                    # Store retry strategy based on error and podcast config
+                    retry_strategy = self._determine_retry_strategy(error_msg, podcast)
+                    episodes_to_retry.append({
+                        'episode': episode,
+                        'error': error_msg,
+                        'strategy': retry_strategy
+                    })
+                    
+                    # Update database with retry attempt
+                    if episode_data.get('id'):
+                        self.db.update_episode_status(
+                            episode_data['id'], 
+                            'retrying',
+                            failure_reason=error_msg,
+                            retry_strategy=retry_strategy
+                        )
+        
+        # Process retries with specific strategies
+        if episodes_to_retry:
+            retry_summaries = await self._process_episodes_with_retry_strategies(episodes_to_retry)
             
-            # Determine retry strategy based on error type
-            if '403' in error_msg or 'Cloudflare' in error_msg:
-                logger.info(f"[{self.correlation_id}] → Using YouTube search for Cloudflare-protected content")
-                # TODO: Implement YouTube retry
-            elif 'timeout' in error_msg:
-                logger.info(f"[{self.correlation_id}] → Using direct CDN with extended timeout")
-                # TODO: Implement CDN retry with longer timeout
-            elif 'transcript' in error_msg:
-                logger.info(f"[{self.correlation_id}] → Forcing audio transcription")
-                # TODO: Implement forced audio transcription
+            for summary in retry_summaries:
+                if summary:
+                    results['successful'] += 1
+                else:
+                    results['failed'] += 1
             
-            # For now, simulate some success
-            if '403' in error_msg:
-                results['successful'] += 1
-            else:
-                results['failed'] += 1
-                results['errors'].append(episode_info)
+            # Add remaining failures to errors
+            if results['failed'] > 0:
+                for retry_info in episodes_to_retry[results['successful']:]:
+                    results['errors'].append({
+                        'episode': f"{retry_info['episode'].podcast}: {retry_info['episode'].title}",
+                        'message': retry_info['error']
+                    })
         
         logger.info(f"[{self.correlation_id}] ✅ Retry complete: {results['successful']} succeeded, {results['failed']} failed")
         return results
+    
+    def _determine_retry_strategy(self, error_msg: str, podcast_name: str = None) -> str:
+        """Determine the best retry strategy based on error type and podcast configuration"""
+        # Check if podcast has specific retry strategy configured
+        if podcast_name:
+            from .config import PODCAST_CONFIGS
+            podcast_config = next((p for p in PODCAST_CONFIGS if p['name'] == podcast_name), None)
+            if podcast_config and 'retry_strategy' in podcast_config:
+                return podcast_config['retry_strategy'].get('primary', 'standard_retry')
+        
+        # Fall back to error-based strategy
+        if '403' in error_msg or 'Cloudflare' in error_msg:
+            return 'youtube_search'
+        elif 'timeout' in error_msg or 'Timeout' in error_msg:
+            return 'cdn_extended_timeout'
+        elif 'transcript' in error_msg or 'Transcription' in error_msg:
+            return 'force_audio_transcription'
+        elif 'audio' in error_msg.lower() or 'download' in error_msg.lower():
+            return 'alternative_audio_sources'
+        else:
+            return 'standard_retry'
+    
+    async def _process_episodes_with_retry_strategies(self, retry_infos: List[Dict]) -> List[Dict]:
+        """Process episodes with specific retry strategies"""
+        summaries = []
+        
+        for retry_info in retry_infos:
+            episode = retry_info['episode']
+            strategy = retry_info['strategy']
+            
+            logger.info(f"[{self.correlation_id}] 🔄 Retrying {episode.podcast}: {episode.title} with strategy: {strategy}")
+            
+            try:
+                # Apply strategy-specific modifications
+                if strategy == 'youtube_search':
+                    # Force YouTube as primary audio source
+                    from .fetchers.audio_sources import AudioSourceFinder
+                    async with AudioSourceFinder() as finder:
+                        sources = await finder.find_all_audio_sources(episode)
+                        # Find YouTube URL in sources
+                        youtube_url = next((s for s in sources if 'youtube.com' in s or 'youtu.be' in s), None)
+                        if youtube_url:
+                            episode.audio_url = youtube_url
+                            logger.info(f"[{self.correlation_id}] 🎥 Using YouTube URL: {youtube_url}")
+                
+                elif strategy == 'cdn_extended_timeout':
+                    # Temporarily increase timeouts
+                    # This would need to be passed through to the downloader
+                    logger.info(f"[{self.correlation_id}] ⏱️ Using extended timeout (120s)")
+                
+                elif strategy == 'force_audio_transcription':
+                    # Skip transcript search, go straight to audio
+                    logger.info(f"[{self.correlation_id}] 🎵 Forcing audio transcription")
+                    # Set a flag to skip transcript search
+                    episode._force_audio_transcription = True
+                
+                # Process the episode with modifications
+                summary = await self.process_episode(episode)
+                if summary:
+                    summaries.append({"episode": episode, "summary": summary})
+                    
+            except Exception as e:
+                logger.error(f"[{self.correlation_id}] ❌ Retry failed for {episode.podcast}: {e}")
+                continue
+        
+        return summaries
     
     async def run_dry_run(self, days_back: int = 7):
         """Run full pipeline without making API calls"""

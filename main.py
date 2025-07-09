@@ -46,6 +46,7 @@ def print_help():
     print("  python main.py check \"Podcast Name\" [days] # Check single podcast")
     print("  python main.py reload-prompts            # Reload prompts from disk")
     print("  python main.py regenerate-summaries [days] # Force regenerate summaries")
+    print("  python main.py pre-flight [days]         # Pre-flight check for available episodes")
     print("  python main.py test                      # Run system diagnostics")
     print("  python main.py -h                        # Show this help\n")
     print("Selective Testing Commands:")
@@ -260,6 +261,10 @@ def parse_arguments():
             mode = "regenerate-summaries"
             if len(sys.argv) > 2 and sys.argv[2].isdigit():
                 days_back = int(sys.argv[2])
+        elif sys.argv[1] == "pre-flight":
+            mode = "pre-flight"
+            if len(sys.argv) > 2 and sys.argv[2].isdigit():
+                days_back = int(sys.argv[2])
         elif sys.argv[1] == "test":
             mode = "test"
         elif sys.argv[1] == "health":
@@ -349,6 +354,34 @@ async def main():
             logger.info("✅ Prompts reloaded successfully")
         elif mode == "regenerate-summaries":
             await app_instance.regenerate_summaries(days_back)
+        elif mode == "pre-flight":
+            # Run pre-flight check
+            from renaissance_weekly.config import PODCAST_CONFIGS
+            podcast_names = [p['name'] for p in PODCAST_CONFIGS]
+            results = await app_instance.pre_flight_check(podcast_names, days_back)
+            
+            logger.info(f"\n📊 Pre-Flight Check Results:")
+            logger.info(f"✅ Podcasts with new episodes: {len(results['podcasts_with_episodes'])}")
+            logger.info(f"⏭️  Podcasts without new episodes: {len(results['podcasts_without_episodes'])}")
+            
+            if results['podcasts_without_episodes']:
+                logger.info("\nPodcasts without new episodes:")
+                for podcast_info in results['podcasts_without_episodes']:
+                    logger.info(f"  - {podcast_info['name']}: Last episode {podcast_info['days_since']} days ago")
+            
+            logger.info(f"\n📈 Total episodes available: ~{results['total_episodes_available']}")
+            logger.info(f"⏱️  Estimated processing time: ~{results['estimated_processing_time']} minutes")
+            
+            if results['warnings']:
+                logger.warning("\n⚠️  Warnings:")
+                for warning in results['warnings']:
+                    logger.warning(f"  - {warning}")
+            
+            if results['should_proceed']:
+                logger.info("\n✅ Ready to proceed with processing!")
+            else:
+                logger.warning("\n❌ Not enough content to proceed")
+                
         elif mode == "test-fetch":
             await app_instance.test_fetch_only(days_back)
         elif mode == "test-summarize":
