@@ -1,11 +1,11 @@
 {
   "component_stats": {
     "transcript_fetch": {
-      "total_attempts": 628,
+      "total_attempts": 631,
       "successful": 144,
-      "failed": 484,
-      "last_failure": "2025-07-09T02:20:09.007620",
-      "consecutive_failures": 21
+      "failed": 487,
+      "last_failure": "2025-07-09T03:10:03.887597",
+      "consecutive_failures": 24
     },
     "audio_download": {
       "total_attempts": 461,

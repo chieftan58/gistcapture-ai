@@ -13,7 +13,8 @@ from collections import defaultdict
 
 from .config import (
     TESTING_MODE, MAX_TRANSCRIPTION_MINUTES, EMAIL_TO, EMAIL_FROM,
-    PODCAST_CONFIGS, VERIFY_APPLE_PODCASTS, FETCH_MISSING_EPISODES
+    PODCAST_CONFIGS, VERIFY_APPLE_PODCASTS, FETCH_MISSING_EPISODES,
+    TEMP_DIR
 )
 from .database import PodcastDatabase
 from .models import Episode, TranscriptSource
@@ -29,6 +30,7 @@ from .utils.helpers import (
     validate_env_vars, get_available_memory, get_cpu_count,
     ProgressTracker, exponential_backoff_with_jitter, slugify
 )
+from .download_manager import DownloadManager
 from .utils.clients import openai_rate_limiter
 
 logger = get_logger(__name__)
@@ -1469,6 +1471,79 @@ class RenaissanceWeekly:
                 if not task.done():
                     task.cancel()
             self._active_tasks = []
+    
+    async def download_episodes(self, episodes: List[Episode], progress_callback: Optional[Callable] = None) -> Dict:
+        """Download episodes using DownloadManager with concurrent downloads"""
+        logger.info(f"[{self.correlation_id}] Starting download of {len(episodes)} episodes")
+        
+        # Create download manager with high concurrency
+        download_manager = DownloadManager(
+            concurrency=10,  # 10 concurrent downloads
+            progress_callback=progress_callback
+        )
+        
+        # Store reference for cancellation support
+        self._download_manager = download_manager
+        
+        # Define state file path
+        state_file = Path(TEMP_DIR) / f"download_state_{self.correlation_id}.json"
+        
+        # Check for existing state
+        if state_file.exists():
+            logger.info(f"[{self.correlation_id}] Found existing download state, attempting to resume...")
+            if download_manager.load_state(state_file, episodes):
+                logger.info(f"[{self.correlation_id}] Resumed download state successfully")
+        
+        try:
+            # Create periodic state saving task
+            async def save_state_periodically():
+                while True:
+                    await asyncio.sleep(10)  # Save every 10 seconds
+                    if self._download_manager:
+                        download_manager.save_state(state_file)
+                        
+            save_task = asyncio.create_task(save_state_periodically())
+            
+            try:
+                # Run downloads
+                result = await download_manager.download_episodes(episodes)
+                
+                logger.info(
+                    f"[{self.correlation_id}] Download complete: "
+                    f"{result['downloaded']}/{result['total']} succeeded"
+                )
+                
+                # Save final state
+                download_manager.save_state(state_file)
+                
+                # Clean up state file on success
+                if result['failed'] == 0:
+                    state_file.unlink(missing_ok=True)
+                    logger.info(f"[{self.correlation_id}] Cleaned up download state file")
+                
+                return result
+                
+            finally:
+                save_task.cancel()
+                try:
+                    await save_task
+                except asyncio.CancelledError:
+                    pass
+                
+        except Exception as e:
+            logger.error(f"[{self.correlation_id}] Download error: {e}", exc_info=True)
+            # Save state on error
+            if download_manager:
+                download_manager.save_state(state_file)
+            raise
+        finally:
+            self._download_manager = None
+            
+    def cancel_downloads(self):
+        """Cancel ongoing downloads"""
+        if hasattr(self, '_download_manager') and self._download_manager:
+            self._download_manager.cancel()
+            logger.info(f"[{self.correlation_id}] Download cancellation requested")
     
     def get_processing_status(self):
         """Get current processing status for UI"""

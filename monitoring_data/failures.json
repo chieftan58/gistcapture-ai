@@ -7538,5 +7538,35 @@
     "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T03:10:03.079960",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "How Andreessen Horowitz Disrupted VC & What\u2019s Coming Next",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T03:10:03.562144",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T03:10:03.887585",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
   }
 ]

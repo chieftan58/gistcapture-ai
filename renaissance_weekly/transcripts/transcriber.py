@@ -233,6 +233,52 @@ class AudioTranscriber:
             for file_path in temp_files_to_clean:
                 self.temp_files.discard(str(file_path))
     
+    async def download_audio_simple(self, episode: Episode, url: str, correlation_id: str) -> Optional[Path]:
+        """Simple audio download without retry logic - for use with DownloadManager"""
+        logger.info(f"[{correlation_id}] 📥 Downloading audio from: {url[:80]}...")
+        
+        # Create safe filename
+        date_str = episode.published.strftime('%Y%m%d')
+        safe_podcast = slugify(episode.podcast)[:30]
+        safe_title = slugify(episode.title)[:50]
+        audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
+        
+        # Check if already exists and is valid
+        if audio_file.exists():
+            if validate_audio_file_smart(audio_file, correlation_id, url):
+                file_hash = calculate_file_hash(audio_file)
+                logger.info(f"[{correlation_id}] ✅ Using cached audio file (hash: {file_hash[:8]}...)")
+                return audio_file
+            else:
+                logger.warning(f"[{correlation_id}] Cached file invalid, re-downloading")
+                audio_file.unlink()
+        
+        # Track this file for cleanup
+        self.temp_files.add(str(audio_file))
+        
+        # Try downloading with best headers
+        headers = self.headers_presets[0]  # Use best headers
+        
+        # Try aiohttp download
+        try:
+            success = await self._download_with_aiohttp_validated(
+                url, audio_file, headers, correlation_id
+            )
+            if success and audio_file.exists():
+                if validate_audio_file_smart(audio_file, correlation_id, url):
+                    logger.info(f"[{correlation_id}] ✅ Download successful")
+                    return audio_file
+                else:
+                    logger.warning(f"[{correlation_id}] Downloaded file failed validation")
+                    if audio_file.exists():
+                        audio_file.unlink()
+        except Exception as e:
+            logger.warning(f"[{correlation_id}] Download failed: {e}")
+            if audio_file.exists():
+                audio_file.unlink()
+        
+        return None
+    
     async def _download_audio_with_fallbacks(self, episode: Episode, correlation_id: str) -> Optional[Path]:
         """Download audio with multiple fallback strategies and exponential backoff"""
         logger.info(f"[{correlation_id}] 📥 Downloading audio file...")

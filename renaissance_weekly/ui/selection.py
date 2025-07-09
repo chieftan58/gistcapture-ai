@@ -51,6 +51,11 @@ class EpisodeSelector:
         self._retry_episodes = []
         self._use_alternative_sources = True
         self._process_callback = None
+        self._download_status = None
+        self._download_thread = None
+        self._episodes_to_download = []
+        self._manual_download_queue = []
+        self._browser_download_queue = []
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
@@ -215,6 +220,22 @@ class EpisodeSelector:
                             'errors': list(status.get('errors', []))
                         }
                     self._send_json(status_copy)
+                elif self.path == '/api/download-status':
+                    # Return current download status
+                    with parent._status_lock:
+                        status = getattr(parent, '_download_status', None)
+                        if status is None:
+                            status = {
+                                'total': 0,
+                                'downloaded': 0,
+                                'retrying': 0,
+                                'failed': 0,
+                                'episodeDetails': {},
+                                'startTime': time.time()
+                            }
+                        # Make a copy to avoid modification during serialization
+                        status_copy = dict(status)
+                    self._send_json(status_copy)
                 else:
                     self._send_json({'status': 'error', 'message': 'Not found'})
                     return
@@ -363,6 +384,102 @@ class EpisodeSelector:
                         target=lambda: (time.sleep(0.1), parent._selection_complete.set()),
                         daemon=True
                     ).start()
+                    
+                elif self.path == '/api/start-download':
+                    # Start downloading episodes
+                    episode_ids = data.get('episode_ids', [])
+                    
+                    # Initialize download status
+                    parent._download_status = {
+                        'total': len(episode_ids),
+                        'downloaded': 0,
+                        'retrying': 0,
+                        'failed': 0,
+                        'episodeDetails': {},
+                        'startTime': time.time()
+                    }
+                    
+                    # Map episode IDs to Episode objects
+                    episode_map = {}
+                    for ep in parent.episode_cache:
+                        ep_id = f"{ep.podcast}|{ep.title}|{ep.published}"
+                        episode_map[ep_id] = ep
+                    
+                    parent._episodes_to_download = []
+                    for ep_id in episode_ids:
+                        if ep_id in episode_map:
+                            parent._episodes_to_download.append(episode_map[ep_id])
+                    
+                    # Start download thread
+                    parent._download_thread = threading.Thread(
+                        target=parent._download_episodes_background,
+                        daemon=True
+                    )
+                    parent._download_thread.start()
+                    
+                    self._send_json({'status': 'success'})
+                    
+                elif self.path == '/api/manual-download':
+                    # Handle manual URL download
+                    episode_id = data.get('episode_id')
+                    url = data.get('url')
+                    
+                    # If download is in progress, add to download manager
+                    if hasattr(parent, '_download_app') and parent._download_app and hasattr(parent._download_app, '_download_manager'):
+                        download_manager = parent._download_app._download_manager
+                        if download_manager:
+                            download_manager.add_manual_url(episode_id, url)
+                            self._send_json({'status': 'processing'})
+                            return
+                    
+                    # Otherwise queue for later
+                    parent._manual_download_queue.append({
+                        'episode_id': episode_id,
+                        'url': url
+                    })
+                    
+                    self._send_json({'status': 'queued'})
+                    
+                elif self.path == '/api/browser-download':
+                    # Handle browser-based download
+                    episode_id = data.get('episode_id')
+                    
+                    # If download is in progress, add to download manager
+                    if hasattr(parent, '_download_app') and parent._download_app and hasattr(parent._download_app, '_download_manager'):
+                        download_manager = parent._download_app._download_manager
+                        if download_manager:
+                            download_manager.request_browser_download(episode_id)
+                            self._send_json({'status': 'processing'})
+                            return
+                    
+                    # Otherwise queue for later
+                    parent._browser_download_queue.append({
+                        'episode_id': episode_id
+                    })
+                    
+                    self._send_json({'status': 'queued'})
+                    
+                elif self.path == '/api/debug-download':
+                    # Return debug information for episode
+                    episode_id = data.get('episode_id')
+                    
+                    # Get episode details and debug info
+                    debug_info = parent._get_download_debug_info(episode_id)
+                    
+                    self._send_json(debug_info)
+                    
+                elif self.path == '/api/retry-downloads':
+                    # Retry failed downloads
+                    failed_episodes = data.get('failed_episodes', [])
+                    
+                    # Queue retry requests
+                    for ep_id in failed_episodes:
+                        if ep_id in parent._download_status['episodeDetails']:
+                            parent._download_status['episodeDetails'][ep_id]['status'] = 'retrying'
+                            parent._download_status['retrying'] += 1
+                            parent._download_status['failed'] -= 1
+                    
+                    self._send_json({'status': 'retrying'})
                     
                 else:
                     self._send_json({'status': 'error', 'message': 'Not found'})
@@ -1022,12 +1139,216 @@ class EpisodeSelector:
                             <button class="button secondary" onclick="goBackToEpisodes()">
                                 ← Back to Episodes
                             </button>
-                            <button class="button primary" onclick="startProcessing()">
+                            <button class="button primary" onclick="startDownloading()">
                                 Start Processing →
                             </button>
                         </div>
                     </div>
                 </div>
+            `;
+        }}
+        
+        function renderDownload() {{
+            const downloadStatus = APP_STATE.downloadStatus || {{}};
+            const {{ total = 0, downloaded = 0, failed = 0, retrying = 0, episodeDetails = {{}} }} = downloadStatus;
+            
+            // Group failed episodes by error type
+            const failedEpisodes = Object.entries(episodeDetails).filter(([_, detail]) => detail.status === 'failed');
+            const retryingEpisodes = Object.entries(episodeDetails).filter(([_, detail]) => detail.status === 'retrying');
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Downloading Audio Files</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('download')}}
+                    
+                    <div class="processing-content">
+                        <div class="status-overview">
+                            <div class="status-card success">
+                                <div class="status-icon">✓</div>
+                                <div class="status-count">${{downloaded}}</div>
+                                <div class="status-label">Downloaded</div>
+                            </div>
+                            
+                            <div class="status-card warning">
+                                <div class="status-icon">↻</div>
+                                <div class="status-count">${{retrying}}</div>
+                                <div class="status-label">Retrying</div>
+                            </div>
+                            
+                            <div class="status-card error">
+                                <div class="status-icon">✗</div>
+                                <div class="status-count">${{failed}}</div>
+                                <div class="status-label">Failed</div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width: ${{total > 0 ? (downloaded / total * 100) : 0}}%"></div>
+                        </div>
+                        
+                        <div class="download-details">
+                            ${{retryingEpisodes.length > 0 ? `
+                                <div class="retrying-section">
+                                    <h3>⚠️ Retrying (${{retryingEpisodes.length}})</h3>
+                                    ${{retryingEpisodes.map(([episodeId, attempt]) => `
+                                        <div class="download-item retrying">
+                                            <div class="episode-info">
+                                                <div class="episode-title">${{attempt.episode}}</div>
+                                                <div class="attempt-info">
+                                                    Attempt ${{attempt.attemptCount}} - Trying: ${{attempt.currentStrategy}}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}}
+                                </div>
+                            ` : ''}}
+                            
+                            ${{failedEpisodes.length > 0 ? `
+                                <div class="failed-section">
+                                    <h3>❌ Failed Episodes (${{failedEpisodes.length}})</h3>
+                                    ${{failedEpisodes.map(([episodeId, attempt]) => `
+                                        <div class="download-item failed expandable" onclick="toggleDownloadDetails('${{episodeId}}')">
+                                            <div class="episode-info">
+                                                <div class="episode-title">${{attempt.episode}}</div>
+                                                <div class="error-message">${{attempt.lastError}}</div>
+                                            </div>
+                                            <div class="expand-icon">▼</div>
+                                        </div>
+                                        <div id="details-${{episodeId}}" class="download-details-panel" style="display: none;">
+                                            <div class="attempt-history">
+                                                <h4>Attempt History:</h4>
+                                                ${{(attempt.history || []).map(h => `
+                                                    <div class="history-item">
+                                                        <span class="timestamp">${{new Date(h.timestamp).toLocaleTimeString()}}</span>
+                                                        <span class="strategy">${{h.strategy}}</span>
+                                                        <span class="error">${{h.error}}</span>
+                                                    </div>
+                                                `).join('')}}
+                                            </div>
+                                            <div class="troubleshoot-actions">
+                                                <button class="button secondary" onclick="viewDetailedLogs('${{episodeId}}')">View Logs</button>
+                                                <button class="button secondary" onclick="tryManualUrl('${{episodeId}}')">Manual URL</button>
+                                                <button class="button secondary" onclick="tryBrowserDownload('${{episodeId}}')">Try Browser</button>
+                                                <button class="button secondary" onclick="enableDebugMode('${{episodeId}}')">Debug Mode</button>
+                                            </div>
+                                        </div>
+                                    `).join('')}}
+                                </div>
+                            ` : ''}}
+                        </div>
+                        
+                        <div class="action-bar">
+                            ${{failed > 0 ? `
+                                <button class="button secondary" onclick="retryAllFailed()">
+                                    Retry All Failed
+                                </button>
+                            ` : ''}}
+                            
+                            <button class="button danger" onclick="cancelDownloads()">
+                                Cancel Downloads
+                            </button>
+                            
+                            <button class="button primary" onclick="continueWithDownloads()" ${{downloaded === 0 ? 'disabled' : ''}}>
+                                ${{failed > 0 ? `Continue with ${{downloaded}} Episodes` : 'Continue to Processing'}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <style>
+                    .status-overview {{
+                        display: flex;
+                        gap: 24px;
+                        margin-bottom: 32px;
+                        justify-content: center;
+                    }}
+                    
+                    .status-card {{
+                        background: #f8f8f8;
+                        border-radius: 12px;
+                        padding: 24px;
+                        text-align: center;
+                        min-width: 120px;
+                    }}
+                    
+                    .status-card.success {{ background: #e8f5e9; }}
+                    .status-card.warning {{ background: #fff3e0; }}
+                    .status-card.error {{ background: #ffebee; }}
+                    
+                    .status-icon {{
+                        font-size: 32px;
+                        margin-bottom: 8px;
+                    }}
+                    
+                    .status-count {{
+                        font-size: 36px;
+                        font-weight: 600;
+                        margin-bottom: 4px;
+                    }}
+                    
+                    .download-details {{
+                        margin-top: 32px;
+                        max-height: 400px;
+                        overflow-y: auto;
+                    }}
+                    
+                    .download-item {{
+                        background: white;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 8px;
+                        padding: 16px;
+                        margin-bottom: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }}
+                    
+                    .download-item.retrying {{
+                        border-color: #ff9800;
+                        background: #fff8e1;
+                    }}
+                    
+                    .download-item.failed {{
+                        border-color: #f44336;
+                        background: #ffebee;
+                    }}
+                    
+                    .download-details-panel {{
+                        background: #f5f5f5;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 8px;
+                        padding: 16px;
+                        margin: -8px 0 12px 0;
+                    }}
+                    
+                    .attempt-history {{
+                        margin-bottom: 16px;
+                    }}
+                    
+                    .history-item {{
+                        display: flex;
+                        gap: 16px;
+                        padding: 4px 0;
+                        font-size: 13px;
+                        color: #666;
+                    }}
+                    
+                    .troubleshoot-actions {{
+                        display: flex;
+                        gap: 8px;
+                        flex-wrap: wrap;
+                    }}
+                    
+                    .troubleshoot-actions .button {{
+                        font-size: 12px;
+                        padding: 6px 12px;
+                    }}
+                </style>
             `;
         }}
         
@@ -2230,6 +2551,9 @@ class EpisodeSelector:
                 case 'cost_estimate':
                     app.innerHTML = renderCostEstimate();
                     break;
+                case 'download':
+                    app.innerHTML = renderDownload();
+                    break;
                 case 'processing':
                     app.innerHTML = renderProcessing();
                     break;
@@ -2257,6 +2581,7 @@ class EpisodeSelector:
                 {{ id: 'podcasts', label: 'Podcasts' }},
                 {{ id: 'episodes', label: 'Episodes' }},
                 {{ id: 'estimate', label: 'Estimate' }},
+                {{ id: 'download', label: 'Download' }},
                 {{ id: 'processing', label: 'Process' }},
                 {{ id: 'results', label: 'Results' }},
                 {{ id: 'review', label: 'Review' }},
@@ -2553,6 +2878,229 @@ class EpisodeSelector:
             
             APP_STATE.state = 'review';
             render();
+        }}
+        
+        // Download stage functions
+        async function startDownloading() {{
+            APP_STATE.state = 'download';
+            APP_STATE.downloadStatus = {{
+                total: APP_STATE.selectedEpisodes.size,
+                downloaded: 0,
+                retrying: 0,
+                failed: 0,
+                episodeDetails: {{}},
+                startTime: Date.now()
+            }};
+            render();
+            
+            try {{
+                const response = await fetch('/api/start-download', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        episode_ids: Array.from(APP_STATE.selectedEpisodes)
+                    }})
+                }});
+                
+                if (!response.ok) {{
+                    throw new Error('Failed to start download');
+                }}
+                
+                // Start polling for download progress
+                startDownloadPolling();
+                
+            }} catch (error) {{
+                console.error('Failed to start downloads:', error);
+                alert('Failed to start downloads. Please try again.');
+                APP_STATE.state = 'cost_estimate';
+                render();
+            }}
+        }}
+        
+        async function startDownloadPolling() {{
+            APP_STATE.downloadInterval = setInterval(async () => {{
+                try {{
+                    const response = await fetch('/api/download-status');
+                    const status = await response.json();
+                    
+                    APP_STATE.downloadStatus = {{
+                        ...APP_STATE.downloadStatus,
+                        ...status
+                    }};
+                    
+                    // Update the display
+                    if (APP_STATE.state === 'download') {{
+                        render();
+                    }}
+                    
+                    // Check if downloads are complete
+                    if (status.downloaded + status.failed >= status.total && status.total > 0) {{
+                        clearInterval(APP_STATE.downloadInterval);
+                        
+                        // Automatically proceed if all successful
+                        if (status.failed === 0) {{
+                            setTimeout(() => continueWithDownloads(), 1500);
+                        }}
+                    }}
+                    
+                }} catch (error) {{
+                    console.error('Failed to update download status:', error);
+                }}
+            }}, 1000);
+        }}
+        
+        function toggleDownloadDetails(episodeId) {{
+            const detailsDiv = document.getElementById(`details-${{episodeId}}`);
+            const toggleIcon = document.getElementById(`toggle-${{episodeId}}`);
+            
+            if (detailsDiv.style.display === 'none' || !detailsDiv.style.display) {{
+                detailsDiv.style.display = 'block';
+                toggleIcon.textContent = '▼';
+            }} else {{
+                detailsDiv.style.display = 'none';
+                toggleIcon.textContent = '▶';
+            }}
+        }}
+        
+        async function viewDetailedLogs(episodeId) {{
+            const episode = APP_STATE.downloadStatus.episodeDetails[episodeId];
+            if (!episode) return;
+            
+            const logs = episode.attempts.map((attempt, idx) => 
+                `Attempt ${{idx + 1}}:\\n` +
+                `URL: ${{attempt.url}}\\n` +
+                `Error: ${{attempt.error}}\\n` +
+                `Duration: ${{attempt.duration}}ms\\n`
+            ).join('\\n---\\n');
+            
+            alert(`Download logs for ${{episode.title}}:\\n\\n${{logs}}`);
+        }}
+        
+        async function tryManualUrl(episodeId) {{
+            const url = prompt('Enter direct URL to audio file:');
+            if (!url) return;
+            
+            try {{
+                const response = await fetch('/api/manual-download', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        episode_id: episodeId,
+                        url: url
+                    }})
+                }});
+                
+                if (response.ok) {{
+                    alert('Manual download started...');
+                }} else {{
+                    alert('Failed to start manual download');
+                }}
+            }} catch (error) {{
+                console.error('Manual download error:', error);
+                alert('Error: ' + error.message);
+            }}
+        }}
+        
+        async function tryBrowserDownload(episodeId) {{
+            try {{
+                const response = await fetch('/api/browser-download', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        episode_id: episodeId
+                    }})
+                }});
+                
+                if (response.ok) {{
+                    alert('Browser download started (this may take longer)...');
+                }} else {{
+                    alert('Failed to start browser download');
+                }}
+            }} catch (error) {{
+                console.error('Browser download error:', error);
+                alert('Error: ' + error.message);
+            }}
+        }}
+        
+        async function enableDebugMode(episodeId) {{
+            try {{
+                const response = await fetch('/api/debug-download', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        episode_id: episodeId,
+                        debug: true
+                    }})
+                }});
+                
+                const result = await response.json();
+                alert(`Debug info:\\n\\n${{JSON.stringify(result, null, 2)}}`);
+            }} catch (error) {{
+                console.error('Debug mode error:', error);
+                alert('Error: ' + error.message);
+            }}
+        }}
+        
+        async function retryAllFailed() {{
+            const failedCount = APP_STATE.downloadStatus.failed;
+            if (failedCount === 0) {{
+                alert('No failed downloads to retry');
+                return;
+            }}
+            
+            if (!confirm(`Retry all ${{failedCount}} failed downloads?`)) {{
+                return;
+            }}
+            
+            try {{
+                const response = await fetch('/api/retry-downloads', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        failed_episodes: Object.keys(APP_STATE.downloadStatus.episodeDetails)
+                            .filter(id => APP_STATE.downloadStatus.episodeDetails[id].status === 'failed')
+                    }})
+                }});
+                
+                if (response.ok) {{
+                    // Reset retry count and continue polling
+                    APP_STATE.downloadStatus.retrying = failedCount;
+                    APP_STATE.downloadStatus.failed = 0;
+                    render();
+                }} else {{
+                    alert('Failed to start retry');
+                }}
+            }} catch (error) {{
+                console.error('Retry error:', error);
+                alert('Error: ' + error.message);
+            }}
+        }}
+        
+        async function continueWithDownloads() {{
+            const {{ downloaded, failed, total }} = APP_STATE.downloadStatus;
+            
+            if (failed > 0 && downloaded < 20) {{
+                if (!confirm(`Only ${{downloaded}} episodes downloaded successfully. You need at least 20 episodes for the email. Continue anyway?`)) {{
+                    return;
+                }}
+            }}
+            
+            clearInterval(APP_STATE.downloadInterval);
+            
+            // Move to processing stage
+            APP_STATE.state = 'processing';
+            render();
+            
+            // Start processing
+            await startProcessing();
+        }}
+        
+        async function cancelDownloads() {{
+            if (confirm('Are you sure you want to cancel downloads? This will stop all remaining downloads.')) {{
+                clearInterval(APP_STATE.downloadInterval);
+                APP_STATE.state = 'cost_estimate';
+                render();
+            }}
         }}
         
         async function retryFailedEpisodes() {{
@@ -4009,6 +4557,112 @@ class EpisodeSelector:
                 loop.close()
             except:
                 pass
+    
+    def _download_episodes_background(self):
+        """Download episodes in background with concurrent downloads"""
+        try:
+            logger.info(f"Starting download of {len(self._episodes_to_download)} episodes")
+            
+            # Import the app to use its download functionality
+            from ..app import RenaissanceWeekly
+            import asyncio
+            
+            # Create event loop for async downloads
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # Create app instance
+                app = RenaissanceWeekly()
+                
+                # Store the download manager reference
+                self._download_app = app
+                
+                # Define progress callback to update UI status
+                def download_progress_callback(status):
+                    with self._status_lock:
+                        self._download_status = status
+                
+                # Create a custom download function that handles manual URLs
+                async def run_downloads():
+                    # Start the download process
+                    download_task = asyncio.create_task(
+                        app.download_episodes(self._episodes_to_download, download_progress_callback)
+                    )
+                    
+                    # Wait a moment for download manager to be created
+                    await asyncio.sleep(0.1)
+                    
+                    # Handle manual URLs and browser requests if download manager exists
+                    if hasattr(app, '_download_manager') and app._download_manager:
+                        download_manager = app._download_manager
+                        
+                        # Add manual URLs
+                        for req in self._manual_download_queue:
+                            download_manager.add_manual_url(req['episode_id'], req['url'])
+                        self._manual_download_queue.clear()
+                        
+                        # Add browser requests
+                        for req in self._browser_download_queue:
+                            download_manager.request_browser_download(req['episode_id'])
+                        self._browser_download_queue.clear()
+                    
+                    # Wait for downloads to complete
+                    return await download_task
+                
+                # Run the download
+                result = loop.run_until_complete(run_downloads())
+                
+                # Update final status
+                with self._status_lock:
+                    self._download_status = result
+                
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
+                
+        except Exception as e:
+            logger.error(f"Download thread error: {e}", exc_info=True)
+    
+    def _get_download_debug_info(self, episode_id):
+        """Get debug information for episode download"""
+        # Check if we have a download manager
+        if hasattr(self, '_download_app') and self._download_app and hasattr(self._download_app, '_download_manager'):
+            download_manager = self._download_app._download_manager
+            if download_manager:
+                return download_manager.get_debug_info(episode_id)
+        
+        # Fallback to basic info
+        episode = None
+        for ep in self.episode_cache:
+            if f"{ep.podcast}|{ep.title}|{ep.published}" == episode_id:
+                episode = ep
+                break
+        
+        if not episode:
+            return {'error': 'Episode not found'}
+        
+        debug_info = {
+            'episode': {
+                'title': episode.title,
+                'podcast': episode.podcast,
+                'published': str(episode.published),
+                'audio_url': episode.audio_url,
+                'transcript_url': episode.transcript_url,
+                'description': episode.description[:200] if episode.description else None
+            },
+            'download_attempts': self._download_status.get('episodeDetails', {}).get(episode_id, {}).get('attempts', []),
+            'available_strategies': [
+                'RSS feed URL',
+                'YouTube search',
+                'Apple Podcasts API',
+                'Spotify API', 
+                'CDN direct access',
+                'Browser automation'
+            ]
+        }
+        
+        return debug_info
     
     def _generate_email_preview(self):
         """Generate a preview of the email that will be sent"""

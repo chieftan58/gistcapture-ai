@@ -687,3 +687,104 @@ The system now searches for transcripts in this order:
 2. Fine-tune retry strategies based on results
 3. Add more podcast-specific configurations as needed
 4. Consider implementing browser automation for stubborn Cloudflare cases
+
+## Download Stage Implementation (2025-01-09)
+
+### Overview
+Implemented a dedicated download stage in the UI pipeline that provides visibility and control over the download process, allowing operator intervention when downloads fail.
+
+### Key Features
+
+1. **New Download Stage in UI** ✅:
+   - Added between Cost Estimate and Processing stages
+   - Real-time progress with Downloaded/Retrying/Failed counts
+   - Visual progress bar showing overall completion
+   - Stage progression: Podcasts → Episodes → Estimate → **Download** → Process → Results → Review → Email
+
+2. **DownloadManager Class** ✅:
+   - Location: `/renaissance_weekly/download_manager.py`
+   - 10 concurrent downloads (configurable)
+   - Multiple retry strategies per episode
+   - Detailed attempt tracking with timestamps and error messages
+   - Progress callback support for UI updates
+   - Methods:
+     - `download_episodes()` - Main entry point
+     - `add_manual_url()` - Add custom URL for specific episode
+     - `request_browser_download()` - Queue browser-based download
+     - `save_state()/load_state()` - Persistence support
+
+3. **Interactive Troubleshooting Options** ✅:
+   - **View Logs**: Shows detailed attempt history for each failed episode
+   - **Manual URL**: Enter a custom audio URL to bypass normal sources
+   - **Try Browser**: Browser automation placeholder (future implementation)
+   - **Debug Mode**: Comprehensive debug information including all available strategies
+   - **Retry All Failed**: Bulk retry all failed episodes
+
+4. **Download Attempt Logging** ✅:
+   - Each attempt tracked with:
+     - URL attempted
+     - Strategy used (RSS, YouTube, CDN, manual, etc.)
+     - Timestamp and duration
+     - Success/failure status with error message
+   - Full history available in UI for troubleshooting
+
+5. **State Persistence** ✅:
+   - Automatic state saving every 10 seconds during downloads
+   - Resume capability on restart
+   - State file: `/temp/download_state_{correlation_id}.json`
+   - Includes episode data, attempts, and download paths
+   - Cleans up state file on successful completion
+
+### Technical Implementation
+
+1. **Integration with AudioTranscriber**:
+   - Added `download_audio_simple()` method for single-attempt downloads
+   - Removed conflicting retry logic from download path
+   - Uses existing validation and file management
+
+2. **UI Components**:
+   - `renderDownload()` - Main download stage UI
+   - `startDownloading()` - Initiates download process
+   - `toggleDownloadDetails()` - Expand/collapse failed episode details
+   - `continueWithDownloads()` - Proceed to processing (min 20 episodes check)
+   - Real-time status updates via polling
+
+3. **API Endpoints**:
+   - `/api/start-download` - Begin download process
+   - `/api/download-status` - Get current download status
+   - `/api/manual-download` - Submit manual URL
+   - `/api/browser-download` - Request browser download
+   - `/api/debug-download` - Get debug info for episode
+   - `/api/retry-downloads` - Retry failed downloads
+
+### Usage Flow
+
+1. Run `python main.py 7`
+2. Select podcasts and episodes in UI
+3. Review cost estimate
+4. **Download stage shows**:
+   - Progress cards for Downloaded/Retrying/Failed
+   - Progress bar with percentage
+   - Failed episodes with expandable details
+   - Troubleshooting buttons for each failure
+5. For failed downloads:
+   - Click episode to see attempt history
+   - Use "Manual URL" to provide direct link
+   - Use "Debug Mode" to see all available info
+   - Use "Retry All Failed" for bulk retry
+6. Continue to processing once sufficient episodes downloaded (min 20)
+
+### Benefits
+
+- **Visibility**: See exactly what's happening with each download
+- **Control**: Intervene when downloads fail with manual URLs
+- **Efficiency**: 10x concurrent downloads for speed
+- **Reliability**: Multiple retry strategies and fallbacks
+- **Resume**: Can restart after interruption without losing progress
+
+### Known Limitations
+
+- Browser automation not yet implemented (placeholder only)
+- Some podcast platforms may require authentication
+- Regional restrictions may affect some downloads
+- Expired URLs will fail (need fresh episode data)
