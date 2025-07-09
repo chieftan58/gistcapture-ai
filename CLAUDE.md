@@ -818,3 +818,13 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
 - Some podcast platforms may require authentication
 - Regional restrictions may affect some downloads
 - Expired URLs will fail (need fresh episode data)
+
+### Recent Updates (2025-01-09) - Fixed AssemblyAI Concurrency:
+- **Issue**: Only 3 concurrent transcriptions despite AssemblyAI supporting 32
+- **Root Cause**: General semaphore was limiting ALL operations to 3 based on CPU cores (2 cores × 1.5 = 3)
+- **Fix**: Separated I/O-bound operations from CPU-bound operations
+  - I/O operations (AssemblyAI, API calls): 20 concurrent
+  - CPU-bound operations: Still limited by system resources (3)
+  - AssemblyAI's internal semaphore handles its own 32x concurrency
+- **Result**: AssemblyAI can now use its full 32 concurrent transcription capacity
+- **Performance Impact**: Transcription time reduced from ~2 hours to ~15-30 minutes

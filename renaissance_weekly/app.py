@@ -534,20 +534,26 @@ class RenaissanceWeekly:
         # Get optimal concurrency with separate limits for different services
         whisper_concurrency_limit = 3  # Whisper API: 3 requests per minute
         gpt4_concurrency_limit = 20  # GPT-4 API: Much higher limit (check your tier)
-        # Allow more concurrent tasks for transcript fetching and other non-API operations
-        general_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Up to 10 concurrent tasks
+        
+        # For I/O-bound operations like AssemblyAI, we don't need to limit by CPU cores
+        # AssemblyAI handles its own concurrency (32 concurrent) internally
+        # Only limit CPU-bound operations by system resources
+        io_concurrency = 20  # Allow more concurrent I/O operations
+        cpu_bound_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Limited by CPU/memory
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"[{self.correlation_id}] ⚙️  Max concurrent tasks: {general_concurrency}")
+        logger.info(f"[{self.correlation_id}] ⚙️  I/O operations concurrency: {io_concurrency}")
+        logger.info(f"[{self.correlation_id}] 🧮  CPU-bound concurrency: {cpu_bound_concurrency}")
         logger.info(f"[{self.correlation_id}] 🎙️  Whisper API limit: {whisper_concurrency_limit} concurrent")
         logger.info(f"[{self.correlation_id}] 🤖  GPT-4 API limit: {gpt4_concurrency_limit} concurrent")
+        logger.info(f"[{self.correlation_id}] 🚀  AssemblyAI: 32 concurrent (handled internally)")
         
         # Progress tracker for processing
         process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
         
         # Create semaphores for different types of operations
-        # General semaphore for overall concurrency (transcript fetch, processing, etc.)
-        general_semaphore = asyncio.Semaphore(general_concurrency)
+        # Use higher concurrency for I/O-bound operations (transcript fetch, AssemblyAI, etc.)
+        general_semaphore = asyncio.Semaphore(io_concurrency)
         # Separate semaphores for different OpenAI services
         self._whisper_semaphore = asyncio.Semaphore(whisper_concurrency_limit)
         self._gpt4_semaphore = asyncio.Semaphore(gpt4_concurrency_limit)
