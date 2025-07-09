@@ -614,36 +614,76 @@ The system now searches for transcripts in this order:
 - **After**: ~15-30 minutes for transcription (32 concurrent AssemblyAI)
 - **Total Pipeline**: Under 1 hour (vs current 3-4 hours)
 
-## Planned Major Changes (2025-01-09)
+## Major Changes Implemented (2025-01-09)
 
 ### Git Checkpoint Created
 - **Commit**: `eb355c9` - "chore: Update monitoring data from recent processing runs"
-- **Tag**: `pre-major-changes-2025-01-09` - Stable state with AssemblyAI integration and optimized RSS fetching
+- **Tag**: `pre-major-changes-2025-01-09` - Stable state before major UI/retry changes
 - **Revert Command**: `git reset --hard pre-major-changes-2025-01-09` (if needed)
 
-### Planned Improvements
+### Implemented Changes (Commits: 426470e, 45ec9a7, e5bb8fb, 2e9c422)
 
-1. **Fix American Optimist & Tim Ferriss Issues**:
-   - American Optimist: Improve YouTube search or implement browser automation for Substack
-   - Tim Ferriss: Fix timezone-aware date parsing to include recent episodes
+1. **Pre-Email Review Stage** ✅:
+   - Added new "Review" stage between Results and Email in UI
+   - Shows failed episodes grouped by error type (Cloudflare, timeout, transcription)
+   - Displays specific retry strategies for each failure type
+   - Requires minimum 20 episodes before allowing email send
+   - Operator can retry failures or proceed without them
    
-2. **Complete Performance Optimization**:
-   - Verify AssemblyAI is working correctly (32x concurrency boost)
-   - Implement parallel audio downloads (currently sequential)
-   - Add pipeline stages for true parallel processing
+2. **Enhanced Database Schema** ✅:
+   - Added granular status tracking: `processing_status`, `failure_reason`, `retry_count`, `retry_strategy`
+   - New methods: `update_episode_status()`, `get_failed_episodes()`, `get_retry_eligible_episodes()`
+   - Tracks processing timestamps and retry attempts
    
-3. **UI Enhancements**:
-   - Fix verification banner timing issue
-   - Add more detailed error information in UI
-   - Implement retry button for failed episodes
+3. **Smart Retry System** ✅:
+   - Automatically determines retry strategy based on error:
+     - Cloudflare/403 → YouTube search + browser automation
+     - Timeout → Direct CDN with extended timeout (120s)
+     - Transcription failures → Force audio transcription
+     - Audio download → Alternative sources (Apple, Spotify, etc.)
+   - Wired up existing `AudioSourceFinder` for multi-source downloads
+   - Retries use fundamentally different approaches, not same failing method
    
-4. **Reliability Improvements**:
-   - Re-enable PodcastIndex/multi-platform search with proper validation
-   - Add more robust Cloudflare bypass strategies
-   - Implement persistent browser sessions for scraping
+4. **Podcast-Specific Retry Configuration** ✅:
+   - Extended `podcasts.yaml` with retry strategies per podcast
+   - American Optimist: YouTube-first (bypasses Cloudflare)
+   - Dwarkesh: YouTube then Apple Podcasts fallback
+   - Configuration example:
+     ```yaml
+     retry_strategy:
+       primary: "youtube_search"
+       fallback: "browser_automation"
+       skip_rss: true
+     ```
+   
+5. **Pre-Flight Check Command** ✅:
+   - New command: `python main.py pre-flight [days]`
+   - Checks which podcasts have new episodes before processing
+   - Estimates total processing time
+   - Warns if < 15 episodes available
+   - Shows days since last episode for each podcast
+   
+6. **AssemblyAI Integration Fixed** ✅:
+   - Fixed syntax errors preventing initialization (lines 116, 144)
+   - AssemblyAI now properly initialized as primary transcriber
+   - 32x concurrent transcriptions (vs 3 with Whisper)
+   - Automatic fallback to Whisper if AssemblyAI fails
 
-### Testing Strategy
-- Test changes incrementally with small episode batches
-- Monitor performance metrics in monitoring_data/
-- Use `python main.py --dry-run` for safe testing
-- Save test datasets before major changes
+### Expected Improvements
+- **Success Rate**: 84% → 95-98% (retry with alternative sources)
+- **Transcription Speed**: 2 hours → 15-30 minutes (AssemblyAI 32x concurrency)
+- **Total Pipeline Time**: 3-4 hours → Under 1 hour
+- **American Optimist**: 0% → 90% success (YouTube bypass)
+- **Tim Ferriss**: 60% → 95% success (CDN + extended timeout)
+
+### Key Architecture Changes
+- **Review before email**: Operator sees and can retry failures before sending
+- **Multi-source retry**: Not just retrying, but trying different sources/methods
+- **Visibility**: Clear indication of what retry strategies will be used
+- **Control**: Minimum episode threshold and explicit email approval
+
+### Next Steps
+1. Monitor retry success rates in production
+2. Fine-tune retry strategies based on results
+3. Add more podcast-specific configurations as needed
+4. Consider implementing browser automation for stubborn Cloudflare cases
