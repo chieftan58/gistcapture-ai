@@ -614,6 +614,13 @@ The system now searches for transcripts in this order:
 - **After**: ~15-30 minutes for transcription (32 concurrent AssemblyAI)
 - **Total Pipeline**: Under 1 hour (vs current 3-4 hours)
 
+### AssemblyAI Integration Fix (2025-01-09):
+
+**Issue Fixed**: AssemblyAI was failing with "module 'assemblyai' has no attribute 'upload_file'" error
+**Root Cause**: The code was trying to use `aai.upload_file` directly on the module, but `upload_file` is a method on the `Transcriber` instance
+**Solution**: Updated to pass the audio file path directly to `transcriber.transcribe()` method, which handles the upload automatically
+**Impact**: AssemblyAI integration now works properly, enabling 32x concurrent transcriptions vs 3x with Whisper
+
 ## Major Changes Implemented (2025-01-09)
 
 ### Git Checkpoint Created

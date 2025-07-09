@@ -66,17 +66,9 @@ class AssemblyAITranscriber:
                     
                 logger.info(f"Starting AssemblyAI transcription for {episode.title}")
                 start_time = time.time()
-                
-                # Upload audio file
-                upload_url = await self._upload_audio(audio_path)
-                if not upload_url:
-                    self.failure_count += 1
-                    self.last_failure_time = time.time()
-                    return None
                     
                 # Configure transcription options
                 config = aai.TranscriptionConfig(
-                    audio_url=upload_url,
                     speaker_labels=True,  # Enable speaker diarization
                     auto_chapters=True,   # Enable chapter detection
                     entity_detection=True, # Detect entities
@@ -92,9 +84,9 @@ class AssemblyAITranscriber:
                     config.audio_end_at = max_minutes * 60 * 1000  # Convert to milliseconds
                     logger.info(f"Test mode: Limiting transcription to first {max_minutes} minutes")
                 
-                # Create transcription job
+                # Create transcription job - pass the file path directly
                 transcriber = aai.Transcriber()
-                transcript = await asyncio.to_thread(transcriber.transcribe, config)
+                transcript = await asyncio.to_thread(transcriber.transcribe, str(audio_path), config)
                 
                 # Check for errors
                 if transcript.status == aai.TranscriptStatus.error:
@@ -142,21 +134,6 @@ class AssemblyAITranscriber:
             logger.error(f"AssemblyAI transcription error: {str(e)}", exc_info=True)
             self.failure_count += 1
             self.last_failure_time = time.time()
-            return None
-            
-    async def _upload_audio(self, audio_path: Path) -> Optional[str]:
-        """Upload audio file to AssemblyAI and return URL"""
-        try:
-            logger.info(f"Uploading {audio_path.name} to AssemblyAI ({audio_path.stat().st_size / 1024 / 1024:.1f} MB)")
-            
-            # Use AssemblyAI's upload function
-            upload_url = await asyncio.to_thread(aai.upload_file, str(audio_path))
-            
-            logger.info(f"Successfully uploaded audio to AssemblyAI")
-            return upload_url
-            
-        except Exception as e:
-            logger.error(f"Failed to upload audio to AssemblyAI: {str(e)}")
             return None
             
     def _format_transcript(self, transcript) -> str:
