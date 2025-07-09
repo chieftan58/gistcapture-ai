@@ -613,3 +613,37 @@ The system now searches for transcripts in this order:
 - **Before**: ~2-3 hours for 34 episodes (3 concurrent Whisper)
 - **After**: ~15-30 minutes for transcription (32 concurrent AssemblyAI)
 - **Total Pipeline**: Under 1 hour (vs current 3-4 hours)
+
+## Planned Major Changes (2025-01-09)
+
+### Git Checkpoint Created
+- **Commit**: `eb355c9` - "chore: Update monitoring data from recent processing runs"
+- **Tag**: `pre-major-changes-2025-01-09` - Stable state with AssemblyAI integration and optimized RSS fetching
+- **Revert Command**: `git reset --hard pre-major-changes-2025-01-09` (if needed)
+
+### Planned Improvements
+
+1. **Fix American Optimist & Tim Ferriss Issues**:
+   - American Optimist: Improve YouTube search or implement browser automation for Substack
+   - Tim Ferriss: Fix timezone-aware date parsing to include recent episodes
+   
+2. **Complete Performance Optimization**:
+   - Verify AssemblyAI is working correctly (32x concurrency boost)
+   - Implement parallel audio downloads (currently sequential)
+   - Add pipeline stages for true parallel processing
+   
+3. **UI Enhancements**:
+   - Fix verification banner timing issue
+   - Add more detailed error information in UI
+   - Implement retry button for failed episodes
+   
+4. **Reliability Improvements**:
+   - Re-enable PodcastIndex/multi-platform search with proper validation
+   - Add more robust Cloudflare bypass strategies
+   - Implement persistent browser sessions for scraping
+
+### Testing Strategy
+- Test changes incrementally with small episode batches
+- Monitor performance metrics in monitoring_data/
+- Use `python main.py --dry-run` for safe testing
+- Save test datasets before major changes
