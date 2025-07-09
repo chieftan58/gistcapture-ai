@@ -828,3 +828,13 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
   - AssemblyAI's internal semaphore handles its own 32x concurrency
 - **Result**: AssemblyAI can now use its full 32 concurrent transcription capacity
 - **Performance Impact**: Transcription time reduced from ~2 hours to ~15-30 minutes
+
+### Recent Updates (2025-01-09) - Memory-Aware Concurrency:
+- **Issue**: Process killed (OOM) when processing multiple large audio files
+- **Root Cause**: 20 concurrent operations × 60-70MB audio files = memory exhaustion
+- **Fix**: Added memory-aware concurrency limiting
+  - Calculates safe concurrency: available_memory / 300MB per task
+  - Limits to 3-10 concurrent operations based on memory
+  - Example: 4800MB RAM / 300MB = 16, capped at 10
+- **Result**: Prevents OOM while maintaining improved performance
+- **Dynamic Scaling**: Automatically adjusts based on available memory
