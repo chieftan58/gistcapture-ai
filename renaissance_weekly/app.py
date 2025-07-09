@@ -537,12 +537,16 @@ class RenaissanceWeekly:
         
         # For I/O-bound operations like AssemblyAI, we don't need to limit by CPU cores
         # AssemblyAI handles its own concurrency (32 concurrent) internally
-        # Only limit CPU-bound operations by system resources
-        io_concurrency = 20  # Allow more concurrent I/O operations
+        # But we need to be careful with memory usage when processing audio files
+        # Each audio file being trimmed loads ~100-200MB into memory
+        available_memory = get_available_memory()
+        memory_safe_concurrency = min(int(available_memory / 300), 10)  # 300MB per audio task
+        io_concurrency = max(3, memory_safe_concurrency)  # At least 3, up to 10 based on memory
         cpu_bound_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Limited by CPU/memory
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
-        logger.info(f"[{self.correlation_id}] ⚙️  I/O operations concurrency: {io_concurrency}")
+        logger.info(f"[{self.correlation_id}] 💾 Available memory: {available_memory:.0f}MB")
+        logger.info(f"[{self.correlation_id}] ⚙️  I/O operations concurrency: {io_concurrency} (memory-safe)")
         logger.info(f"[{self.correlation_id}] 🧮  CPU-bound concurrency: {cpu_bound_concurrency}")
         logger.info(f"[{self.correlation_id}] 🎙️  Whisper API limit: {whisper_concurrency_limit} concurrent")
         logger.info(f"[{self.correlation_id}] 🤖  GPT-4 API limit: {gpt4_concurrency_limit} concurrent")
