@@ -575,7 +575,7 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 📋 Created {len(tasks)} tasks for processing")
         
         # Monitor resource usage periodically
-        monitor_task = asyncio.create_task(self._monitor_resources(general_concurrency))
+        monitor_task = asyncio.create_task(self._monitor_resources(io_concurrency))
         
         try:
             # Execute all tasks
