@@ -621,6 +621,27 @@ The system now searches for transcripts in this order:
 **Solution**: Updated to pass the audio file path directly to `transcriber.transcribe()` method, which handles the upload automatically
 **Impact**: AssemblyAI integration now works properly, enabling 32x concurrent transcriptions vs 3x with Whisper
 
+### Additional Issues Found (2025-01-09):
+
+1. **AssemblyAI audio_end_at Error**:
+   - **Issue**: `property 'audio_end_at' of 'TranscriptionConfig' object has no setter`
+   - **Solution**: Implemented audio trimming before upload for test mode using pydub
+   - **Status**: Fixed - AssemblyAI now properly handles test mode with 15-minute clips
+
+2. **Only 3 Concurrent Transcriptions**:
+   - **Root Cause**: AssemblyAI failures cause fallback to Whisper API (3 concurrent limit)
+   - **Impact**: Processing takes 2-3 hours instead of 15-30 minutes
+   - **Solution**: Fixed AssemblyAI errors to enable 32x concurrency
+
+3. **Failed Downloads Still Being Processed**:
+   - **Issue**: Episodes that failed to download are still sent to transcription/summarization
+   - **Location**: `_process_episodes_background` in selection.py processes all selected episodes
+   - **Solution Needed**: Filter out failed downloads before processing
+
+4. **UI Terminology**:
+   - **Current**: "Processing" stage includes both transcription and summarization
+   - **Better**: "Transcribing & Summarizing" or split into two stages
+
 ## Major Changes Implemented (2025-01-09)
 
 ### Git Checkpoint Created

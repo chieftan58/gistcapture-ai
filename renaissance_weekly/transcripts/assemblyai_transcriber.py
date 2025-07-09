@@ -6,6 +6,8 @@ import aiohttp
 from pathlib import Path
 from typing import Optional, Tuple
 import time
+import tempfile
+from pydub import AudioSegment
 import assemblyai as aai
 
 from ..models import Episode
@@ -78,15 +80,22 @@ class AssemblyAITranscriber:
                     format_text=True,
                 )
                 
-                # In test mode, limit transcription time
+                # In test mode, trim the audio file before uploading
+                audio_to_transcribe = audio_path
                 if mode == 'test' and TESTING_MODE:
                     max_minutes = MAX_TRANSCRIPTION_MINUTES or 15
-                    config.audio_end_at = max_minutes * 60 * 1000  # Convert to milliseconds
-                    logger.info(f"Test mode: Limiting transcription to first {max_minutes} minutes")
+                    logger.info(f"Test mode: Trimming audio to {max_minutes} minutes")
+                    
+                    # Trim the audio file
+                    trimmed_path = await self._trim_audio(audio_path, max_minutes)
+                    if trimmed_path:
+                        audio_to_transcribe = trimmed_path
+                    else:
+                        logger.warning("Failed to trim audio, using full file")
                 
                 # Create transcription job - pass the file path directly
                 transcriber = aai.Transcriber()
-                transcript = await asyncio.to_thread(transcriber.transcribe, str(audio_path), config)
+                transcript = await asyncio.to_thread(transcriber.transcribe, str(audio_to_transcribe), config)
                 
                 # Check for errors
                 if transcript.status == aai.TranscriptStatus.error:
@@ -127,6 +136,14 @@ class AssemblyAITranscriber:
                 # Reset failure count on success
                 self.failure_count = 0
                 
+                # Clean up trimmed audio file if we created one
+                if audio_to_transcribe != audio_path and audio_to_transcribe.exists():
+                    try:
+                        audio_to_transcribe.unlink()
+                        logger.debug(f"Cleaned up trimmed audio file: {audio_to_transcribe}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up trimmed audio: {e}")
+                
                 # Return formatted transcript with speaker labels
                 return self._format_transcript(transcript)
                 
@@ -134,6 +151,36 @@ class AssemblyAITranscriber:
             logger.error(f"AssemblyAI transcription error: {str(e)}", exc_info=True)
             self.failure_count += 1
             self.last_failure_time = time.time()
+            return None
+    
+    async def _trim_audio(self, audio_path: Path, max_minutes: int) -> Optional[Path]:
+        """Trim audio file to specified duration"""
+        try:
+            # Load audio file
+            audio = AudioSegment.from_file(str(audio_path))
+            
+            # Calculate trimming duration in milliseconds
+            max_duration_ms = max_minutes * 60 * 1000
+            
+            # If audio is already shorter, return original
+            if len(audio) <= max_duration_ms:
+                return audio_path
+            
+            # Trim the audio
+            trimmed_audio = audio[:max_duration_ms]
+            
+            # Create temporary file for trimmed audio
+            temp_dir = Path(tempfile.gettempdir())
+            trimmed_path = temp_dir / f"trimmed_{audio_path.name}"
+            
+            # Export trimmed audio
+            trimmed_audio.export(str(trimmed_path), format="mp3")
+            
+            logger.info(f"Trimmed audio from {len(audio)/1000:.1f}s to {len(trimmed_audio)/1000:.1f}s")
+            return trimmed_path
+            
+        except Exception as e:
+            logger.error(f"Failed to trim audio: {str(e)}")
             return None
             
     def _format_transcript(self, transcript) -> str:
