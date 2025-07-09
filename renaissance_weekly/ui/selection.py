@@ -48,6 +48,9 @@ class EpisodeSelector:
         self._process_thread = None
         self.db = db
         self._status_lock = threading.Lock()
+        self._retry_episodes = []
+        self._use_alternative_sources = True
+        self._process_callback = None
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
@@ -316,6 +319,33 @@ class EpisodeSelector:
                         self._send_json({'status': 'success', 'state': parent.state})
                     else:
                         self._send_json({'status': 'error', 'message': 'Invalid state'})
+                    
+                elif self.path == '/api/retry-episodes':
+                    # Retry failed episodes with alternative sources
+                    failed_episodes = data.get('episodes', [])
+                    use_alternative = data.get('use_alternative_sources', True)
+                    
+                    # Store retry request info
+                    parent._retry_episodes = failed_episodes
+                    parent._use_alternative_sources = use_alternative
+                    parent._processing_status = {
+                        'total': len(failed_episodes),
+                        'completed': 0,
+                        'failed': 0,
+                        'currently_processing': [],
+                        'errors': []
+                    }
+                    
+                    # Start retry processing in background
+                    if parent._process_callback:
+                        parent._process_thread = threading.Thread(
+                            target=parent._run_retry_processing,
+                            args=(failed_episodes,),
+                            daemon=True
+                        )
+                        parent._process_thread.start()
+                    
+                    self._send_json({'status': 'processing_started'})
                     
                 elif self.path == '/api/send-email':
                     # Mark email as approved and ready to send
@@ -1353,9 +1383,133 @@ class EpisodeSelector:
                                 Cancel & Exit
                             </button>
                             
-                            <button class="button primary" onclick="proceedToEmail()">
-                                Proceed to Email →
+                            <button class="button primary" onclick="proceedToReview()">
+                                Continue →
                             </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }}
+        
+        function renderReview() {{
+            const {{ completed, failed, errors }} = APP_STATE.processingStatus;
+            
+            // Group errors by type for better retry strategies
+            const errorGroups = {{
+                cloudflare: [],
+                timeout: [],
+                transcription: [],
+                other: []
+            }};
+            
+            errors.forEach(err => {{
+                if (err.message.includes('403') || err.message.includes('Cloudflare')) {{
+                    errorGroups.cloudflare.push(err);
+                }} else if (err.message.includes('timeout') || err.message.includes('Timeout')) {{
+                    errorGroups.timeout.push(err);
+                }} else if (err.message.includes('transcript') || err.message.includes('Transcription')) {{
+                    errorGroups.transcription.push(err);
+                }} else {{
+                    errorGroups.other.push(err);
+                }}
+            }});
+            
+            return `
+                <div class="header">
+                    <div class="logo">RW</div>
+                    <div class="header-text">Review & Retry</div>
+                </div>
+                
+                <div class="container">
+                    ${{renderStageIndicator('review')}}
+                    
+                    <div style="max-width: 800px; margin: 48px auto;">
+                        <div style="text-align: center; margin-bottom: 48px;">
+                            <h2 style="font-size: 28px; font-weight: 600; margin-bottom: 16px;">Review Results</h2>
+                            <div style="font-size: 18px; color: #666;">
+                                ✅ Successfully Processed: ${{completed}} episodes<br>
+                                ❌ Failed: ${{failed}} episodes
+                            </div>
+                        </div>
+                        
+                        ${{failed > 0 ? `
+                            <div style="background: #FFF5F5; border: 1px solid #FFDDDD; border-radius: 12px; padding: 24px; margin-bottom: 48px;">
+                                <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #FF3B30;">Failed Episodes</h3>
+                                
+                                ${{errorGroups.cloudflare.length > 0 ? `
+                                    <div style="margin-bottom: 24px;">
+                                        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Cloudflare Protection (${{errorGroups.cloudflare.length}} episodes)</h4>
+                                        ${{errorGroups.cloudflare.map(err => `
+                                            <div style="padding: 8px 0; border-bottom: 1px solid #FFDDDD;">
+                                                <div style="font-weight: 500;">${{err.episode}}</div>
+                                                <div style="font-size: 14px; color: #666;">→ Will retry with: YouTube search, Browser automation</div>
+                                            </div>
+                                        `).join('')}}
+                                    </div>
+                                ` : ''}}
+                                
+                                ${{errorGroups.timeout.length > 0 ? `
+                                    <div style="margin-bottom: 24px;">
+                                        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Download Timeout (${{errorGroups.timeout.length}} episodes)</h4>
+                                        ${{errorGroups.timeout.map(err => `
+                                            <div style="padding: 8px 0; border-bottom: 1px solid #FFDDDD;">
+                                                <div style="font-weight: 500;">${{err.episode}}</div>
+                                                <div style="font-size: 14px; color: #666;">→ Will retry with: Direct CDN, Extended timeout (120s)</div>
+                                            </div>
+                                        `).join('')}}
+                                    </div>
+                                ` : ''}}
+                                
+                                ${{errorGroups.transcription.length > 0 ? `
+                                    <div style="margin-bottom: 24px;">
+                                        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Transcription Failed (${{errorGroups.transcription.length}} episodes)</h4>
+                                        ${{errorGroups.transcription.map(err => `
+                                            <div style="padding: 8px 0; border-bottom: 1px solid #FFDDDD;">
+                                                <div style="font-weight: 500;">${{err.episode}}</div>
+                                                <div style="font-size: 14px; color: #666;">→ Will retry with: Full audio transcription</div>
+                                            </div>
+                                        `).join('')}}
+                                    </div>
+                                ` : ''}}
+                                
+                                ${{errorGroups.other.length > 0 ? `
+                                    <div style="margin-bottom: 24px;">
+                                        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Other Errors (${{errorGroups.other.length}} episodes)</h4>
+                                        ${{errorGroups.other.map(err => `
+                                            <div style="padding: 8px 0; border-bottom: 1px solid #FFDDDD;">
+                                                <div style="font-weight: 500;">${{err.episode}}</div>
+                                                <div style="font-size: 14px; color: #666;">${{err.message}}</div>
+                                            </div>
+                                        `).join('')}}
+                                    </div>
+                                ` : ''}}
+                                
+                                <div style="background: #F0F8FF; border: 1px solid #B3D9FF; border-radius: 8px; padding: 16px; margin-top: 16px;">
+                                    <p style="margin: 0; font-size: 14px; color: #0066CC;">
+                                        <strong>Note:</strong> Retry will use different download sources and strategies. 
+                                        Most failures can be resolved with alternative methods.
+                                    </p>
+                                </div>
+                            </div>
+                        ` : ''}}
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <button class="button secondary" onclick="cancelAndExit()">
+                                Cancel & Exit
+                            </button>
+                            
+                            <div style="display: flex; gap: 12px;">
+                                ${{failed > 0 ? `
+                                    <button class="button secondary" onclick="retryFailedEpisodes()">
+                                        Retry Failed Episodes
+                                    </button>
+                                ` : ''}}
+                                
+                                <button class="button primary" onclick="proceedToEmail()" ${{completed < 20 ? 'disabled' : ''}}>
+                                    ${{completed < 20 ? `Need 20+ Episodes (Have ${{completed}})` : 'Continue to Email →'}}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2082,6 +2236,9 @@ class EpisodeSelector:
                 case 'results':
                     app.innerHTML = renderResults();
                     break;
+                case 'review':
+                    app.innerHTML = renderReview();
+                    break;
                 case 'email_approval':
                     app.innerHTML = renderEmailApproval();
                     break;
@@ -2102,6 +2259,7 @@ class EpisodeSelector:
                 {{ id: 'estimate', label: 'Estimate' }},
                 {{ id: 'processing', label: 'Process' }},
                 {{ id: 'results', label: 'Results' }},
+                {{ id: 'review', label: 'Review' }},
                 {{ id: 'email', label: 'Email' }}
             ];
             
@@ -2377,6 +2535,63 @@ class EpisodeSelector:
                 }}
                 
                 APP_STATE.state = 'results';
+                render();
+            }}
+        }}
+        
+        async function proceedToReview() {{
+            // Update server state
+            try {{
+                await fetch('/api/update-state', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{state: 'review'}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to update server state:', e);
+            }}
+            
+            APP_STATE.state = 'review';
+            render();
+        }}
+        
+        async function retryFailedEpisodes() {{
+            // Get failed episodes from processing status
+            const failedEpisodes = APP_STATE.processingStatus.errors;
+            
+            if (failedEpisodes.length === 0) {{
+                alert('No failed episodes to retry');
+                return;
+            }}
+            
+            // Update UI to show we're retrying
+            APP_STATE.state = 'processing';
+            APP_STATE.processingStatus.startTime = Date.now();
+            APP_STATE.processingStatus.currently_processing = failedEpisodes.map(e => e.episode);
+            render();
+            
+            try {{
+                // Call retry endpoint with failed episodes
+                const response = await fetch('/api/retry-episodes', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        episodes: failedEpisodes,
+                        use_alternative_sources: true
+                    }})
+                }});
+                
+                if (!response.ok) {{
+                    throw new Error('Failed to start retry');
+                }}
+                
+                // Start polling for progress
+                startProgressPolling();
+                
+            }} catch (error) {{
+                console.error('Failed to retry episodes:', error);
+                alert('Failed to start retry. Please try again.');
+                APP_STATE.state = 'review';
                 render();
             }}
         }}
@@ -3742,6 +3957,58 @@ class EpisodeSelector:
                     'episode': 'all',
                     'message': f'Processing error: {str(e)}'
                 })
+    
+    def _run_retry_processing(self, failed_episodes):
+        """Run retry processing for failed episodes with alternative sources"""
+        logger.info(f"Starting retry processing for {len(failed_episodes)} failed episodes")
+        
+        try:
+            # Import necessary modules
+            import asyncio
+            from ..app import RenaissanceWeeklyApp
+            
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run the retry processing
+            app = RenaissanceWeeklyApp()
+            
+            # Extract episode info from failed episodes
+            retry_episodes = []
+            for error_info in failed_episodes:
+                # Parse episode info from error
+                episode_name = error_info.get('episode', '')
+                # You'll need to reconstruct Episode objects or pass IDs
+                # For now, this is a placeholder
+                retry_episodes.append(episode_name)
+            
+            # Run retry with alternative sources
+            results = loop.run_until_complete(
+                app.retry_failed_episodes(retry_episodes, use_alternative_sources=True)
+            )
+            
+            # Update processing status
+            with self._status_lock:
+                self._processing_status['completed'] = results.get('successful', 0)
+                self._processing_status['failed'] = results.get('failed', 0)
+                self._processing_status['errors'] = results.get('errors', [])
+                
+            logger.info(f"Retry processing complete: {results}")
+            
+        except Exception as e:
+            logger.error(f"Error in retry processing: {e}")
+            with self._status_lock:
+                self._processing_status['errors'].append({
+                    'episode': 'Retry Process',
+                    'message': str(e)
+                })
+        finally:
+            # Clean up event loop
+            try:
+                loop.close()
+            except:
+                pass
     
     def _generate_email_preview(self):
         """Generate a preview of the email that will be sent"""

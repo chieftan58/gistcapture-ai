@@ -79,6 +79,12 @@ class PodcastDatabase:
                 transcript TEXT,
                 transcript_source TEXT,
                 summary TEXT,
+                processing_status TEXT DEFAULT 'pending',
+                failure_reason TEXT,
+                retry_count INTEGER DEFAULT 0,
+                retry_strategy TEXT,
+                processing_started_at DATETIME,
+                processing_completed_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(podcast, title, published)
@@ -125,6 +131,12 @@ class PodcastDatabase:
                     transcript TEXT,
                     transcript_source TEXT,
                     summary TEXT,
+                    processing_status TEXT DEFAULT 'pending',
+                    failure_reason TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    retry_strategy TEXT,
+                    processing_started_at DATETIME,
+                    processing_completed_at DATETIME,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(podcast, title, published)
@@ -474,3 +486,105 @@ class PodcastDatabase:
                     
         except sqlite3.Error as e:
             logger.error(f"Database error clearing old episodes: {e}")
+    
+    def update_episode_status(self, episode_id: int, status: str, 
+                            failure_reason: Optional[str] = None,
+                            retry_strategy: Optional[str] = None):
+        """Update the processing status of an episode"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if status in ['downloading', 'transcribing', 'summarizing']:
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, processing_started_at = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, datetime.now().isoformat(), datetime.now().isoformat(), episode_id))
+                elif status == 'completed':
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, processing_completed_at = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, datetime.now().isoformat(), datetime.now().isoformat(), episode_id))
+                elif 'failed' in status:
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, failure_reason = ?, retry_count = retry_count + 1, 
+                            retry_strategy = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, failure_reason, retry_strategy, datetime.now().isoformat(), episode_id))
+                else:
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, datetime.now().isoformat(), episode_id))
+                
+                conn.commit()
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error updating episode status: {e}")
+    
+    def get_failed_episodes(self, days_back: int = 7) -> List[Dict]:
+        """Get episodes that failed processing"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE published >= datetime('now', '-' || ? || ' days')
+                    AND processing_status LIKE '%failed%'
+                    ORDER BY published DESC
+                """, (days_back,))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting failed episodes: {e}")
+            return []
+    
+    def get_episodes_by_status(self, status: str, days_back: int = 7) -> List[Dict]:
+        """Get episodes with a specific processing status"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE published >= datetime('now', '-' || ? || ' days')
+                    AND processing_status = ?
+                    ORDER BY published DESC
+                """, (days_back, status))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting episodes by status: {e}")
+            return []
+    
+    def get_retry_eligible_episodes(self, max_retries: int = 3) -> List[Dict]:
+        """Get failed episodes that haven't exceeded retry limit"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM episodes 
+                    WHERE processing_status LIKE '%failed%'
+                    AND retry_count < ?
+                    ORDER BY published DESC
+                """, (max_retries,))
+                
+                results = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting retry eligible episodes: {e}")
+            return []
