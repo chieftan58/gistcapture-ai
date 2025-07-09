@@ -141,7 +141,7 @@ class AssemblyAITranscriber:
         except Exception as e:
             logger.error(f"AssemblyAI transcription error: {str(e)}", exc_info=True)
             self.failure_count += 1
-                    self.last_failure_time = time.time()
+            self.last_failure_time = time.time()
             return None
             
     async def _upload_audio(self, audio_path: Path) -> Optional[str]:

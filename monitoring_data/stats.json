@@ -1,31 +1,31 @@
 {
   "component_stats": {
     "transcript_fetch": {
-      "total_attempts": 616,
+      "total_attempts": 628,
       "successful": 144,
-      "failed": 472,
-      "last_failure": "2025-07-09T01:24:26.615540",
-      "consecutive_failures": 9
+      "failed": 484,
+      "last_failure": "2025-07-09T02:20:09.007620",
+      "consecutive_failures": 21
     },
     "audio_download": {
-      "total_attempts": 447,
-      "successful": 378,
-      "failed": 69,
-      "last_failure": "2025-07-09T01:01:24.556819",
+      "total_attempts": 461,
+      "successful": 388,
+      "failed": 73,
+      "last_failure": "2025-07-09T02:19:17.605169",
       "consecutive_failures": 0
     },
     "summarization": {
-      "total_attempts": 483,
-      "successful": 356,
+      "total_attempts": 490,
+      "successful": 363,
       "failed": 127,
       "last_failure": "2025-07-02T19:18:39.778480",
       "consecutive_failures": 0
     },
     "audio_transcription": {
-      "total_attempts": 407,
-      "successful": 339,
-      "failed": 68,
-      "last_failure": "2025-07-09T01:01:58.171737",
+      "total_attempts": 416,
+      "successful": 346,
+      "failed": 70,
+      "last_failure": "2025-07-09T02:19:47.856811",
       "consecutive_failures": 0
     }
   }
