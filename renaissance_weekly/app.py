@@ -1120,10 +1120,10 @@ class RenaissanceWeekly:
         # Create a simple fetch callback
         async def fetch_episodes_test(podcast_names, days, progress_callback):
             since_date = datetime.now() - timedelta(days=days)
-            return await self._fetch_episodes_with_retry(
+            return await self._fetch_selected_episodes(
                 podcast_names, 
-                since_date,
-                lambda e: e  # No filtering
+                days,
+                progress_callback
             )
         
         def fetch_callback(podcast_names, days, progress_callback):

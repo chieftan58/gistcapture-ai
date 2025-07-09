@@ -112,7 +112,7 @@ class AssemblyAITranscriber:
                     if waited >= max_wait:
                         logger.error(f"AssemblyAI transcription timeout after {max_wait} seconds")
                         self.failure_count += 1
-                    self.last_failure_time = time.time()
+                        self.last_failure_time = time.time()
                         return None
                         
                     await asyncio.sleep(poll_interval)
