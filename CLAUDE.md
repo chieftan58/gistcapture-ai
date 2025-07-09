@@ -838,3 +838,29 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
   - Example: 4800MB RAM / 300MB = 16, capped at 10
 - **Result**: Prevents OOM while maintaining improved performance
 - **Dynamic Scaling**: Automatically adjusts based on available memory
+
+### Recent Updates (2025-01-09) - Fixed Processing Completion Tracking:
+- **Issue**: 3 episodes stuck as "currently processing" preventing progression to Results page
+- **Root Cause**: 
+  - UI expected `currently_processing` as array but backend used Set
+  - Some episodes weren't properly marked as completed/failed in asyncio.gather
+  - No final verification to catch unaccounted episodes
+- **Fixes**:
+  - Convert Set to array when sending to UI
+  - Added checks in asyncio.gather results processing to ensure all episodes marked
+  - Added final verification step to mark any "stuck" episodes as failed
+  - Enhanced logging to track episode completion
+- **Result**: All episodes now properly accounted for, allowing progression to Results
+
+### Recent Updates (2025-01-09) - Fixed Audio/Transcript Reuse:
+- **Issue**: System re-downloading audio files and re-processing transcripts on subsequent runs
+- **Root Cause**:
+  - DownloadManager wasn't checking for existing audio files before downloading
+  - File naming consistency between download and transcription stages
+- **Fixes**:
+  - Added existing file check in DownloadManager before downloading
+  - Uses same file naming pattern: `YYYYMMDD_podcast_title.mp3`
+  - Validates existing files with hash check
+  - Logs when reusing: "✅ Using existing audio file for [episode]"
+- **Transcript Reuse**: Already working - TranscriptFinder checks database first
+- **Result**: Subsequent runs much faster, reusing cached audio files and transcripts

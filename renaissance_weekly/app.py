@@ -6,6 +6,7 @@ import threading
 import uuid
 import traceback
 import time
+import gc
 from pathlib import Path
 from typing import List, Optional, Dict, Callable, Any
 from datetime import datetime, timedelta, timezone
@@ -43,8 +44,8 @@ class ResourceAwareConcurrencyManager:
         self.correlation_id = correlation_id
         self.base_concurrency = 3
         self.max_concurrency = 10
-        self.min_memory_per_task = 500  # MB for test mode
-        self.min_memory_per_task_full = 1500  # MB for full mode (larger audio files)
+        self.min_memory_per_task = 400  # MB for test mode (increased for safety)
+        self.min_memory_per_task_full = 1200  # MB for full mode (larger audio files)
         self.cpu_multiplier = 1.5
         self.is_full_mode = False
         
@@ -538,27 +539,44 @@ class RenaissanceWeekly:
         # For I/O-bound operations like AssemblyAI, we don't need to limit by CPU cores
         # AssemblyAI handles its own concurrency (32 concurrent) internally
         # But we need to be careful with memory usage when processing audio files
-        # Each audio file being trimmed loads ~100-200MB into memory
+        # Memory requirements vary significantly between test and full mode
         available_memory = get_available_memory()
-        memory_safe_concurrency = min(int(available_memory / 300), 10)  # 300MB per audio task
-        io_concurrency = max(3, memory_safe_concurrency)  # At least 3, up to 10 based on memory
+        
+        if self.current_transcription_mode == 'test':
+            # Test mode: With ffmpeg prioritized, we can be less conservative
+            # ffmpeg streams files without loading them into memory
+            # Only need to account for: trimmed file (15min = ~20MB) + API overhead
+            memory_per_task = 600   # MB - much less needed with proper trimming
+            max_concurrent = 6      # Can increase back up since we're not loading full files
+        else:
+            # Full mode: Complete episodes can be 100-300MB
+            # Need extra buffer for 300MB files + transcription overhead
+            memory_per_task = 1500  # MB - very conservative for large files
+            max_concurrent = 3      # Slightly increased for better performance
+            
+        # Calculate safe concurrency with reasonable safety factor
+        available_for_tasks = available_memory * 0.75  # Keep 25% memory free
+        memory_safe_concurrency = min(int(available_for_tasks / memory_per_task), max_concurrent)
+        io_concurrency = max(2, memory_safe_concurrency)  # Minimum 2 for reasonable speed
         cpu_bound_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Limited by CPU/memory
         
         logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
         logger.info(f"[{self.correlation_id}] 💾 Available memory: {available_memory:.0f}MB")
-        logger.info(f"[{self.correlation_id}] ⚙️  I/O operations concurrency: {io_concurrency} (memory-safe)")
-        logger.info(f"[{self.correlation_id}] 🧮  CPU-bound concurrency: {cpu_bound_concurrency}")
+        logger.info(f"[{self.correlation_id}] 📊 Memory calculations: {memory_per_task}MB per task, {available_for_tasks:.0f}MB available for tasks")
+        logger.info(f"[{self.correlation_id}] ⚙️  Episode concurrency limit: {io_concurrency} (memory-aware)")
         logger.info(f"[{self.correlation_id}] 🎙️  Whisper API limit: {whisper_concurrency_limit} concurrent")
         logger.info(f"[{self.correlation_id}] 🤖  GPT-4 API limit: {gpt4_concurrency_limit} concurrent")
-        logger.info(f"[{self.correlation_id}] 🚀  AssemblyAI: 32 concurrent (handled internally)")
+        logger.info(f"[{self.correlation_id}] 🚀  AssemblyAI: 32 concurrent (managed internally)")
+        logger.info(f"[{self.correlation_id}] 📊  Effective concurrency: Episodes({io_concurrency}), AssemblyAI(32), GPT-4(20)")
         
         # Progress tracker for processing
         process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
         
         # Create semaphores for different types of operations
-        # Use higher concurrency for I/O-bound operations (transcript fetch, AssemblyAI, etc.)
-        general_semaphore = asyncio.Semaphore(io_concurrency)
-        # Separate semaphores for different OpenAI services
+        # CRITICAL: Use the calculated io_concurrency to prevent OOM
+        # This limits total concurrent episode processing based on available memory
+        general_semaphore = asyncio.Semaphore(io_concurrency)  # Use memory-aware limit (2-5)
+        # Store API-specific semaphores for future use if needed
         self._whisper_semaphore = asyncio.Semaphore(whisper_concurrency_limit)
         self._gpt4_semaphore = asyncio.Semaphore(gpt4_concurrency_limit)
         
@@ -589,8 +607,9 @@ class RenaissanceWeekly:
             
             # Process results maintaining order
             for i, result in enumerate(results):
+                episode = selected_episodes[i]
+                
                 if isinstance(result, Exception):
-                    episode = selected_episodes[i]
                     logger.error(
                         f"[{self.correlation_id}] Episode {i+1} ({episode.title[:50]}...) "
                         f"failed with exception: {result}"
@@ -599,10 +618,20 @@ class RenaissanceWeekly:
                         f"process_episode_{i}_{episode.title[:30]}", 
                         result
                     )
+                    # Ensure failed episodes are marked as failed in UI
+                    if hasattr(self, '_progress_callback') and self._progress_callback:
+                        if not any(error.get('episode', '').endswith(episode.title) for error in self._processing_status.get('errors', [])):
+                            self._progress_callback(episode, 'failed', result)
                 elif isinstance(result, dict) and result:
                     summaries.append(result)
                 elif result is None:
                     logger.debug(f"[{self.correlation_id}] Episode {i+1} returned None")
+                    # Ensure episodes that returned None are marked as failed
+                    if hasattr(self, '_progress_callback') and self._progress_callback:
+                        # Check if this episode wasn't already marked as completed or failed
+                        episode_key = f"{episode.podcast}:{episode.title}"
+                        if episode_key in self._processing_status.get('currently_processing', set()):
+                            self._progress_callback(episode, 'failed', Exception("Episode processing returned None"))
             
         finally:
             # Cancel monitoring
@@ -630,6 +659,22 @@ class RenaissanceWeekly:
                 logger.error(
                     f"[{self.correlation_id}] 🚨 Results mismatch: {len(results)} results for {len(selected_episodes)} episodes"
                 )
+            
+            # Fix UI status by marking unprocessed episodes as failed
+            if hasattr(self, '_progress_callback') and self._progress_callback and self._processing_status:
+                with self._status_lock:
+                    unprocessed_count = process_summary['total_items'] - total_processed
+                    if unprocessed_count > 0:
+                        # Find episodes still marked as processing
+                        still_processing = list(self._processing_status.get('currently_processing', set()).copy())
+                        logger.info(f"[{self.correlation_id}] Marking {len(still_processing)} stuck episodes as failed")
+                        
+                        for episode_key in still_processing:
+                            # Find the matching episode
+                            for i, episode in enumerate(selected_episodes):
+                                if f"{episode.podcast}:{episode.title}" == episode_key:
+                                    self._progress_callback(episode, 'failed', Exception("Episode processing incomplete"))
+                                    break
         
         logger.info(
             f"[{self.correlation_id}] ✅ Processing complete: "
@@ -658,6 +703,7 @@ class RenaissanceWeekly:
     async def _process_episode_with_monitoring(self, episode: Episode, semaphore: asyncio.Semaphore, 
                                              progress: ProgressTracker, index: int) -> Optional[Dict]:
         """Process single episode with monitoring and error handling"""
+        # CRITICAL: Acquire semaphore to limit concurrent processing
         async with semaphore:
             # Check for cancellation before starting
             if self._processing_cancelled:
@@ -666,37 +712,37 @@ class RenaissanceWeekly:
                 
             episode_id = f"{episode.podcast}:{episode.title[:30]}"
             episode_timeout = 600  # 10 minutes per episode
-            
+        
             try:
                 await progress.start_item(episode_id)
-                
+            
                 # Update processing status if available (thread-safe)
                 if self._processing_status:
                     with self._status_lock:
                         self._processing_status['currently_processing'].add(f"{episode.podcast}:{episode.title}")
-                
+            
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
                     self._progress_callback(episode, 'processing')
-                
+            
                 # Add retry logic with exponential backoff
                 max_retries = 3
                 last_exception = None
-                
+            
                 for attempt in range(max_retries):
                     try:
                         # Check for cancellation in retry loop
                         if self._processing_cancelled:
                             logger.info(f"[{self.correlation_id}] Processing cancelled during episode {index+1}")
                             return None
-                            
+                        
                         # Add timeout to prevent stuck episodes
                         logger.debug(f"[{self.correlation_id}] Processing episode {index+1}: {episode_id}")
                         summary = await asyncio.wait_for(
                             self.process_episode(episode),
                             timeout=episode_timeout
                         )
-                        
+                    
                         if summary:
                             await progress.complete_item(True)
                             # Update processing status (thread-safe)
@@ -704,11 +750,13 @@ class RenaissanceWeekly:
                                 with self._status_lock:
                                     self._processing_status['completed'] += 1
                                     self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
-                            
+                        
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
                                 self._progress_callback(episode, 'completed')
                             logger.debug(f"[{self.correlation_id}] Episode {index+1} completed successfully")
+                            # Force garbage collection after processing large files
+                            gc.collect()
                             return {"episode": episode, "summary": summary}
                         else:
                             await progress.complete_item(False)
@@ -717,23 +765,23 @@ class RenaissanceWeekly:
                                 with self._status_lock:
                                     self._processing_status['failed'] += 1
                                     self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
-                            
+                        
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
                                 self._progress_callback(episode, 'failed')
                             logger.debug(f"[{self.correlation_id}] Episode {index+1} completed with no summary")
                             return None
-                            
+                        
                     except asyncio.TimeoutError:
-                        logger.error(
-                            f"[{self.correlation_id}] Episode {index+1} ({episode_id}) timed out after {episode_timeout}s"
-                        )
-                        last_exception = asyncio.TimeoutError(f"Episode processing timed out after {episode_timeout}s")
-                        if attempt < max_retries - 1:
-                            logger.warning(f"[{self.correlation_id}] Retrying episode {index+1}...")
-                            continue
-                        else:
-                            raise last_exception
+                            logger.error(
+                                f"[{self.correlation_id}] Episode {index+1} ({episode_id}) timed out after {episode_timeout}s"
+                            )
+                            last_exception = asyncio.TimeoutError(f"Episode processing timed out after {episode_timeout}s")
+                            if attempt < max_retries - 1:
+                                logger.warning(f"[{self.correlation_id}] Retrying episode {index+1}...")
+                                continue
+                            else:
+                                raise last_exception
                     except Exception as e:
                         last_exception = e
                         if attempt < max_retries - 1:
@@ -752,13 +800,13 @@ class RenaissanceWeekly:
                 )
                 await self.exception_aggregator.add_exception(episode_id, e)
                 await progress.complete_item(False)
-                
+            
                 # Update processing status with error (thread-safe)
                 if self._processing_status:
                     with self._status_lock:
                         self._processing_status['failed'] += 1
                         self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
-                
+            
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
                     self._progress_callback(episode, 'failed', e)
@@ -768,7 +816,7 @@ class RenaissanceWeekly:
                                 'episode': f"{episode.podcast}: {episode.title}",
                                 'message': str(e)[:200]  # Limit error message length
                             })
-                
+            
                 return None
     
     async def _monitor_resources(self, initial_concurrency: int):
@@ -826,6 +874,7 @@ class RenaissanceWeekly:
         try:
             # Step 1: Try to find existing transcript
             logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
+            logger.info(f"[{episode_id}]    GUID: {episode.guid or 'None'}")
             transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode)
             
             # If transcript found, validate it immediately
@@ -1515,8 +1564,13 @@ class RenaissanceWeekly:
             save_task = asyncio.create_task(save_state_periodically())
             
             try:
-                # Run downloads
-                result = await download_manager.download_episodes(episodes)
+                # Build podcast configs mapping from imported PODCAST_CONFIGS
+                podcast_configs = {}
+                for config in PODCAST_CONFIGS:
+                    podcast_configs[config['name']] = config
+                
+                # Run downloads with podcast configs
+                result = await download_manager.download_episodes(episodes, podcast_configs)
                 
                 logger.info(
                     f"[{self.correlation_id}] Download complete: "

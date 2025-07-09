@@ -13,6 +13,7 @@ from .transcripts.transcriber import AudioTranscriber
 from .fetchers.audio_sources import AudioSourceFinder
 from .utils.logging import get_logger
 from .utils.helpers import exponential_backoff_with_jitter
+from .config import TEMP_DIR
 
 logger = get_logger(__name__)
 
@@ -117,10 +118,14 @@ class DownloadManager:
         self._cancelled = True
         logger.info("Download manager cancelled")
         
-    async def download_episodes(self, episodes: List[Episode]) -> Dict[str, Any]:
+    async def download_episodes(self, episodes: List[Episode], podcast_configs: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
         """Download multiple episodes concurrently"""
         self.stats['total'] = len(episodes)
         self.stats['startTime'] = time.time()
+        
+        # Store podcast configs for audio finder
+        if podcast_configs:
+            self.podcast_configs = podcast_configs
         
         # Initialize status for each episode
         for episode in episodes:
@@ -153,6 +158,38 @@ class DownloadManager:
             if self._cancelled:
                 return None
                 
+            # First check if file already exists
+            from .config import AUDIO_DIR
+            from .utils.helpers import slugify, calculate_file_hash, validate_audio_file_smart
+            
+            # Ensure audio directory exists
+            AUDIO_DIR.mkdir(exist_ok=True)
+            
+            date_str = episode.published.strftime('%Y%m%d')
+            safe_podcast = slugify(episode.podcast)[:30]
+            safe_title = slugify(episode.title)[:50]
+            audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
+            
+            # Check if already exists and is valid
+            if audio_file.exists():
+                correlation_id = f"download_{ep_id[:8]}"
+                if validate_audio_file_smart(audio_file, correlation_id, episode.audio_url):
+                    file_hash = calculate_file_hash(audio_file)
+                    logger.info(f"✅ Using existing audio file for {episode.title}")
+                    logger.info(f"   Path: {audio_file}")
+                    logger.info(f"   Size: {audio_file.stat().st_size / 1024 / 1024:.1f} MB")
+                    logger.info(f"   Hash: {file_hash[:8]}...")
+                    
+                    # Mark as successful immediately
+                    status.status = 'success'
+                    status.audio_path = audio_file
+                    self.stats['downloaded'] += 1
+                    self._report_progress()
+                    return audio_file
+                else:
+                    logger.warning(f"Existing file invalid for {episode.title}, re-downloading")
+                    audio_file.unlink()
+                
             # Update status
             status.status = 'downloading'
             self._report_progress()
@@ -173,7 +210,17 @@ class DownloadManager:
                     
             # Try multiple audio sources
             try:
-                sources = await self.audio_finder.find_all_audio_sources(episode)
+                # Get podcast config for this episode
+                podcast_config = None
+                if hasattr(self, 'podcast_configs') and episode.podcast in self.podcast_configs:
+                    podcast_config = self.podcast_configs[episode.podcast]
+                    # Set apple_podcast_id on episode if not already set
+                    if not episode.apple_podcast_id and 'apple_id' in podcast_config:
+                        episode.apple_podcast_id = podcast_config['apple_id']
+                        logger.info(f"Set apple_podcast_id={episode.apple_podcast_id} for {episode.podcast}")
+                
+                sources = await self.audio_finder.find_all_audio_sources(episode, podcast_config)
+                logger.info(f"Found {len(sources)} audio sources for {episode.title}")
                 
                 for i, source_url in enumerate(sources):
                     if self._cancelled:
@@ -196,6 +243,13 @@ class DownloadManager:
                         'original_rss',
                         status
                     )
+                    if audio_path:
+                        return audio_path
+                        
+                # Final fallback: Try yt-dlp YouTube download
+                if not self._cancelled:
+                    logger.info(f"🎥 All sources failed, trying yt-dlp YouTube fallback for {episode.title}")
+                    audio_path = await self._try_ytdlp_fallback(episode, status)
                     if audio_path:
                         return audio_path
                         
@@ -259,16 +313,111 @@ class DownloadManager:
             
     async def _try_browser_download(self, episode: Episode, 
                                   status: EpisodeDownloadStatus) -> Optional[Path]:
-        """Try browser-based download (placeholder - not implemented yet)"""
-        attempt = DownloadAttempt(episode.audio_url or 'unknown', 'browser_automation')
+        """Try browser-based download using Playwright"""
+        if not episode.audio_url:
+            return None
+            
+        attempt = DownloadAttempt(episode.audio_url, 'browser_automation')
         status.add_attempt(attempt)
         
-        # Browser download not implemented yet
-        error_msg = "Browser automation not implemented yet"
-        attempt.complete(False, error_msg)
-        status.last_error = error_msg
-        logger.warning(f"Browser download requested for {episode.title} but not implemented")
-        return None
+        try:
+            logger.info(f"🌐 Attempting browser-based download for {episode.title}")
+            
+            # Import browser downloader
+            try:
+                from ..transcripts.browser_downloader import BrowserDownloader, PLAYWRIGHT_AVAILABLE
+                
+                if not PLAYWRIGHT_AVAILABLE:
+                    error_msg = "Playwright not installed. Run: playwright install chromium"
+                    attempt.complete(False, error_msg)
+                    status.last_error = error_msg
+                    logger.warning(error_msg)
+                    return None
+                    
+            except ImportError as e:
+                error_msg = f"Failed to import browser downloader: {e}"
+                attempt.complete(False, error_msg)
+                status.last_error = error_msg
+                logger.error(error_msg)
+                return None
+            
+            # Create temporary file path
+            temp_file = Path(TEMP_DIR) / f"browser_download_{episode.title[:20]}_{int(time.time())}.mp3"
+            
+            # Use browser downloader
+            async with BrowserDownloader() as downloader:
+                success = await downloader.download_with_browser(
+                    episode.audio_url,
+                    str(temp_file),
+                    timeout=120
+                )
+                
+                if success and temp_file.exists():
+                    attempt.complete(True)
+                    status.status = 'success'
+                    status.audio_path = temp_file
+                    logger.info(f"✅ Browser download successful for {episode.title}")
+                    return temp_file
+                else:
+                    error_msg = "Browser download failed or file not created"
+                    attempt.complete(False, error_msg)
+                    status.last_error = error_msg
+                    return None
+                    
+        except Exception as e:
+            error_msg = f"Browser download error: {str(e)}"
+            attempt.complete(False, error_msg)
+            status.last_error = error_msg
+            logger.error(f"Browser download failed for {episode.title}: {e}")
+            return None
+            
+    async def _try_ytdlp_fallback(self, episode: Episode, 
+                                  status: EpisodeDownloadStatus) -> Optional[Path]:
+        """Try downloading from YouTube using yt-dlp as final fallback"""
+        attempt = DownloadAttempt("youtube_search", 'ytdlp_fallback')
+        status.add_attempt(attempt)
+        
+        try:
+            logger.info(f"🎥 Attempting yt-dlp YouTube fallback for {episode.title}")
+            
+            # Import YtDlpDownloader
+            try:
+                from .fetchers.fallback_downloader import YtDlpDownloader
+            except ImportError as e:
+                error_msg = f"Failed to import YtDlpDownloader: {e}"
+                attempt.complete(False, error_msg)
+                status.last_error = error_msg
+                logger.error(error_msg)
+                return None
+            
+            # Create temporary file path
+            temp_file = Path(TEMP_DIR) / f"ytdlp_download_{episode.title[:20]}_{int(time.time())}.mp3"
+            
+            # Try to find and download from YouTube
+            success = await YtDlpDownloader.find_and_download_youtube(
+                episode.title,
+                episode.podcast,
+                temp_file
+            )
+            
+            if success and temp_file.exists():
+                attempt.complete(True)
+                status.status = 'success'
+                status.audio_path = temp_file
+                logger.info(f"✅ yt-dlp YouTube download successful for {episode.title}")
+                return temp_file
+            else:
+                error_msg = "yt-dlp YouTube download failed or file not created"
+                attempt.complete(False, error_msg)
+                status.last_error = error_msg
+                return None
+                
+        except Exception as e:
+            error_msg = f"yt-dlp YouTube download error: {str(e)}"
+            attempt.complete(False, error_msg)
+            status.last_error = error_msg
+            logger.error(f"yt-dlp YouTube download failed for {episode.title}: {e}")
+            return None
             
     def _report_progress(self):
         """Report progress to callback if available"""
@@ -330,7 +479,8 @@ class DownloadManager:
                 'Apple Podcasts API',
                 'Spotify API',
                 'CDN direct access',
-                'Browser automation'
+                'Browser automation',
+                'yt-dlp YouTube fallback'
             ],
             'current_status': status.status,
             'last_error': status.last_error

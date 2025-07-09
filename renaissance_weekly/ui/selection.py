@@ -212,11 +212,16 @@ class EpisodeSelector:
                                 'errors': []
                             }
                         # Make a copy to avoid modification during serialization
+                        currently_processing = status.get('currently_processing', [])
+                        # Convert set to list if needed
+                        if isinstance(currently_processing, set):
+                            currently_processing = list(currently_processing)
+                        
                         status_copy = {
                             'total': status.get('total', 0),
                             'completed': status.get('completed', 0),
                             'failed': status.get('failed', 0),
-                            'currently_processing': list(status.get('currently_processing', [])),
+                            'currently_processing': currently_processing,
                             'errors': list(status.get('errors', []))
                         }
                     self._send_json(status_copy)
@@ -824,6 +829,16 @@ class EpisodeSelector:
         function renderLoading() {{
             // Sort podcasts alphabetically
             const podcasts = Array.from(APP_STATE.selectedPodcasts).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            
+            // Calculate time elapsed
+            let timeElapsed = '';
+            if (APP_STATE.fetchStartTime) {{
+                const elapsed = Math.floor((Date.now() - APP_STATE.fetchStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                timeElapsed = minutes > 0 ? `${{minutes}}m ${{seconds}}s` : `${{seconds}}s`;
+            }}
+            
             return `
                 <div class="header">
                     <div class="logo">RW</div>
@@ -835,6 +850,8 @@ class EpisodeSelector:
                         <div class="loading-spinner"></div>
                         <h2 class="loading-title">Fetching episodes</h2>
                         <p class="loading-status" id="status">Connecting to feeds...</p>
+                        
+                        <p class="time-elapsed">Time elapsed: ${{timeElapsed || '0s'}}</p>
                         
                         <div class="progress-track">
                             <div class="progress-fill" id="progress"></div>
@@ -1118,7 +1135,7 @@ class EpisodeSelector:
                         <div class="estimate-breakdown">
                             <h3>Cost Breakdown</h3>
                             <div class="breakdown-item">
-                                <span>Audio Transcription (Whisper API)</span>
+                                <span>Audio Transcription</span>
                                 <span>$${{(episodeCount * 0.006 * (mode === 'test' ? 15 : 60)).toFixed(2)}}</span>
                             </div>
                             <div class="breakdown-item">
@@ -1151,10 +1168,19 @@ class EpisodeSelector:
         function renderDownload() {{
             const downloadStatus = APP_STATE.downloadStatus || {{}};
             const {{ total = 0, downloaded = 0, failed = 0, retrying = 0, episodeDetails = {{}} }} = downloadStatus;
+            const remaining = total - downloaded - failed - retrying;
+            const processedCount = downloaded + failed; // Both downloaded and failed count as processed
             
-            // Group failed episodes by error type
-            const failedEpisodes = Object.entries(episodeDetails).filter(([_, detail]) => detail.status === 'failed');
-            const retryingEpisodes = Object.entries(episodeDetails).filter(([_, detail]) => detail.status === 'retrying');
+            // Sort episodes: Failed first, then retrying, then in queue, then downloaded
+            const sortedEpisodes = Object.entries(episodeDetails).sort(([, a], [, b]) => {{
+                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'pending': 2, 'queued': 2, 'downloaded': 3 }};
+                return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
+            }});
+            
+            // Group episodes by status
+            const failedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'failed');
+            const inQueueEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'pending' || detail.status === 'queued' || detail.status === 'retrying');
+            const downloadedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'downloaded');
             
             return `
                 <div class="header">
@@ -1167,76 +1193,62 @@ class EpisodeSelector:
                     
                     <div class="processing-content">
                         <div class="status-overview">
-                            <div class="status-card success">
-                                <div class="status-icon">✓</div>
+                            <div class="status-card">
                                 <div class="status-count">${{downloaded}}</div>
                                 <div class="status-label">Downloaded</div>
                             </div>
                             
-                            <div class="status-card warning">
-                                <div class="status-icon">↻</div>
+                            <div class="status-card">
+                                <div class="status-count">${{remaining}}</div>
+                                <div class="status-label">Remaining</div>
+                            </div>
+                            
+                            <div class="status-card">
                                 <div class="status-count">${{retrying}}</div>
                                 <div class="status-label">Retrying</div>
                             </div>
                             
-                            <div class="status-card error">
-                                <div class="status-icon">✗</div>
+                            <div class="status-card">
                                 <div class="status-count">${{failed}}</div>
                                 <div class="status-label">Failed</div>
                             </div>
                         </div>
                         
                         <div class="progress-track">
-                            <div class="progress-fill" style="width: ${{total > 0 ? (downloaded / total * 100) : 0}}%"></div>
+                            <div class="progress-fill" style="width: ${{total > 0 ? (processedCount / total * 100) : 0}}%"></div>
                         </div>
                         
                         <div class="download-details">
-                            ${{retryingEpisodes.length > 0 ? `
-                                <div class="retrying-section">
-                                    <h3>⚠️ Retrying (${{retryingEpisodes.length}})</h3>
-                                    ${{retryingEpisodes.map(([episodeId, attempt]) => `
-                                        <div class="download-item retrying">
-                                            <div class="episode-info">
-                                                <div class="episode-title">${{attempt.episode}}</div>
-                                                <div class="attempt-info">
-                                                    Attempt ${{attempt.attemptCount}} - Trying: ${{attempt.currentStrategy}}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `).join('')}}
+                            ${{failedEpisodes.length > 0 ? `
+                                <div class="episode-section">
+                                    <h3>Failed Episodes</h3>
+                                    <div class="episode-group">
+                                        ${{failedEpisodes.map(([episodeId, detail]) => {{
+                                            return renderDownloadItem(episodeId, detail);
+                                        }}).join('')}}
+                                    </div>
                                 </div>
                             ` : ''}}
                             
-                            ${{failedEpisodes.length > 0 ? `
-                                <div class="failed-section">
-                                    <h3>❌ Failed Episodes (${{failedEpisodes.length}})</h3>
-                                    ${{failedEpisodes.map(([episodeId, attempt]) => `
-                                        <div class="download-item failed expandable" onclick="toggleDownloadDetails('${{episodeId}}')">
-                                            <div class="episode-info">
-                                                <div class="episode-title">${{attempt.episode}}</div>
-                                                <div class="error-message">${{attempt.lastError}}</div>
-                                            </div>
-                                            <div class="expand-icon">▼</div>
-                                        </div>
-                                        <div id="details-${{episodeId}}" class="download-details-panel" style="display: none;">
-                                            <div class="attempt-history">
-                                                <h4>Attempt History:</h4>
-                                                ${{(attempt.history || []).map(h => `
-                                                    <div class="history-item">
-                                                        <span class="timestamp">${{new Date(h.timestamp).toLocaleTimeString()}}</span>
-                                                        <span class="strategy">${{h.strategy}}</span>
-                                                        <span class="error">${{h.error}}</span>
-                                                    </div>
-                                                `).join('')}}
-                                            </div>
-                                            <div class="troubleshoot-actions">
-                                                <button class="button secondary" onclick="viewDetailedLogs('${{episodeId}}')">View Logs</button>
-                                                <button class="button secondary" onclick="tryManualUrl('${{episodeId}}')">Manual URL</button>
-                                                <button class="button secondary" onclick="tryBrowserDownload('${{episodeId}}')">Try Browser</button>
-                                                <button class="button secondary" onclick="enableDebugMode('${{episodeId}}')">Debug Mode</button>
-                                            </div>
-                                        </div>
-                                    `).join('')}}
+                            ${{inQueueEpisodes.length > 0 ? `
+                                <div class="episode-section">
+                                    <h3>In Queue</h3>
+                                    <div class="episode-group">
+                                        ${{inQueueEpisodes.map(([episodeId, detail]) => {{
+                                            return renderDownloadItem(episodeId, detail);
+                                        }}).join('')}}
+                                    </div>
+                                </div>
+                            ` : ''}}
+                            
+                            ${{downloadedEpisodes.length > 0 ? `
+                                <div class="episode-section">
+                                    <h3>Downloaded</h3>
+                                    <div class="episode-group">
+                                        ${{downloadedEpisodes.map(([episodeId, detail]) => {{
+                                            return renderDownloadItem(episodeId, detail);
+                                        }}).join('')}}
+                                    </div>
                                 </div>
                             ` : ''}}
                         </div>
@@ -1270,30 +1282,68 @@ class EpisodeSelector:
                     .status-card {{
                         background: #f8f8f8;
                         border-radius: 12px;
-                        padding: 24px;
+                        padding: 24px 32px;
                         text-align: center;
                         min-width: 120px;
+                        border: 1px solid #e0e0e0;
+                        transition: all 0.2s ease;
                     }}
                     
-                    .status-card.success {{ background: #e8f5e9; }}
-                    .status-card.warning {{ background: #fff3e0; }}
-                    .status-card.error {{ background: #ffebee; }}
-                    
-                    .status-icon {{
-                        font-size: 32px;
-                        margin-bottom: 8px;
+                    .status-card:hover {{
+                        background: #f0f0f0;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
                     }}
                     
                     .status-count {{
-                        font-size: 36px;
-                        font-weight: 600;
-                        margin-bottom: 4px;
+                        font-size: 48px;
+                        font-weight: 700;
+                        margin-bottom: 8px;
+                        color: #333;
+                    }}
+                    
+                    .status-label {{
+                        font-size: 14px;
+                        color: #666;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    }}
+                    
+                    .progress-track {{
+                        width: 100%;
+                        height: 8px;
+                        background: #e0e0e0;
+                        border-radius: 4px;
+                        overflow: hidden;
+                        margin-bottom: 32px;
+                    }}
+                    
+                    .progress-fill {{
+                        height: 100%;
+                        background: #333;
+                        border-radius: 4px;
+                        transition: width 0.5s ease;
                     }}
                     
                     .download-details {{
                         margin-top: 32px;
-                        max-height: 400px;
+                    }}
+                    
+                    .episode-section {{
+                        margin-bottom: 32px;
+                    }}
+                    
+                    .episode-section h3 {{
+                        font-size: 16px;
+                        font-weight: 600;
+                        margin-bottom: 16px;
+                        color: #333;
+                    }}
+                    
+                    .episode-group {{
+                        max-height: 300px;
                         overflow-y: auto;
+                        padding-right: 8px;
                     }}
                     
                     .download-item {{
@@ -1308,14 +1358,70 @@ class EpisodeSelector:
                         align-items: center;
                     }}
                     
+                    .download-item.success {{
+                        border-color: #ddd;
+                        background: #fafafa;
+                        cursor: default;
+                    }}
+                    
+                    .download-item.queued {{
+                        border-color: #e0e0e0;
+                        background: white;
+                        cursor: default;
+                    }}
+                    
                     .download-item.retrying {{
-                        border-color: #ff9800;
-                        background: #fff8e1;
+                        border-color: #999;
+                        background: #f9f9f9;
+                        border-left: 4px solid #666;
+                        cursor: default;
                     }}
                     
                     .download-item.failed {{
-                        border-color: #f44336;
-                        background: #ffebee;
+                        border-color: #666;
+                        background: #f5f5f5;
+                        border-left: 4px solid #333;
+                    }}
+                    
+                    .status-badge {{
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        flex-shrink: 0;
+                        padding: 6px 12px;
+                        background: #f0f0f0;
+                        border-radius: 20px;
+                        font-size: 13px;
+                        font-weight: 500;
+                    }}
+                    
+                    .download-item.success .status-badge {{
+                        background: #e8e8e8;
+                        color: #333;
+                    }}
+                    
+                    .download-item.queued .status-badge {{
+                        background: #f5f5f5;
+                        color: #666;
+                    }}
+                    
+                    .download-item.retrying .status-badge {{
+                        background: #efefef;
+                        color: #444;
+                    }}
+                    
+                    .download-item.failed .status-badge {{
+                        background: #e0e0e0;
+                        color: #222;
+                    }}
+                    
+                    .status-icon {{
+                        font-size: 16px;
+                    }}
+                    
+                    .episodes-list {{
+                        max-height: 500px;
+                        overflow-y: auto;
                     }}
                     
                     .download-details-panel {{
@@ -1357,6 +1463,15 @@ class EpisodeSelector:
             const progress = total > 0 ? ((completed + failed) / total * 100) : 0;
             const remaining = total - completed - failed;
             const estimatedMinutesRemaining = remaining * (APP_STATE.configuration.transcription_mode === 'test' ? 0.5 : 5);
+            
+            // Calculate time elapsed
+            let timeElapsed = '';
+            if (APP_STATE.processingStartTime) {{
+                const elapsed = Math.floor((Date.now() - APP_STATE.processingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                timeElapsed = minutes > 0 ? `${{minutes}}m ${{seconds}}s` : `${{seconds}}s`;
+            }}
             
             // Get selected episodes for display
             const selectedEpisodesArray = [];
@@ -1409,6 +1524,12 @@ class EpisodeSelector:
                                     Math.round(estimatedMinutesRemaining) + ' min' : 
                                     Math.round(estimatedMinutesRemaining / 60) + ' hr'}}</span>
                             </div>
+                            ${{timeElapsed ? `
+                                <div class="stat-row">
+                                    <span class="stat-label">Time elapsed:</span>
+                                    <span class="stat-value">${{timeElapsed}}</span>
+                                </div>
+                            ` : ''}}
                         </div>
                         
                         <div class="progress-actions">
@@ -2270,6 +2391,7 @@ class EpisodeSelector:
             if (response.ok) {{
                 // Store the selected podcast names immediately so they're available in all subsequent states
                 APP_STATE.selectedPodcastNames = Array.from(APP_STATE.selectedPodcasts);
+                APP_STATE.fetchStartTime = Date.now();  // Track when fetching started
                 APP_STATE.state = 'loading';
                 render();
                 startStatusPolling();
@@ -2446,6 +2568,18 @@ class EpisodeSelector:
                     const progress = Math.max(5, ((status.progress + 1) / status.total) * 100);
                     document.getElementById('progress').style.width = progress + '%';
                     
+                    // Update time elapsed
+                    if (APP_STATE.fetchStartTime) {{
+                        const elapsed = Math.floor((Date.now() - APP_STATE.fetchStartTime) / 1000);
+                        const minutes = Math.floor(elapsed / 60);
+                        const seconds = elapsed % 60;
+                        const timeElapsed = minutes > 0 ? `${{minutes}}m ${{seconds}}s` : `${{seconds}}s`;
+                        const timeElapsedElement = document.querySelector('.time-elapsed');
+                        if (timeElapsedElement) {{
+                            timeElapsedElement.textContent = `Time elapsed: ${{timeElapsed}}`;
+                        }}
+                    }}
+                    
                     if (status.current_podcast) {{
                         document.getElementById('status').textContent = `Fetching from ${{status.current_podcast}}...`;
                         
@@ -2532,6 +2666,48 @@ class EpisodeSelector:
                     console.error('Status polling error:', e);
                 }}
             }}, 1000);
+        }}
+        
+        // Helper function for rendering download items
+        function renderDownloadItem(episodeId, detail) {{
+            const statusClass = detail.status === 'downloaded' ? 'success' : (detail.status === 'failed' ? 'failed' : (detail.status === 'retrying' ? 'retrying' : 'queued'));
+            const statusText = detail.status === 'downloaded' ? 'Downloaded' : (detail.status === 'failed' ? 'Failed' : (detail.status === 'retrying' ? 'Downloading...' : 'In Queue'));
+            const statusIcon = detail.status === 'downloaded' ? '✓' : (detail.status === 'failed' ? '✗' : (detail.status === 'retrying' ? '↻' : '•'));
+            
+            return `
+                <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
+                     ${{detail.status === 'failed' ? `onclick="toggleDownloadDetails('${{episodeId}}')"` : ''}}>
+                    <div class="episode-info">
+                        <div class="episode-title">${{detail.episode || detail.title || episodeId}}</div>
+                        ${{detail.status === 'failed' ? `<div class="error-message">${{detail.lastError}}</div>` : ''}}
+                        ${{detail.status === 'retrying' ? `<div class="attempt-info">Attempt ${{detail.attemptCount}} - ${{detail.currentStrategy}}</div>` : ''}}
+                    </div>
+                    <div class="status-badge">
+                        <span class="status-icon">${{statusIcon}}</span>
+                        <span class="status-text">${{statusText}}</span>
+                    </div>
+                </div>
+                ${{detail.status === 'failed' ? `
+                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: none;">
+                        <div class="attempt-history">
+                            <h4>Attempt History:</h4>
+                            ${{(detail.history || []).map(h => `
+                                <div class="history-item">
+                                    <span class="timestamp">${{new Date(h.timestamp).toLocaleTimeString()}}</span>
+                                    <span class="strategy">${{h.strategy}}</span>
+                                    <span class="error">${{h.error}}</span>
+                                </div>
+                            `).join('')}}
+                        </div>
+                        <div class="troubleshoot-actions">
+                            <button class="button secondary" onclick="viewDetailedLogs('${{episodeId}}')">View Logs</button>
+                            <button class="button secondary" onclick="tryManualUrl('${{episodeId}}')">Manual URL</button>
+                            <button class="button secondary" onclick="tryBrowserDownload('${{episodeId}}')">Try Browser</button>
+                            <button class="button secondary" onclick="enableDebugMode('${{episodeId}}')">Debug Mode</button>
+                        </div>
+                    </div>
+                ` : ''}}
+            `;
         }}
         
         // Main render function
@@ -3097,6 +3273,9 @@ class EpisodeSelector:
             
             // Update selected episodes to only include successful downloads
             APP_STATE.selectedEpisodes = successfulEpisodes;
+            
+            // Track when processing started
+            APP_STATE.processingStartTime = Date.now();
             
             // Move to processing stage
             APP_STATE.state = 'processing';
@@ -3855,6 +4034,13 @@ class EpisodeSelector:
             font-size: 16px;
             color: var(--gray-600);
             margin-bottom: 48px;
+        }
+        
+        .time-elapsed {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-top: -32px;
+            margin-bottom: 32px;
         }
         
         .progress-track {

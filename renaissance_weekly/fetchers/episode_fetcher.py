@@ -217,7 +217,11 @@ class ReliableEpisodeFetcher:
         methods_tried = []
         
         # Method 1: Try configured RSS feeds (with cache)
-        if "rss_feeds" in podcast_config and podcast_config["rss_feeds"]:
+        # Check if RSS should be skipped based on retry_strategy
+        retry_strategy = podcast_config.get("retry_strategy", {})
+        skip_rss = retry_strategy.get("skip_rss", False)
+        
+        if "rss_feeds" in podcast_config and podcast_config["rss_feeds"] and not skip_rss:
             methods_tried.append("RSS feeds")
             
             # Use cached feeds if available
@@ -228,6 +232,8 @@ class ReliableEpisodeFetcher:
             )
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
+        elif skip_rss:
+            logger.info(f"[{correlation_id}]   ⏭️ Skipping RSS feeds per retry_strategy configuration")
         
         # Method 2: Try Apple Podcasts (always try this)
         if "apple_id" in podcast_config and podcast_config["apple_id"]:
@@ -427,7 +433,9 @@ class ReliableEpisodeFetcher:
                 headers = {'User-Agent': ua}
                 
                 # Universal streaming approach with size limit
-                response = session.get(feed_url, timeout=20, headers=headers, allow_redirects=True, stream=True)
+                # Special handling for Tim Ferriss - known to be very slow
+                timeout = 60 if 'tim-ferriss' in feed_url.lower() else 20
+                response = session.get(feed_url, timeout=timeout, headers=headers, allow_redirects=True, stream=True)
                 
                 if response.status_code == 200:
                     # Smart RSS parsing - only download what we need

@@ -98,7 +98,8 @@ podcasts:
             "rss_feeds": list(set(rss_feeds)),  # Deduplicate
             "website": podcast.get('website'),
             "force_apple": podcast.get('force_apple', True),
-            "has_transcripts": podcast.get('has_transcripts', False)
+            "has_transcripts": podcast.get('has_transcripts', False),
+            "retry_strategy": podcast.get('retry_strategy', {})  # Load retry strategy
         }
         podcast_configs.append(config)
     

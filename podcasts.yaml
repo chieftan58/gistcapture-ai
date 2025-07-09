@@ -18,6 +18,10 @@ podcasts:
     apple_id: "1502871393"
     rss_feed: "https://feeds.megaphone.fm/all-in-with-chamath-jason-sacks-friedberg"
     search_term: "All-In Podcast Chamath Jason Sacks Friedberg"
+    retry_strategy:
+      primary: "apple_podcasts"
+      fallback: "youtube_search"
+      youtube_channel: "UCESLZhusAkFfsNsApnjF_Cg"  # All-In official channel
     
   - name: "American Optimist"
     apple_id: "1573141757"
@@ -25,9 +29,10 @@ podcasts:
     rss_feed: "https://api.substack.com/feed/podcast/1231981.rss"
     website: "https://americanoptimist.substack.com"
     retry_strategy:
-      primary: "youtube_search"
-      fallback: "browser_automation"
+      primary: "apple_podcasts"
+      fallback: "youtube_search"
       skip_rss: true
+      force_apple: true  # Always use Apple Podcasts for audio URLs
     
   - name: "BG2 Pod"
     apple_id: "1727278168"
@@ -48,6 +53,8 @@ podcasts:
     retry_strategy:
       primary: "youtube_search"
       fallback: "apple_podcasts"
+      skip_rss: true  # Skip Substack RSS due to Cloudflare
+      youtube_channel: "UCCaEbmz8gvyJHXFR42uSbXQ"  # Dwarkesh Patel channel
     
   - name: "Forward Guidance"
     apple_id: "1592743188"
@@ -106,6 +113,10 @@ podcasts:
     apple_id: "1400828889"
     rss_feed: "https://peterattiadrive.libsyn.com/rss"
     search_term: "The Drive Peter Attia"
+    retry_strategy:
+      primary: "apple_podcasts"
+      fallback: "cdn_alternatives"
+      extended_timeout: true  # Libsyn can be slow
     
   - name: "Tim Ferriss"
     apple_id: "863897795"

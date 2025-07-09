@@ -13,6 +13,7 @@ import shutil
 from urllib.parse import urlparse, parse_qs
 import uuid
 import tempfile
+import gc
 
 from ..models import Episode
 from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
@@ -41,6 +42,14 @@ class AudioTranscriber:
         self._session_lock = asyncio.Lock()
         self.temp_files = set()  # Track temp files for cleanup
         self._current_mode = 'test'  # Default mode, updated per episode
+        
+        # Check for ffmpeg availability (critical for memory-efficient trimming)
+        import shutil
+        self.ffmpeg_available = shutil.which('ffmpeg') is not None
+        if self.ffmpeg_available:
+            logger.info("✅ ffmpeg available for memory-efficient audio trimming")
+        else:
+            logger.warning("⚠️  ffmpeg NOT found! Audio trimming will use more memory. Install with: sudo apt-get install ffmpeg")
         
         # Initialize AssemblyAI transcriber if API key is available
         self.assemblyai_transcriber = None
@@ -212,6 +221,9 @@ class AudioTranscriber:
                         logger.info(f"[{correlation_id}] 🗑️  Deleted audio file immediately to save disk space")
                 except Exception as e:
                     logger.debug(f"[{correlation_id}] Could not delete audio file immediately: {e}")
+            
+            # Force garbage collection after processing large audio files
+            gc.collect()
             
             return transcript
             
@@ -1169,12 +1181,15 @@ class AudioTranscriber:
                 stdout, stderr = await process.communicate()
                 
                 if process.returncode == 0 and trimmed_file.exists():
-                    logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully")
+                    logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully with ffmpeg")
                     return trimmed_file
                 else:
-                    logger.error(f"[{correlation_id}] ffmpeg trim failed: {stderr.decode()}")
+                    logger.error(f"[{correlation_id}] ffmpeg trim failed (code {process.returncode}): {stderr.decode()}")
+                    logger.info(f"[{correlation_id}] Attempting pydub fallback...")
+            else:
+                logger.warning(f"[{correlation_id}] ffmpeg not found, using pydub fallback")
             
-            # Fallback: use pydub
+            # Fallback: use pydub (with size check to prevent OOM)
             return await self._trim_with_pydub(audio_file, max_seconds, correlation_id)
                 
         except Exception as e:
@@ -1185,11 +1200,18 @@ class AudioTranscriber:
     async def _trim_with_pydub(self, audio_file: Path, max_seconds: int, correlation_id: str) -> Optional[Path]:
         """Fallback: trim audio using pydub"""
         try:
+            # Check file size first to avoid OOM
+            file_size_mb = audio_file.stat().st_size / (1024 * 1024)
+            if file_size_mb > 100:  # 100MB threshold
+                logger.warning(f"[{correlation_id}] File too large for pydub ({file_size_mb:.1f}MB), skipping pydub trim")
+                # Return original file rather than risk OOM
+                return audio_file
+            
             from pydub import AudioSegment
             
-            logger.info(f"[{correlation_id}] Using pydub for trimming...")
+            logger.info(f"[{correlation_id}] Using pydub for trimming ({file_size_mb:.1f}MB file)...")
             
-            # Load audio
+            # Load audio - this is where OOM can happen with large files
             audio = AudioSegment.from_file(str(audio_file))
             
             # Trim to max duration
@@ -1200,7 +1222,12 @@ class AudioTranscriber:
             self.temp_files.add(str(trimmed_file))
             trimmed.export(str(trimmed_file), format="mp3")
             
-            logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully")
+            # Clean up the large audio object
+            del audio
+            del trimmed
+            gc.collect()  # Force garbage collection after pydub operations
+            
+            logger.info(f"[{correlation_id}] ✅ Audio trimmed successfully with pydub")
             return trimmed_file
             
         except Exception as e:

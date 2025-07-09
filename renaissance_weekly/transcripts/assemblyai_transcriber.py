@@ -34,7 +34,8 @@ class AssemblyAITranscriber:
         self.last_failure_time = None
         
         # Semaphore for controlling concurrency (AssemblyAI supports high concurrency)
-        self.semaphore = asyncio.Semaphore(32)  # 32 concurrent transcriptions
+        # Dynamic based on mode - will be updated by app.py if needed
+        self.semaphore = asyncio.Semaphore(10)  # Default: balanced for test mode
         
         # Track active jobs for monitoring
         self.active_jobs = {}
@@ -156,6 +157,43 @@ class AssemblyAITranscriber:
     async def _trim_audio(self, audio_path: Path, max_minutes: int) -> Optional[Path]:
         """Trim audio file to specified duration"""
         try:
+            # Check file size first to avoid OOM
+            file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > 100:  # 100MB threshold
+                logger.warning(f"File too large for pydub ({file_size_mb:.1f}MB), attempting ffmpeg trim")
+                # Try ffmpeg first for large files
+                import shutil
+                if shutil.which('ffmpeg'):
+                    temp_dir = Path(tempfile.gettempdir())
+                    trimmed_path = temp_dir / f"trimmed_{audio_path.name}"
+                    max_seconds = max_minutes * 60
+                    
+                    cmd = [
+                        'ffmpeg', '-i', str(audio_path),
+                        '-t', str(max_seconds),
+                        '-c', 'copy',  # Copy codec to avoid re-encoding
+                        '-y',  # Overwrite output
+                        str(trimmed_path)
+                    ]
+                    
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    
+                    stdout, stderr = await process.communicate()
+                    
+                    if process.returncode == 0 and trimmed_path.exists():
+                        logger.info(f"Audio trimmed successfully with ffmpeg")
+                        return trimmed_path
+                    else:
+                        logger.error(f"ffmpeg trim failed: {stderr.decode()}")
+                        return None
+                else:
+                    logger.error(f"File too large and ffmpeg not available")
+                    return None
+            
             # Load audio file
             audio = AudioSegment.from_file(str(audio_path))
             
@@ -164,6 +202,7 @@ class AssemblyAITranscriber:
             
             # If audio is already shorter, return original
             if len(audio) <= max_duration_ms:
+                del audio
                 return audio_path
             
             # Trim the audio
@@ -177,6 +216,13 @@ class AssemblyAITranscriber:
             trimmed_audio.export(str(trimmed_path), format="mp3")
             
             logger.info(f"Trimmed audio from {len(audio)/1000:.1f}s to {len(trimmed_audio)/1000:.1f}s")
+            
+            # Clean up
+            del audio
+            del trimmed_audio
+            import gc
+            gc.collect()
+            
             return trimmed_path
             
         except Exception as e:

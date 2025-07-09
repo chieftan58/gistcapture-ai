@@ -47,52 +47,92 @@ class AudioSourceFinder:
         Find all possible audio sources for an episode.
         Returns list of audio URLs in order of preference.
         
-        NEW PRIORITY ORDER:
-        1. Platform APIs (most reliable)
-        2. Direct CDN URLs (bypass redirects)
-        3. Episode webpage sources
-        4. YouTube versions
-        5. RSS feed URL (least reliable due to redirects/protection)
+        Respects retry_strategy configuration:
+        - primary: First source to try (apple_podcasts, youtube_search, etc.)
+        - fallback: Secondary source if primary fails
+        - skip_rss: Skip RSS feed URL entirely
+        - force_apple: Always prioritize Apple Podcasts
         """
         sources = []
         
-        # Special handling for Substack podcasts - prioritize YouTube
-        if episode.audio_url and 'substack.com' in episode.audio_url:
-            logger.info(f"🎯 Substack podcast detected ({episode.podcast}), prioritizing YouTube...")
+        # Check retry strategy configuration
+        retry_strategy = podcast_config.get('retry_strategy', {}) if podcast_config else {}
+        primary = retry_strategy.get('primary')
+        fallback = retry_strategy.get('fallback')
+        skip_rss = retry_strategy.get('skip_rss', False)
+        force_apple = retry_strategy.get('force_apple', False)
+        
+        # Platform-specific handling
+        if episode.audio_url:
+            # Check if we can fix platform-specific URLs
+            from .platform_handlers import MegaphoneHandler, LibsynHandler
             
-            # Try YouTube first for Substack podcasts
-            youtube_url = await self._find_youtube_version(episode)
+            if 'megaphone.fm' in episode.audio_url:
+                fixed_url = await MegaphoneHandler.get_audio_url(episode.audio_url)
+                if fixed_url:
+                    sources.append(fixed_url)
+                    logger.info("✅ Fixed Megaphone URL")
+            elif 'libsyn.com' in episode.audio_url:
+                fixed_url = await LibsynHandler.get_audio_url(episode.audio_url)
+                if fixed_url:
+                    sources.append(fixed_url)
+                    logger.info("✅ Fixed Libsyn URL")
+        
+        # If force_apple or primary is apple_podcasts, try Apple first
+        if force_apple or primary == 'apple_podcasts':
+            logger.info(f"🍎 Prioritizing Apple Podcasts for {episode.podcast}")
+            apple_sources = await self._find_apple_podcast_sources(episode, podcast_config)
+            sources.extend(apple_sources)
+        
+        # If primary is youtube_search, try YouTube first
+        if primary == 'youtube_search':
+            logger.info(f"🎥 Prioritizing YouTube for {episode.podcast}")
+            youtube_url = await self._find_youtube_version(episode, podcast_config)
             if youtube_url:
                 sources.append(youtube_url)
-                logger.info(f"✅ Found YouTube version for Substack podcast")
+                logger.info(f"✅ Found YouTube version")
         
-        # 1. Platform-specific searches (HIGHEST PRIORITY)
-        logger.info(f"🔍 Searching platform APIs for: {episode.title[:50]}...")
-        platform_sources = await self._find_platform_specific_sources(episode, podcast_config)
-        sources.extend(platform_sources)
+        # Platform-specific searches (unless already done above)
+        if not (force_apple or primary == 'apple_podcasts'):
+            logger.info(f"🔍 Searching platform APIs for: {episode.title[:50]}...")
+            platform_sources = await self._find_platform_specific_sources(episode, podcast_config)
+            sources.extend(platform_sources)
         
-        # 2. Search for direct CDN URLs (bypass redirects)
-        if episode.audio_url:
-            logger.info("🔍 Looking for direct CDN URLs...")
+        # Handle fallback strategy
+        if fallback == 'youtube_search' and primary != 'youtube_search':
+            logger.info(f"🎥 YouTube as fallback for {episode.podcast}")
+            youtube_url = await self._find_youtube_version(episode, podcast_config)
+            if youtube_url:
+                sources.append(youtube_url)
+        elif fallback == 'cdn_alternatives' and episode.audio_url:
+            logger.info("🔍 CDN alternatives as fallback")
             cdn_sources = await self._find_cdn_alternatives(episode.audio_url)
             sources.extend(cdn_sources)
+        elif fallback == 'browser_automation':
+            logger.info("🌐 Browser automation marked as fallback")
+            # Browser automation will be handled by download manager
         
-        # 3. Check episode webpage for alternative players
+        # Standard fallback sources (unless primary already tried)
+        
+        # Check episode webpage for alternative players
         if episode.link:
             logger.info("🔍 Checking episode webpage for audio sources...")
             web_sources = await self._find_audio_from_webpage(episode.link)
             sources.extend(web_sources)
         
-        # 4. YouTube audio extraction
-        logger.info("🔍 Searching for YouTube version...")
-        youtube_url = await self._find_youtube_version(episode)
-        if youtube_url:
-            sources.append(youtube_url)
+        # YouTube (if not already tried)
+        if primary != 'youtube_search' and fallback != 'youtube_search':
+            logger.info("🔍 Searching for YouTube version...")
+            youtube_url = await self._find_youtube_version(episode, podcast_config)
+            if youtube_url:
+                sources.append(youtube_url)
         
-        # 5. RSS audio URL (LOWEST PRIORITY - often has redirects/protection)
-        if episode.audio_url:
+        # RSS audio URL - ONLY if skip_rss is False
+        if episode.audio_url and not skip_rss:
             logger.info("📡 Adding RSS feed URL as last resort...")
             sources.append(episode.audio_url)
+        elif skip_rss:
+            logger.info(f"⏭️ Skipping RSS feed URL for {episode.podcast} per configuration")
         
         # Remove duplicates while preserving order
         seen = set()
@@ -245,10 +285,16 @@ class AudioSourceFinder:
             if ep_match:
                 ep_num = ep_match.group(1)
                 ep_title = ep_match.group(2)
-                # Search for Joe Lonsdale's channel specifically
-                queries.append(f'"Joe Lonsdale" "{ep_title}"')
+                # Extract guest name if present
+                guest_match = re.match(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', ep_title)
+                if guest_match:
+                    guest_name = guest_match.group(1)
+                    # Search with Joe Lonsdale + guest name
+                    queries.append(f'Joe Lonsdale {guest_name}')
+                    queries.append(f'Joe Lonsdale Ep {ep_num} {guest_name}')
+                else:
+                    queries.append(f'Joe Lonsdale {ep_title[:30]}')
                 queries.append(f'Joe Lonsdale American Optimist {ep_num}')
-                queries.append(f'"American Optimist" "{ep_title}"')
             else:
                 queries.append(f'Joe Lonsdale "{title}"')
             return queries[:3]
@@ -305,7 +351,16 @@ class AudioSourceFinder:
         
         return cleaned_queries[:3]  # Return top 3 queries
     
-    async def _find_youtube_version(self, episode: Episode) -> Optional[str]:
+    async def _find_apple_podcast_sources(self, episode: Episode, podcast_config: Optional[Dict] = None) -> List[str]:
+        """Find Apple Podcast sources specifically (wrapper for clarity)"""
+        sources = []
+        apple_url = await self._find_apple_podcasts_url(episode, podcast_config)
+        if apple_url:
+            sources.append(apple_url)
+            logger.info(f"🍎 Found Apple Podcasts audio URL")
+        return sources
+    
+    async def _find_youtube_version(self, episode: Episode, podcast_config: Optional[Dict] = None) -> Optional[str]:
         """Find YouTube version of the episode"""
         try:
             import os
@@ -353,7 +408,8 @@ class AudioSourceFinder:
             async with session.get(search_url, params=params) as response:
                 if response.status != 200:
                     logger.warning(f"YouTube API error: {response.status}")
-                    return None
+                    # Try yt-dlp fallback
+                    return await self._search_youtube_ytdlp(query, episode)
                 
                 data = await response.json()
                 
@@ -407,6 +463,34 @@ class AudioSourceFinder:
                 
         except Exception as e:
             logger.error(f"YouTube API search error: {e}")
+        
+        return None
+    
+    async def _search_youtube_ytdlp(self, query: str, episode: Episode) -> Optional[str]:
+        """Search YouTube using yt-dlp when API fails"""
+        try:
+            from .youtube_ytdlp_api import YtDlpSearcher
+            
+            logger.info(f"Using yt-dlp for YouTube search: {query}")
+            
+            # Search for videos
+            videos = await YtDlpSearcher.search_youtube(query, limit=5)
+            
+            if not videos:
+                return None
+            
+            # Find best match
+            best_match = YtDlpSearcher.match_episode(
+                query, 
+                videos, 
+                episode.published if hasattr(episode, 'published') else None
+            )
+            
+            if best_match:
+                return best_match['url']
+                
+        except Exception as e:
+            logger.error(f"yt-dlp search error: {e}")
         
         return None
     
