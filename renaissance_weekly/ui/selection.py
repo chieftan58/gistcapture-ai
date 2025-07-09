@@ -1371,7 +1371,7 @@ class EpisodeSelector:
             return `
                 <div class="header">
                     <div class="logo">RW</div>
-                    <div class="header-text">Processing Episodes</div>
+                    <div class="header-text">Transcribing & Summarizing Episodes</div>
                 </div>
                 
                 <div class="container">
@@ -2582,7 +2582,7 @@ class EpisodeSelector:
                 {{ id: 'episodes', label: 'Episodes' }},
                 {{ id: 'estimate', label: 'Estimate' }},
                 {{ id: 'download', label: 'Download' }},
-                {{ id: 'processing', label: 'Process' }},
+                {{ id: 'processing', label: 'Transcribe & Summarize' }},
                 {{ id: 'results', label: 'Results' }},
                 {{ id: 'review', label: 'Review' }},
                 {{ id: 'email', label: 'Email' }}
@@ -3086,6 +3086,17 @@ class EpisodeSelector:
             }}
             
             clearInterval(APP_STATE.downloadInterval);
+            
+            // Filter out failed downloads - only process successfully downloaded episodes
+            const successfulEpisodes = new Set();
+            Object.entries(APP_STATE.downloadStatus.episodeDetails).forEach(([episodeId, details]) => {{
+                if (details.status === 'success') {{
+                    successfulEpisodes.add(episodeId);
+                }}
+            }});
+            
+            // Update selected episodes to only include successful downloads
+            APP_STATE.selectedEpisodes = successfulEpisodes;
             
             // Move to processing stage
             APP_STATE.state = 'processing';

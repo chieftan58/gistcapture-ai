@@ -621,26 +621,28 @@ The system now searches for transcripts in this order:
 **Solution**: Updated to pass the audio file path directly to `transcriber.transcribe()` method, which handles the upload automatically
 **Impact**: AssemblyAI integration now works properly, enabling 32x concurrent transcriptions vs 3x with Whisper
 
-### Additional Issues Found (2025-01-09):
+### Additional Issues Found and Fixed (2025-01-09):
 
-1. **AssemblyAI audio_end_at Error**:
+1. **AssemblyAI audio_end_at Error**: ✅ FIXED
    - **Issue**: `property 'audio_end_at' of 'TranscriptionConfig' object has no setter`
    - **Solution**: Implemented audio trimming before upload for test mode using pydub
-   - **Status**: Fixed - AssemblyAI now properly handles test mode with 15-minute clips
+   - **Status**: AssemblyAI now properly handles test mode with 15-minute clips
 
-2. **Only 3 Concurrent Transcriptions**:
-   - **Root Cause**: AssemblyAI failures cause fallback to Whisper API (3 concurrent limit)
-   - **Impact**: Processing takes 2-3 hours instead of 15-30 minutes
-   - **Solution**: Fixed AssemblyAI errors to enable 32x concurrency
+2. **Only 3 Concurrent Transcriptions**: ✅ FIXED
+   - **Root Cause**: AssemblyAI failures caused fallback to Whisper API (3 concurrent limit)
+   - **Impact**: Processing was taking 2-3 hours instead of 15-30 minutes
+   - **Solution**: Fixed AssemblyAI errors - now uses 32x concurrency
+   - **Verification**: Semaphores properly configured (32 for AssemblyAI, 3 for Whisper, 20 for GPT-4)
 
-3. **Failed Downloads Still Being Processed**:
-   - **Issue**: Episodes that failed to download are still sent to transcription/summarization
-   - **Location**: `_process_episodes_background` in selection.py processes all selected episodes
-   - **Solution Needed**: Filter out failed downloads before processing
+3. **Failed Downloads Still Being Processed**: ✅ FIXED
+   - **Issue**: Episodes that failed to download were still sent to transcription/summarization
+   - **Location**: `continueWithDownloads` in selection.py was sending all selected episodes
+   - **Solution**: Filter successful downloads before processing - only episodes with status='success' are processed
 
-4. **UI Terminology**:
-   - **Current**: "Processing" stage includes both transcription and summarization
-   - **Better**: "Transcribing & Summarizing" or split into two stages
+4. **UI Terminology**: ✅ FIXED
+   - **Previous**: "Processing" stage and "Process" label
+   - **Updated**: "Transcribing & Summarizing Episodes" header and "Transcribe & Summarize" stage label
+   - **Impact**: Clearer communication about what the system is doing
 
 ## Major Changes Implemented (2025-01-09)
 
