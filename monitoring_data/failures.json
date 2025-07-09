@@ -6798,5 +6798,565 @@
     "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:12:54.793836",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: Why You Must Requalify for Your Role\u2014Every Year",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:12:54.804125",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: Why You Must Requalify for Your Role\u2014Every Year",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:13:55.901416",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #487 Larry McDonald: The Great Migration To Hard Assets",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:14:00.927931",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Big Beautiful Bill, Elon/Trump, Dollar Down Big, Harvard's Money Problems, Figma IPO",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:14:41.494152",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#964 - Simon Sinek - How To Find Meaning When Life Feels Overwhelming",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:15:12.346640",
+    "component": "transcript_fetch",
+    "podcast": "Market Huddle",
+    "episode_title": "The Economy Is Near Stall Speed (Guest: Peter Berezin)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:15:14.620836",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#963 - John Lisle - Investigating The True History Of MKUltra & CIA Mind Control",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:15:46.513364",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:16:14.951582",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:16:36.409575",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Sharper, Stronger, Smarter: Build a Better Brain at Any Age",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:16:41.291951",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:17:36.441598",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Why Chronic Disease is Exploding w/ Daniel Schmachtenberger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:17:45.209393",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:17:45.222815",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:18:33.489588",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP735: Compounding with Character w/ Guy Spier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:18:55.813793",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-08T21:19:35.559240",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:55:13.245413",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:55:14.220047",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:55:15.092962",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "How Andreessen Horowitz Disrupted VC & What\u2019s Coming Next",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:56:09.152066",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Big Beautiful Bill, Elon/Trump, Dollar Down Big, Harvard's Money Problems, Figma IPO",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:56:40.704858",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:56:44.724613",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:56:44.921649",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:57:18.239489",
+    "component": "audio_transcription",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:57:20.205859",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The Data Factory: Inside the $100B Race for Post-Training Supremacy, with Labelbox CEO Manu Sharma",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:58:28.299554",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "Cheat on Everything: Cluely's Vision for Always-On AI Assistance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T00:59:11.402994",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The AI Village: Previewing the Giga-Agent Future with Adam Binksmith, Founder of AI Digest",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:01:23.061262",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Why I don\u2019t think AGI is right around the corner",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:01:24.340489",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/167473378/0ead83b47a8cb303be6052f0ec919fb7",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:01:24.556806",
+    "component": "audio_download",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "https://api.substack.com/feed/podcast/167473378/0ead83b47a8cb303be6052f0ec919fb7",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:01:58.171708",
+    "component": "audio_transcription",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Why I don\u2019t think AGI is right around the corner",
+    "error_type": "TranscriptionFailed",
+    "error_message": "Failed to transcribe audio",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:01:58.554138",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Unpacking The Crypto Treasury Meta",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:02:39.203874",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "All Roads Lead To Debasement | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:03:27.019780",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Bringing The Long Tail Of Markets Onchain",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:04:55.641070",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "PBS fights for its future, with President & CEO Paula Kerger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:05:38.336299",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:06:08.194069",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Big Beautiful Bill, Elon/Trump, Dollar Down Big, Harvard's Money Problems, Figma IPO",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:09:05.778437",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: Why You Must Requalify for Your Role\u2014Every Year",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:09:05.791013",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: Why You Must Requalify for Your Role\u2014Every Year",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:11:50.465063",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #487 Larry McDonald: The Great Migration To Hard Assets",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:12:43.626789",
+    "component": "transcript_fetch",
+    "podcast": "Market Huddle",
+    "episode_title": "The Economy Is Near Stall Speed (Guest: Peter Berezin)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:14:04.070230",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#964 - Simon Sinek - How To Find Meaning When Life Feels Overwhelming",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:14:45.765839",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#963 - John Lisle - Investigating The True History Of MKUltra & CIA Mind Control",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:15:39.482949",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:15:41.167101",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:16:26.647017",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:16:33.770155",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Sharper, Stronger, Smarter: Build a Better Brain at Any Age",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:17:15.143132",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:18:02.997656",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Why Chronic Disease is Exploding w/ Daniel Schmachtenberger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:18:46.714759",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:18:46.728390",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:22:34.657262",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC242: Bitcoin Core Vs. Knots w/ NVK (BItcoin Podcast)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:23:35.936253",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP735: Compounding with Character w/ Guy Spier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:24:04.101775",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#964 - Simon Sinek - How To Find Meaning When Life Feels Overwhelming",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T01:24:26.615531",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
   }
 ]
