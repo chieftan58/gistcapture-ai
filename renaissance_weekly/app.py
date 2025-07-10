@@ -624,14 +624,17 @@ class RenaissanceWeekly:
                             self._progress_callback(episode, 'failed', result)
                 elif isinstance(result, dict) and result:
                     summaries.append(result)
+                    logger.info(f"[{self.correlation_id}] ✅ Episode {i+1} ({episode.title[:50]}...) successfully processed")
                 elif result is None:
-                    logger.debug(f"[{self.correlation_id}] Episode {i+1} returned None")
+                    logger.warning(f"[{self.correlation_id}] ⚠️ Episode {i+1} ({episode.title[:50]}...) returned None")
                     # Ensure episodes that returned None are marked as failed
                     if hasattr(self, '_progress_callback') and self._progress_callback:
                         # Check if this episode wasn't already marked as completed or failed
                         episode_key = f"{episode.podcast}:{episode.title}"
                         if episode_key in self._processing_status.get('currently_processing', set()):
                             self._progress_callback(episode, 'failed', Exception("Episode processing returned None"))
+                else:
+                    logger.warning(f"[{self.correlation_id}] ⚠️ Episode {i+1} ({episode.title[:50]}...) returned unexpected result type: {type(result)}")
             
         finally:
             # Cancel monitoring

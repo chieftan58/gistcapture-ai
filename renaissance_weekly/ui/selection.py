@@ -379,8 +379,34 @@ class EpisodeSelector:
                     parent.state = "complete"
                     
                     # Store the processed summaries for the main app
-                    if hasattr(parent, '_processed_summaries'):
+                    if hasattr(parent, '_processed_summaries') and parent._processed_summaries:
                         parent._final_summaries = parent._processed_summaries
+                    else:
+                        # Fallback: retrieve summaries from database for successfully processed episodes
+                        logger.info(f"[{parent._correlation_id}] No processed summaries in memory, retrieving from database")
+                        from ..database import Database
+                        db = Database()
+                        
+                        # Get recent episodes with summaries
+                        episodes_with_summaries = db.get_episodes_with_summaries(days_back=parent.configuration.get('lookback_days', 7))
+                        
+                        # Convert database records to summary format expected by email digest
+                        summaries = []
+                        for ep in episodes_with_summaries:
+                            # Only include episodes that were part of this processing session
+                            # Check if this episode was in our selected episodes
+                            episode_id = f"{ep['podcast']}|{ep['title']}|{ep['published']}"
+                            if parent._selected_episode_indices and episode_id in parent._selected_episode_indices:
+                                summaries.append({
+                                    'podcast': ep['podcast'],
+                                    'title': ep['title'],
+                                    'summary': ep['summary'],
+                                    'published': ep['published'],
+                                    'audio_url': ep['audio_url']
+                                })
+                        
+                        logger.info(f"[{parent._correlation_id}] Retrieved {len(summaries)} summaries from database")
+                        parent._final_summaries = summaries
                     
                     self._send_json({'status': 'success'})
                     
