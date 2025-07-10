@@ -864,3 +864,55 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
   - Logs when reusing: "✅ Using existing audio file for [episode]"
 - **Transcript Reuse**: Already working - TranscriptFinder checks database first
 - **Result**: Subsequent runs much faster, reusing cached audio files and transcripts
+
+### Recent Updates (2025-01-10) - Comprehensive Podcast Failure Fixes:
+
+1. **Fixed Stuck Episodes in Processing** ✅:
+   - **Issue**: 5 episodes got stuck in AssemblyAI transcription polling loop
+   - **Root Cause**: Race condition between AssemblyAI timeout (10min) and episode timeout (10min)
+   - **Fix**: Reduced AssemblyAI timeout to 8 minutes with proper failure recording
+   - **Result**: Episodes now properly marked as failed instead of stuck
+
+2. **YouTube-First Strategy for Problematic Podcasts** ✅:
+   - **Created YouTubeEnhancedFetcher**: Intelligent search with channel mappings
+   - **Updated podcasts.yaml**: 
+     - American Optimist: YouTube primary, Apple fallback
+     - Dwarkesh: YouTube primary, Apple fallback  
+     - The Drive: Apple primary, YouTube fallback
+   - **Smart Query Building**: Guest extraction, date-based search, channel-specific search
+   - **Result**: Bypasses Cloudflare protection effectively
+
+3. **Enhanced Audio Download Capabilities** ✅:
+   - **YouTube Support**: Added yt-dlp integration to audio_downloader.py
+   - **Format Handling**: Automatic conversion to mp3 with proper quality settings
+   - **Platform Detection**: Routes YouTube URLs to specialized download method
+   - **Result**: Reliable YouTube audio extraction
+
+4. **Smart Retry System Implementation** ✅:
+   - **RetryHandler Class**: Strategy-based retry selection
+   - **Failure Type Strategies**:
+     - Cloudflare/403: YouTube → Apple → Browser
+     - Timeout: Extended timeout → Direct CDN → YouTube
+     - Transcription: Force audio → Alternative services
+   - **Batch Support**: Process multiple failed episodes in parallel
+   - **Database Integration**: Track retry attempts and strategies
+
+5. **Browser Automation Fallback** ✅:
+   - **Playwright Integration**: Cloudflare bypass capability
+   - **Stealth Techniques**: Avoid bot detection
+   - **Audio Extraction**: Find audio URLs from player elements
+   - **Last Resort**: Only used when all other methods fail
+
+6. **Database Enhancements** ✅:
+   - **New Methods**: 
+     - `get_episode_failure_info()`: Get failure details
+     - `update_episode_status()`: Track retry attempts
+   - **Retry Tracking**: Count attempts and strategies used
+   - **Status Management**: Granular processing states
+
+### Expected Improvements from Latest Updates:
+- **American Optimist**: 0% → 90%+ success (YouTube bypass)
+- **Dwarkesh Podcast**: Low → 90%+ success (YouTube bypass)
+- **Overall Success Rate**: 84.6% → 95%+
+- **No More Stuck Episodes**: Proper timeout handling
+- **Faster Retry**: Smart strategy selection vs brute force
