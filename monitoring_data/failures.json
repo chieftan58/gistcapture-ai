@@ -1,35 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T00:47:44.600641",
-    "component": "summarization",
-    "podcast": "All-In",
-    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:47:46.064597",
-    "component": "transcript_fetch",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:47:46.071646",
-    "component": "transcript_fetch",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T00:48:05.970234",
     "component": "summarization",
     "podcast": "Cognitive Revolution",
@@ -9996,6 +9966,36 @@
     "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
     "error_type": "ValidationFailed",
     "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T17:41:23.330843",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #484 Rory Johnston: Crude Oil Forward Curve Conundrum",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T17:41:24.851805",
+    "component": "transcript_fetch",
+    "podcast": "Market Huddle",
+    "episode_title": "Crude Oil SURGE, Middle East ESCALATION & What It Means For Markets!",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T17:41:33.037277",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
     "retry_count": 0,
     "resolved": false
   }

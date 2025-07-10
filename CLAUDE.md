@@ -1061,11 +1061,27 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
 
 **Problem**: Cannot click/select the top episode in the episode selection screen
 
-**Attempted Fixes**:
+**Fixes Applied**:
 1. Added event parameter handling and stopPropagation
 2. Added position: relative and z-index to episode items
 3. Added data-episode-id attribute for reliable identification
 4. Added debug logging to track click events
 5. Fixed CSS overflow issues that might block clicks
+6. **Final Fix**: Switched to event delegation as primary click handler
+   - Removed inline onclick attributes
+   - Added document-level click handler in capture phase
+   - This should resolve the first episode click issue
 
-**Status**: Issue identified but requires further investigation. The "All" button works, suggesting the state management is correct but click events aren't reaching the first episode item properly.
+### Recent Updates (2025-01-10) - Email and UI Improvements:
+
+**Problems Fixed**:
+1. **20-episode minimum removed**: Changed from 20 to 1 episode minimum for email sending
+2. **Redundant Review stage removed**: UI now goes directly from Results to Email
+3. **Email preview mismatch**: Preview now uses same data source as actual email send
+   - Both check _processed_summaries first, then database
+   - Ensures preview matches what gets sent
+
+**American Optimist Issue (In Progress)**:
+- Still failing to download despite YouTube integration attempts
+- Needs complete rethink with simpler solution
+- Should leverage Apple Podcasts or other reliable sources

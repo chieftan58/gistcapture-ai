@@ -225,7 +225,11 @@ class ReliableEpisodeFetcher:
         if primary_strategy == "youtube_search":
             methods_tried.append("YouTube (primary)")
             logger.info(f"[{correlation_id}]   🎥 Using YouTube as primary source")
-            # This will be handled later when we add episodes with YouTube URLs
+            episodes = await self._fetch_youtube_episodes(
+                podcast_name, podcast_config, days_back, correlation_id
+            )
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
             
         # Method 2: Try Apple Podcasts first if configured as primary
         elif primary_strategy == "apple_podcasts" and "apple_id" in podcast_config:
@@ -864,6 +868,82 @@ class ReliableEpisodeFetcher:
                             
             except Exception as e:
                 logger.debug(f"[{correlation_id}] Google RSS search error: {e}")
+        
+        return episodes
+    
+    async def _fetch_youtube_episodes(self, podcast_name: str, podcast_config: Dict, days_back: int, correlation_id: str) -> List[Episode]:
+        """Fetch episodes from YouTube using search"""
+        episodes = []
+        try:
+            from .youtube_ytdlp_api import YtDlpSearcher
+            
+            # Get search terms from config
+            search_terms = podcast_config.get("retry_strategy", {}).get("youtube_search_terms", [])
+            if not search_terms:
+                search_terms = [podcast_config.get("search_term", podcast_name)]
+            
+            # Get channel info if available
+            channel_id = podcast_config.get("retry_strategy", {}).get("youtube_channel")
+            
+            logger.info(f"[{correlation_id}]   🎥 Searching YouTube for {podcast_name} episodes")
+            
+            # Try each search term
+            for search_term in search_terms:
+                # Build search query
+                # For American Optimist, be more specific
+                if podcast_name == "American Optimist":
+                    query = f'"American Optimist" "{search_term}" episode'
+                else:
+                    query = f"{search_term} full episode podcast"
+                
+                logger.info(f"[{correlation_id}]     YouTube search: {query}")
+                
+                # Search YouTube
+                videos = await YtDlpSearcher.search_youtube(query, limit=10)
+                
+                # Convert videos to episodes
+                cutoff_date = datetime.now() - timedelta(days=days_back)
+                
+                for video in videos:
+                    try:
+                        # Parse upload date if available
+                        upload_date_str = video.get('upload_date')
+                        if upload_date_str:
+                            upload_date = datetime.strptime(upload_date_str, '%Y%m%d')
+                        else:
+                            # If no upload date, assume it's recent (yt-dlp sometimes doesn't return dates)
+                            upload_date = datetime.now()
+                            logger.warning(f"[{correlation_id}]     No upload date for video, assuming recent: {video['title'][:60]}")
+                            
+                        # Check if within date range
+                        if upload_date >= cutoff_date:
+                            # Create episode
+                            episode = Episode(
+                                podcast=podcast_name,
+                                title=video['title'],
+                                published=upload_date,
+                                audio_url=video['url'],  # YouTube URL
+                                transcript_url=None,
+                                description=f"YouTube video from {video.get('channel', 'Unknown Channel')}",
+                                link=video['url'],
+                                duration=video.get('duration', 0),
+                                guid=f"youtube-{video['id']}",
+                                apple_podcast_id=podcast_config.get("apple_id")
+                            )
+                            episodes.append(episode)
+                            logger.info(f"[{correlation_id}]     ✅ Found YouTube episode: {episode.title}")
+                    except Exception as e:
+                        logger.error(f"[{correlation_id}]     Error parsing YouTube video: {e}")
+                
+                # If we found episodes, stop searching
+                if episodes:
+                    break
+            
+            if not episodes:
+                logger.warning(f"[{correlation_id}]   ⚠️ No recent YouTube episodes found for {podcast_name}")
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}]   ❌ YouTube search error: {e}")
         
         return episodes
     

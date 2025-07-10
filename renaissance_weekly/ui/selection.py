@@ -396,44 +396,45 @@ class EpisodeSelector:
                         # Convert database records to summary format expected by email digest
                         summaries = []
                         for ep in episodes_with_summaries:
-                            # Only include episodes that were part of this processing session
-                            # Check if this episode was in our selected episodes
-                            episode_id = f"{ep['podcast']}|{ep['title']}|{ep['published']}"
-                            if parent._selected_episode_indices and episode_id in parent._selected_episode_indices:
-                                # Create Episode object from database record
-                                from ..models import Episode
-                                from datetime import datetime
-                                
-                                # Parse the published date
-                                published = ep['published']
-                                if isinstance(published, str):
-                                    published = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                                
-                                episode_obj = Episode(
-                                    podcast=ep['podcast'],
-                                    title=ep['title'],
-                                    published=published,
-                                    audio_url=ep.get('audio_url'),
-                                    transcript_url=ep.get('transcript_url'),
-                                    description=ep.get('description', ''),
-                                    link=ep.get('link', ''),
-                                    duration=ep.get('duration', ''),
-                                    guid=ep.get('guid', '')
-                                )
-                                
-                                summaries.append({
-                                    'episode': episode_obj,
-                                    'summary': ep['summary']
-                                })
+                            # Include all episodes with summaries from the database
+                            # (The user has already reviewed them on the results page)
+                            # Create Episode object from database record
+                            from ..models import Episode
+                            from datetime import datetime
+                            
+                            # Parse the published date
+                            published = ep['published']
+                            if isinstance(published, str):
+                                published = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                            
+                            episode_obj = Episode(
+                                podcast=ep['podcast'],
+                                title=ep['title'],
+                                published=published,
+                                audio_url=ep.get('audio_url'),
+                                transcript_url=ep.get('transcript_url'),
+                                description=ep.get('description', ''),
+                                link=ep.get('link', ''),
+                                duration=ep.get('duration', ''),
+                                guid=ep.get('guid', '')
+                            )
+                            
+                            summaries.append({
+                                'episode': episode_obj,
+                                'summary': ep['summary']
+                            })
                         
-                        logger.info(f"[{parent._correlation_id}] Retrieved {len(summaries)} summaries from database matching selected episodes")
+                        logger.info(f"[{parent._correlation_id}] Converted {len(summaries)} database records to summary format")
                         summaries_to_send = summaries
                     
                     # Actually send the email
                     email_sent = False
                     error_message = None
                     
-                    if summaries_to_send:
+                    if not summaries_to_send:
+                        logger.error(f"[{parent._correlation_id}] ❌ No summaries to send! Cannot send empty email.")
+                        error_message = "No content to send - no summaries found"
+                    else:
                         try:
                             # Import email digest module
                             from ..email.digest import EmailDigest
@@ -467,9 +468,6 @@ class EpisodeSelector:
                         except Exception as e:
                             logger.error(f"[{parent._correlation_id}] ❌ Error sending email: {e}", exc_info=True)
                             error_message = str(e)
-                    else:
-                        error_message = "No summaries available to send"
-                        logger.error(f"[{parent._correlation_id}] ❌ {error_message}")
                     
                     # Send response
                     if email_sent:
@@ -1123,7 +1121,6 @@ class EpisodeSelector:
                                         <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" 
                                              id="episode-${{ep.id.replace(/[|:]/g, '_')}}" 
                                              data-episode-id="${{ep.id.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}}"
-                                             onclick="toggleEpisode('${{ep.id.replace(/'/g, "\\'").replace(/"/g, '\\"')}}', event)"
                                              style="position: relative; pointer-events: auto;">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">
@@ -2046,8 +2043,8 @@ class EpisodeSelector:
                                     </button>
                                 ` : ''}}
                                 
-                                <button class="button primary" onclick="proceedToEmail()" ${{completed < 20 ? 'disabled' : ''}}>
-                                    ${{completed < 20 ? `Need 20+ Episodes (Have ${{completed}})` : 'Continue to Email →'}}
+                                <button class="button primary" onclick="proceedToEmail()" ${{completed < 1 ? 'disabled' : ''}}>
+                                    ${{completed < 1 ? 'No Episodes Processed' : 'Proceed to Email'}}
                                 </button>
                             </div>
                         </div>
@@ -2852,9 +2849,6 @@ class EpisodeSelector:
                 case 'results':
                     app.innerHTML = renderResults();
                     break;
-                case 'review':
-                    app.innerHTML = renderReview();
-                    break;
                 case 'email_approval':
                     app.innerHTML = renderEmailApproval();
                     break;
@@ -2876,7 +2870,6 @@ class EpisodeSelector:
                 {{ id: 'download', label: 'Download' }},
                 {{ id: 'processing', label: 'Transcribe & Summarize' }},
                 {{ id: 'results', label: 'Results' }},
-                {{ id: 'review', label: 'Review' }},
                 {{ id: 'email', label: 'Email' }}
             ];
             
@@ -3371,8 +3364,13 @@ class EpisodeSelector:
         async function continueWithDownloads() {{
             const {{ downloaded, failed, total }} = APP_STATE.downloadStatus;
             
-            if (failed > 0 && downloaded < 20) {{
-                if (!confirm(`Only ${{downloaded}} episodes downloaded successfully. You need at least 20 episodes for the email. Continue anyway?`)) {{
+            if (downloaded < 1) {{
+                alert('You need at least 1 successfully downloaded episode to continue.');
+                return;
+            }}
+            
+            if (failed > 0) {{
+                if (!confirm(`${{downloaded}} episodes downloaded successfully, ${{failed}} failed. Continue anyway?`)) {{
                     return;
                 }}
             }}
@@ -3531,17 +3529,20 @@ class EpisodeSelector:
         // Initial render
         render();
         
-        // Add event delegation for episode clicks to handle any timing issues
+        // Add event delegation for episode clicks as primary handler
         document.addEventListener('click', function(e) {{
             // Check if click is on episode item or its children
             const episodeItem = e.target.closest('.episode-item');
             if (episodeItem) {{
+                // Prevent default and stop propagation
+                e.preventDefault();
+                e.stopPropagation();
+                
                 // Get the episode ID from the data attribute
                 const episodeId = episodeItem.getAttribute('data-episode-id');
                 if (episodeId) {{
-                    console.log('Click intercepted on episode:', episodeId);
-                    // Don't call toggleEpisode here since onclick should handle it
-                    // This is just for debugging
+                    console.log('Event delegation handling click for episode:', episodeId);
+                    toggleEpisode(episodeId, e);
                 }}
             }}
         }}, true); // Use capture phase to catch events early
@@ -5012,12 +5013,52 @@ class EpisodeSelector:
         completed = self._processing_status.get('completed', 0) if self._processing_status else 0
         failed = self._processing_status.get('failed', 0) if self._processing_status else 0
         
-        # Check if we have summaries to preview
+        # Get summaries the same way the send endpoint does
+        summaries_to_preview = []
+        
         if hasattr(self, '_processed_summaries') and self._processed_summaries:
+            summaries_to_preview = self._processed_summaries
+        else:
+            # Get from database - same logic as send endpoint
+            from ..database import PodcastDatabase
+            db = PodcastDatabase()
+            
+            episodes_with_summaries = db.get_episodes_with_summaries(days_back=self.configuration.get('lookback_days', 7))
+            
+            # Convert to summary format
+            summaries = []
+            for ep in episodes_with_summaries:
+                from ..models import Episode
+                from datetime import datetime
+                
+                published = ep['published']
+                if isinstance(published, str):
+                    published = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                
+                episode_obj = Episode(
+                    podcast=ep['podcast'],
+                    title=ep['title'],
+                    published=published,
+                    audio_url=ep.get('audio_url'),
+                    transcript_url=ep.get('transcript_url'),
+                    description=ep.get('description', ''),
+                    link=ep.get('link', ''),
+                    duration=ep.get('duration', ''),
+                    guid=ep.get('guid', '')
+                )
+                
+                summaries.append({
+                    'episode': episode_obj,
+                    'summary': ep['summary']
+                })
+            
+            summaries_to_preview = summaries
+        
+        if summaries_to_preview:
             # Generate HTML preview using EmailDigest
             from ..email.digest import EmailDigest
             email_digest = EmailDigest()
-            html_preview = email_digest.generate_html_preview(self._processed_summaries)
+            html_preview = email_digest.generate_html_preview(summaries_to_preview)
             
             # Return both text and HTML versions
             return {
