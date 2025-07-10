@@ -58,6 +58,26 @@ class TranscriptFinder:
             logger.info(f"✅ Found cached transcript (source: {cached_source.value})")
             return cached_transcript, cached_source
         
+        # Check if this is a podcast that should prioritize YouTube
+        podcast_lower = episode.podcast.lower()
+        youtube_priority_podcasts = ['american optimist', 'dwarkesh', 'tim ferriss']
+        
+        # If it's a YouTube-priority podcast, try YouTube first
+        if any(p in podcast_lower for p in youtube_priority_podcasts):
+            logger.info(f"🎥 Checking YouTube first for {episode.podcast}")
+            try:
+                from ..fetchers.youtube_enhanced import YouTubeEnhancedFetcher
+                async with YouTubeEnhancedFetcher() as yt_fetcher:
+                    youtube_url = await yt_fetcher.find_episode_on_youtube(episode)
+                    if youtube_url:
+                        # Try to get YouTube transcript
+                        transcript = await self.youtube_finder.get_youtube_transcript(youtube_url)
+                        if transcript:
+                            logger.info("✅ Found transcript from YouTube")
+                            return transcript, TranscriptSource.YOUTUBE
+            except Exception as e:
+                logger.debug(f"YouTube search failed: {e}")
+        
         # Try to find transcript from various sources
         # 1. Check if RSS feed included transcript URL
         if episode.transcript_url:

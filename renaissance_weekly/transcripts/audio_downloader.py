@@ -56,6 +56,8 @@ class PlatformAudioDownloader:
         
         # Platform-specific strategies
         strategies = {
+            'youtube.com': self._download_youtube,
+            'youtu.be': self._download_youtube,
             'api.substack.com': self._download_substack,
             'substack.com': self._download_substack,
             'traffic.libsyn.com': self._download_libsyn,
@@ -435,6 +437,64 @@ class PlatformAudioDownloader:
             
         except Exception as e:
             logger.error(f"Anchor download error: {e}")
+            return False
+    
+    def _download_youtube(self, url: str, output_path: Path) -> bool:
+        """Download audio from YouTube using yt-dlp"""
+        try:
+            logger.info("🎥 Using yt-dlp for YouTube download")
+            
+            # Prepare yt-dlp command
+            cmd = [
+                'yt-dlp',
+                '-f', 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',  # Prefer m4a/mp3
+                '--extract-audio',
+                '--audio-format', 'mp3',
+                '--audio-quality', '192K',
+                '--no-playlist',
+                '--quiet',
+                '--progress',
+                '--no-warnings',
+                '-o', str(output_path.with_suffix('.%(ext)s')),  # Let yt-dlp handle extension
+                url
+            ]
+            
+            # Run yt-dlp
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # Check if file exists with mp3 extension
+                mp3_path = output_path.with_suffix('.mp3')
+                if mp3_path.exists():
+                    # Rename to expected output path if different
+                    if mp3_path != output_path:
+                        mp3_path.rename(output_path)
+                    return True
+                # Also check for m4a
+                m4a_path = output_path.with_suffix('.m4a')
+                if m4a_path.exists():
+                    # Convert to mp3 if needed
+                    try:
+                        convert_cmd = ['ffmpeg', '-i', str(m4a_path), '-acodec', 'mp3', 
+                                     '-ab', '192k', str(output_path), '-y']
+                        subprocess.run(convert_cmd, capture_output=True, check=True)
+                        m4a_path.unlink()  # Remove m4a file
+                        return True
+                    except:
+                        # If conversion fails, just rename
+                        m4a_path.rename(output_path)
+                        return True
+                        
+            else:
+                logger.error(f"yt-dlp failed: {result.stderr}")
+                
+            return False
+            
+        except FileNotFoundError:
+            logger.error("yt-dlp not found. Please install with: pip install yt-dlp")
+            return False
+        except Exception as e:
+            logger.error(f"YouTube download error: {e}")
             return False
     
     def _download_simplecast(self, url: str, output_path: Path) -> bool:

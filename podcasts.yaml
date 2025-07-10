@@ -28,11 +28,13 @@ podcasts:
     apple_url: "https://podcasts.apple.com/us/podcast/joe-lonsdale-american-optimist/id1573141757"
     rss_feed: "https://api.substack.com/feed/podcast/1231981.rss"
     website: "https://americanoptimist.substack.com"
+    search_term: "Joe Lonsdale American Optimist"
     retry_strategy:
-      primary: "apple_podcasts"
-      fallback: "youtube_search"
+      primary: "youtube_search"
+      fallback: "apple_podcasts"
       skip_rss: true
-      force_apple: true  # Always use Apple Podcasts for audio URLs
+      youtube_channel: "UCBZjspOTvT5nyDWcHAfaVZQ"  # Joe Lonsdale's channel
+      youtube_search_terms: ["Joe Lonsdale", "American Optimist Podcast"]
     
   - name: "BG2 Pod"
     apple_id: "1727278168"
@@ -55,6 +57,7 @@ podcasts:
       fallback: "apple_podcasts"
       skip_rss: true  # Skip Substack RSS due to Cloudflare
       youtube_channel: "UCCaEbmz8gvyJHXFR42uSbXQ"  # Dwarkesh Patel channel
+      youtube_search_terms: ["Dwarkesh Patel", "Dwarkesh Podcast"]
     
   - name: "Forward Guidance"
     apple_id: "1592743188"
@@ -115,8 +118,9 @@ podcasts:
     search_term: "The Drive Peter Attia"
     retry_strategy:
       primary: "apple_podcasts"
-      fallback: "cdn_alternatives"
+      fallback: "youtube_search"
       extended_timeout: true  # Libsyn can be slow
+      youtube_search_terms: ["Peter Attia MD", "The Drive Podcast"]
     
   - name: "Tim Ferriss"
     apple_id: "863897795"

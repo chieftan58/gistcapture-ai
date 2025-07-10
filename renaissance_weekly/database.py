@@ -588,3 +588,66 @@ class PodcastDatabase:
         except sqlite3.Error as e:
             logger.error(f"Database error getting retry eligible episodes: {e}")
             return []
+    
+    def get_episode_failure_info(self, guid: str) -> Dict:
+        """Get failure information for a specific episode"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT processing_status, failure_reason, retry_count, retry_strategy
+                    FROM episodes 
+                    WHERE guid = ?
+                """, (guid,))
+                
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'processing_status': result[0],
+                        'failure_reason': result[1],
+                        'retry_count': result[2],
+                        'retry_strategy': result[3]
+                    }
+                return {}
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting episode failure info: {e}")
+            return {}
+    
+    def update_episode_status(self, guid: str, status: str, 
+                            failure_reason: Optional[str] = None,
+                            retry_strategy: Optional[str] = None) -> bool:
+        """Update episode processing status and retry information"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # First get current retry count
+                cursor.execute("SELECT retry_count FROM episodes WHERE guid = ?", (guid,))
+                result = cursor.fetchone()
+                current_retry_count = result[0] if result else 0
+                
+                # Update status
+                if failure_reason:
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, failure_reason = ?, 
+                            retry_count = ?, retry_strategy = ?,
+                            updated_at = ?
+                        WHERE guid = ?
+                    """, (status, failure_reason, current_retry_count + 1, 
+                          retry_strategy, datetime.now().isoformat(), guid))
+                else:
+                    cursor.execute("""
+                        UPDATE episodes 
+                        SET processing_status = ?, retry_strategy = ?,
+                            updated_at = ?
+                        WHERE guid = ?
+                    """, (status, retry_strategy, datetime.now().isoformat(), guid))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error updating episode status: {e}")
+            return False

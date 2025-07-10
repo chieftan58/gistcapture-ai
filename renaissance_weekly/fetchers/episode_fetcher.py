@@ -216,12 +216,28 @@ class ReliableEpisodeFetcher:
         all_episodes = {}  # Use dict to deduplicate by guid/title
         methods_tried = []
         
-        # Method 1: Try configured RSS feeds (with cache)
-        # Check if RSS should be skipped based on retry_strategy
+        # Check retry strategy configuration
         retry_strategy = podcast_config.get("retry_strategy", {})
+        primary_strategy = retry_strategy.get("primary", "rss")
         skip_rss = retry_strategy.get("skip_rss", False)
         
-        if "rss_feeds" in podcast_config and podcast_config["rss_feeds"] and not skip_rss:
+        # Method 1: Try primary strategy first (YouTube for problematic podcasts)
+        if primary_strategy == "youtube_search":
+            methods_tried.append("YouTube (primary)")
+            logger.info(f"[{correlation_id}]   🎥 Using YouTube as primary source")
+            # This will be handled later when we add episodes with YouTube URLs
+            
+        # Method 2: Try Apple Podcasts first if configured as primary
+        elif primary_strategy == "apple_podcasts" and "apple_id" in podcast_config:
+            methods_tried.append("Apple Podcasts (primary)")
+            episodes = await self._comprehensive_apple_search(
+                podcast_name, podcast_config["apple_id"], days_back, correlation_id
+            )
+            for ep in episodes:
+                all_episodes[self._episode_key(ep)] = ep
+        
+        # Method 3: Try configured RSS feeds (with cache)
+        if "rss_feeds" in podcast_config and podcast_config["rss_feeds"] and not skip_rss and primary_strategy != "youtube_search":
             methods_tried.append("RSS feeds")
             
             # Use cached feeds if available
@@ -235,8 +251,8 @@ class ReliableEpisodeFetcher:
         elif skip_rss:
             logger.info(f"[{correlation_id}]   ⏭️ Skipping RSS feeds per retry_strategy configuration")
         
-        # Method 2: Try Apple Podcasts (always try this)
-        if "apple_id" in podcast_config and podcast_config["apple_id"]:
+        # Method 4: Try Apple Podcasts (if not already primary)
+        if "apple_id" in podcast_config and podcast_config["apple_id"] and primary_strategy != "apple_podcasts":
             methods_tried.append("Apple Podcasts")
             episodes = await self._comprehensive_apple_search(
                 podcast_name, podcast_config["apple_id"], days_back, correlation_id
