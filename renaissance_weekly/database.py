@@ -355,6 +355,32 @@ class PodcastDatabase:
             logger.error(f"Database error getting episodes with summaries: {e}")
             return []
     
+    def get_episode_summary(self, podcast: str, title: str, published: datetime) -> Optional[str]:
+        """Get summary for a specific episode if it exists"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Handle both datetime and string published dates
+                if isinstance(published, datetime):
+                    published_str = published.isoformat()
+                else:
+                    published_str = published
+                
+                cursor.execute("""
+                    SELECT summary 
+                    FROM episodes 
+                    WHERE podcast = ? AND title = ? AND published = ?
+                    AND summary IS NOT NULL
+                """, (podcast, title, published_str))
+                
+                row = cursor.fetchone()
+                return row[0] if row else None
+                
+        except Exception as e:
+            logger.error(f"Error fetching episode summary: {e}")
+            return None
+    
     def get_episodes_without_transcripts(self, days_back: int = 7) -> List[Dict]:
         """Get episodes that don't have transcripts yet"""
         try:

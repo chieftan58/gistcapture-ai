@@ -555,8 +555,8 @@ class RenaissanceWeekly:
             # Test mode: With ffmpeg prioritized, we can be less conservative
             # ffmpeg streams files without loading them into memory
             # Only need to account for: trimmed file (15min = ~20MB) + API overhead
-            memory_per_task = 600   # MB - much less needed with proper trimming
-            max_concurrent = 6      # Can increase back up since we're not loading full files
+            memory_per_task = 800   # MB - increased for safety with multiple concurrent operations
+            max_concurrent = 4      # Reduced from 6 to prevent OOM and timeouts
         else:
             # Full mode: Complete episodes can be 100-300MB
             # Need extra buffer for 300MB files + transcription overhead
@@ -564,7 +564,7 @@ class RenaissanceWeekly:
             max_concurrent = 3      # Slightly increased for better performance
             
         # Calculate safe concurrency with reasonable safety factor
-        available_for_tasks = available_memory * 0.75  # Keep 25% memory free
+        available_for_tasks = available_memory * 0.70  # Keep 30% memory free (more conservative)
         memory_safe_concurrency = min(int(available_for_tasks / memory_per_task), max_concurrent)
         io_concurrency = max(2, memory_safe_concurrency)  # Minimum 2 for reasonable speed
         cpu_bound_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Limited by CPU/memory
@@ -886,6 +886,14 @@ class RenaissanceWeekly:
         logger.info(f"[{episode_id}]    Audio URL: {'Yes' if episode.audio_url else 'No'}")
         logger.info(f"[{episode_id}]    Transcript URL: {'Yes' if episode.transcript_url else 'No'}")
         logger.info(f"[{episode_id}] {'='*60}")
+        
+        # Check if episode already has a summary in the database
+        existing_summary = self.db.get_episode_summary(episode.podcast, episode.title, episode.published)
+        if existing_summary:
+            logger.info(f"[{episode_id}] ✅ Episode already processed - using cached summary")
+            logger.info(f"[{episode_id}] 📏 Summary length: {len(existing_summary)} characters")
+            logger.info(f"[{episode_id}] {'='*60}\n")
+            return existing_summary
         
         try:
             # Step 1: Try to find existing transcript
