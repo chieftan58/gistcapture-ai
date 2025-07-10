@@ -105,10 +105,13 @@ class AssemblyAITranscriber:
                     self.last_failure_time = time.time()
                     return None
                     
-                # Wait for completion with timeout
+                # Wait for completion with timeout and exponential backoff
                 max_wait = 480  # 8 minutes max (less than episode timeout of 10 minutes)
-                poll_interval = 5  # Check every 5 seconds
+                poll_interval = 2  # Start with 2 seconds
+                max_poll_interval = 30  # Cap at 30 seconds
                 waited = 0
+                
+                logger.info(f"Polling AssemblyAI transcription status for {episode.title} (ID: {transcript.id[:8]}...)")
                 
                 while transcript.status not in [aai.TranscriptStatus.completed, aai.TranscriptStatus.error]:
                     if waited >= max_wait:
@@ -126,6 +129,13 @@ class AssemblyAITranscriber:
                     
                     # Refresh transcript status
                     transcript = await asyncio.to_thread(aai.Transcript.get_by_id, transcript.id)
+                    
+                    # Log status less frequently as interval increases
+                    if poll_interval <= 5 or waited % 30 == 0:
+                        logger.debug(f"AssemblyAI status: {transcript.status} (waited {waited}s, next poll in {poll_interval}s)")
+                    
+                    # Exponential backoff: increase interval by 50% each time, capped at max
+                    poll_interval = min(int(poll_interval * 1.5), max_poll_interval)
                     
                 if transcript.status == aai.TranscriptStatus.error:
                     logger.error(f"AssemblyAI transcription error: {transcript.error}")

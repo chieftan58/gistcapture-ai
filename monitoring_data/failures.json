@@ -1,55 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T00:26:00.992161",
-    "component": "transcript_fetch",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:26:06.665850",
-    "component": "summarization",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:26:27.122240",
-    "component": "summarization",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:27:00.659585",
-    "component": "transcript_fetch",
-    "podcast": "The Doctor's Farmacy",
-    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:27:13.617499",
-    "component": "transcript_fetch",
-    "podcast": "The Doctor's Farmacy",
-    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T00:27:22.273305",
     "component": "summarization",
     "podcast": "The Doctor's Farmacy",
@@ -9994,6 +9944,56 @@
     "component": "transcript_fetch",
     "podcast": "Modern Wisdom",
     "episode_title": "#963 - John Lisle - Investigating The True History Of MKUltra & CIA Mind Control",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T02:48:10.683905",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T02:48:47.190597",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Only Assets That Beat Fiat Debasement | Raoul Pal & Julien Bittel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T02:48:47.207305",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T02:49:05.110282",
+    "component": "transcript_fetch",
+    "podcast": "Odd Lots",
+    "episode_title": "How You Get and Actually Keep a Job at a Multi-Strat Hedge Fund",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T02:49:05.866093",
+    "component": "transcript_fetch",
+    "podcast": "Odd Lots",
+    "episode_title": "Emily Sundberg on How Nobody Is Coming to Save Gen Z",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,

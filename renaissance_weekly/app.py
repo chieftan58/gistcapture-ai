@@ -42,11 +42,11 @@ class ResourceAwareConcurrencyManager:
     
     def __init__(self, correlation_id: str):
         self.correlation_id = correlation_id
-        self.base_concurrency = 3
-        self.max_concurrency = 10
-        self.min_memory_per_task = 400  # MB for test mode (increased for safety)
-        self.min_memory_per_task_full = 1200  # MB for full mode (larger audio files)
-        self.cpu_multiplier = 1.5
+        self.base_concurrency = 2  # Match CPU cores for stability
+        self.max_concurrency = 4   # Reduced from 10 for 2-core system
+        self.min_memory_per_task = 600  # MB for test mode (increased from 400MB)
+        self.min_memory_per_task_full = 1500  # MB for full mode (increased from 1200MB)
+        self.cpu_multiplier = 1.0  # Reduced from 1.5 to match cores exactly
         self.is_full_mode = False
         
     def get_optimal_concurrency(self, openai_limit: int = 3) -> int:
@@ -343,6 +343,20 @@ class RenaissanceWeekly:
             if len(selected_episodes) > 5:
                 logger.info(f"[{self.correlation_id}]   ... and {len(selected_episodes) - 5} more")
             
+            # Run health check before processing
+            logger.info(f"\n[{self.correlation_id}] 🏥 Running system health check...")
+            health_status = await self.health_check()
+            
+            # Abort if critical services are down
+            if not health_status['database'] or not health_status['openai_api']:
+                logger.error(f"[{self.correlation_id}] ❌ Critical services unavailable - aborting")
+                await pipeline_progress.complete_item(False)
+                return
+            
+            # Warn if non-critical services are down
+            if not health_status['assemblyai_api']:
+                logger.warning(f"[{self.correlation_id}] ⚠️  AssemblyAI unavailable - will use OpenAI Whisper (slower)")
+            
             # Stage 2: Process episodes
             await pipeline_progress.start_item("Episode Processing")
             logger.info(f"\n[{self.correlation_id}] 🎯 STAGE 2: Processing Episodes")
@@ -528,13 +542,194 @@ class RenaissanceWeekly:
         
         return all_episodes
     
+    def estimate_processing_time(self, episodes: List[Episode]) -> Dict[str, float]:
+        """Estimate processing time based on what needs to be done"""
+        
+        needs_download = 0
+        needs_transcript = 0  
+        needs_summary = 0
+        
+        for episode in episodes:
+            # Check what exists in database
+            existing = self.db.get_episode(
+                episode.podcast, 
+                episode.title,
+                episode.published
+            )
+            
+            if not existing:
+                # New episode - needs everything
+                needs_download += 1
+                needs_transcript += 1
+                needs_summary += 1
+            else:
+                # Check what's missing
+                if not existing.get('audio_url') or not Path(f"audio/{episode.published.strftime('%Y%m%d')}_{slugify(episode.podcast)}_{slugify(episode.title)}.mp3").exists():
+                    needs_download += 1
+                if not existing.get('transcript'):
+                    needs_transcript += 1
+                if not existing.get('summary'):
+                    needs_summary += 1
+        
+        # Time estimates (minutes) - adjusted for 2-core system and actual performance
+        download_time = needs_download * 2  # 2 min per download (conservative)
+        
+        # Transcript time depends on whether AssemblyAI is available
+        if hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber and self.assemblyai_transcriber.is_available():
+            transcript_time = needs_transcript * 0.5  # 30s with AssemblyAI (32x concurrent)
+        else:
+            transcript_time = needs_transcript * 3  # 3 min with Whisper (3x concurrent)
+            
+        summary_time = needs_summary * 1  # 1 min per summary with GPT-4
+        
+        total_time = download_time + transcript_time + summary_time
+        
+        return {
+            'downloads_needed': needs_download,
+            'transcripts_needed': needs_transcript,
+            'summaries_needed': needs_summary,
+            'estimated_minutes': total_time,
+            'using_assemblyai': hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber and self.assemblyai_transcriber.is_available()
+        }
+    
+    async def health_check(self) -> Dict[str, bool]:
+        """Check all services before processing"""
+        checks = {
+            'database': False,
+            'openai_api': False,
+            'assemblyai_api': False,
+            'disk_space': False,
+            'memory': False
+        }
+        
+        # Check database
+        try:
+            self.db.get_recent_episodes(1)
+            checks['database'] = True
+            logger.debug(f"[{self.correlation_id}] ✅ Database check passed")
+        except Exception as e:
+            logger.error(f"[{self.correlation_id}] ❌ Database check failed: {e}")
+        
+        # Check OpenAI API
+        try:
+            # Use asyncio.to_thread to avoid blocking
+            from .utils.clients import openai_client
+            await asyncio.to_thread(lambda: openai_client.models.list())
+            checks['openai_api'] = True
+            logger.debug(f"[{self.correlation_id}] ✅ OpenAI API check passed")
+        except Exception as e:
+            logger.error(f"[{self.correlation_id}] ❌ OpenAI API check failed: {e}")
+        
+        # Check AssemblyAI
+        if hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber:
+            checks['assemblyai_api'] = self.assemblyai_transcriber.is_available()
+            if checks['assemblyai_api']:
+                logger.debug(f"[{self.correlation_id}] ✅ AssemblyAI API check passed")
+            else:
+                logger.warning(f"[{self.correlation_id}] ⚠️  AssemblyAI API not available")
+        
+        # Check disk space
+        import shutil
+        try:
+            stat = shutil.disk_usage("/")
+            free_gb = stat.free / (1024**3)
+            checks['disk_space'] = free_gb > 2  # Need at least 2GB
+            if checks['disk_space']:
+                logger.debug(f"[{self.correlation_id}] ✅ Disk space check passed: {free_gb:.1f}GB free")
+            else:
+                logger.error(f"[{self.correlation_id}] ❌ Disk space check failed: only {free_gb:.1f}GB free (need 2GB)")
+        except Exception as e:
+            logger.error(f"[{self.correlation_id}] ❌ Disk space check failed: {e}")
+        
+        # Check memory
+        try:
+            available_memory = get_available_memory()
+            checks['memory'] = available_memory > 1000  # Need at least 1GB
+            if checks['memory']:
+                logger.debug(f"[{self.correlation_id}] ✅ Memory check passed: {available_memory:.0f}MB available")
+            else:
+                logger.error(f"[{self.correlation_id}] ❌ Memory check failed: only {available_memory:.0f}MB available (need 1000MB)")
+        except Exception as e:
+            logger.error(f"[{self.correlation_id}] ❌ Memory check failed: {e}")
+        
+        # Log overall health status
+        passed = sum(checks.values())
+        total = len(checks)
+        
+        if passed == total:
+            logger.info(f"[{self.correlation_id}] ✅ All health checks passed ({passed}/{total})")
+        else:
+            logger.warning(f"[{self.correlation_id}] ⚠️  Health check: {passed}/{total} passed")
+            for check, status in checks.items():
+                if not status:
+                    logger.warning(f"[{self.correlation_id}]    - {check}: FAILED")
+        
+        return checks
+    
+    def filter_episodes_needing_processing(self, episodes: List[Episode]) -> List[Episode]:
+        """Filter out episodes that already have summaries"""
+        episodes_to_process = []
+        
+        for episode in episodes:
+            existing_summary = self.db.get_episode_summary(
+                episode.podcast,
+                episode.title, 
+                episode.published
+            )
+            
+            if existing_summary:
+                logger.info(f"[{self.correlation_id}] ✅ Skipping {episode.title} - already has summary ({len(existing_summary)} chars)")
+            else:
+                episodes_to_process.append(episode)
+        
+        logger.info(f"[{self.correlation_id}] 📊 Processing needed for {len(episodes_to_process)}/{len(episodes)} episodes")
+        return episodes_to_process
+    
+    async def _prepare_summaries_for_email(self, episodes: List[Episode]) -> List[Dict]:
+        """Prepare summaries for episodes that already have them"""
+        summaries = []
+        
+        for episode in episodes:
+            existing_summary = self.db.get_episode_summary(
+                episode.podcast,
+                episode.title,
+                episode.published
+            )
+            
+            if existing_summary:
+                summaries.append({
+                    'episode': episode,
+                    'summary': existing_summary
+                })
+        
+        return summaries
+    
     async def _process_episodes_with_resource_management(self, selected_episodes: List[Episode]) -> List[Dict]:
         """Process episodes with dynamic concurrency based on system resources and OpenAI limits"""
+        # Filter episodes that need processing BEFORE creating any async tasks
+        episodes_to_process = self.filter_episodes_needing_processing(selected_episodes)
+        
+        # If all episodes already have summaries, return them directly
+        if not episodes_to_process:
+            logger.info(f"[{self.correlation_id}] 🎉 All episodes already have summaries! Skipping processing.")
+            return await self._prepare_summaries_for_email(selected_episodes)
+        
+        # If some episodes need processing, process only those
+        logger.info(f"[{self.correlation_id}] 🔄 Processing {len(episodes_to_process)} episodes that need summaries...")
+        
+        # Log processing time estimate
+        time_estimate = self.estimate_processing_time(episodes_to_process)
+        logger.info(f"[{self.correlation_id}] ⏱️  Estimated processing time: {time_estimate['estimated_minutes']:.1f} minutes")
+        logger.info(f"[{self.correlation_id}]    - Downloads needed: {time_estimate['downloads_needed']}")
+        logger.info(f"[{self.correlation_id}]    - Transcripts needed: {time_estimate['transcripts_needed']}")
+        logger.info(f"[{self.correlation_id}]    - Summaries needed: {time_estimate['summaries_needed']}")
+        logger.info(f"[{self.correlation_id}]    - Using AssemblyAI: {'Yes (32x speed)' if time_estimate['using_assemblyai'] else 'No (3x speed)'}")
+        
         summaries = []
         
         # Initialize processing status for UI
         self._processing_status = {
-            'total': len(selected_episodes),
+            'total': len(episodes_to_process),
             'completed': 0,
             'failed': 0,
             'currently_processing': set(),  # Track multiple episodes being processed
@@ -555,13 +750,13 @@ class RenaissanceWeekly:
             # Test mode: With ffmpeg prioritized, we can be less conservative
             # ffmpeg streams files without loading them into memory
             # Only need to account for: trimmed file (15min = ~20MB) + API overhead
-            memory_per_task = 800   # MB - increased for safety with multiple concurrent operations
-            max_concurrent = 4      # Reduced from 6 to prevent OOM and timeouts
+            memory_per_task = 600   # MB - adjusted to match concurrency manager
+            max_concurrent = 3      # Reduced from 4 to prevent OOM on 2-core system
         else:
             # Full mode: Complete episodes can be 100-300MB
             # Need extra buffer for 300MB files + transcription overhead
             memory_per_task = 1500  # MB - very conservative for large files
-            max_concurrent = 3      # Slightly increased for better performance
+            max_concurrent = 2      # Very conservative for full episodes on 2-core system
             
         # Calculate safe concurrency with reasonable safety factor
         available_for_tasks = available_memory * 0.70  # Keep 30% memory free (more conservative)
@@ -569,7 +764,7 @@ class RenaissanceWeekly:
         io_concurrency = max(2, memory_safe_concurrency)  # Minimum 2 for reasonable speed
         cpu_bound_concurrency = self.concurrency_manager.get_optimal_concurrency(10)  # Limited by CPU/memory
         
-        logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(selected_episodes)} episodes...")
+        logger.info(f"[{self.correlation_id}] 🔄 Starting concurrent processing of {len(episodes_to_process)} episodes...")
         logger.info(f"[{self.correlation_id}] 💾 Available memory: {available_memory:.0f}MB")
         logger.info(f"[{self.correlation_id}] 📊 Memory calculations: {memory_per_task}MB per task, {available_for_tasks:.0f}MB available for tasks")
         logger.info(f"[{self.correlation_id}] ⚙️  Episode concurrency limit: {io_concurrency} (memory-aware)")
@@ -579,7 +774,7 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 📊  Effective concurrency: Episodes({io_concurrency}), AssemblyAI(32), GPT-4(20)")
         
         # Progress tracker for processing
-        process_progress = ProgressTracker(len(selected_episodes), self.correlation_id)
+        process_progress = ProgressTracker(len(episodes_to_process), self.correlation_id)
         
         # Create semaphores for different types of operations
         # CRITICAL: Use the calculated io_concurrency to prevent OOM
@@ -591,7 +786,7 @@ class RenaissanceWeekly:
         
         # Create tasks with enhanced error handling
         tasks = []
-        for i, episode in enumerate(selected_episodes):
+        for i, episode in enumerate(episodes_to_process):
             task = asyncio.create_task(
                 self._process_episode_with_monitoring(
                     episode, general_semaphore, process_progress, i
@@ -616,9 +811,13 @@ class RenaissanceWeekly:
             
             # Process results maintaining order
             for i, result in enumerate(results):
-                episode = selected_episodes[i]
+                episode = episodes_to_process[i]
                 
-                if isinstance(result, Exception):
+                if isinstance(result, asyncio.CancelledError):
+                    # Don't mark cancelled tasks as failed
+                    logger.info(f"[{self.correlation_id}] Episode {i+1} ({episode.title[:50]}...) was cancelled (not failed)")
+                    continue
+                elif isinstance(result, Exception):
                     logger.error(
                         f"[{self.correlation_id}] Episode {i+1} ({episode.title[:50]}...) "
                         f"failed with exception: {result}"
@@ -695,7 +894,22 @@ class RenaissanceWeekly:
             f"in {process_summary['duration_seconds']/60:.1f} minutes"
         )
         
-        return summaries
+        # Merge newly processed summaries with existing ones for all selected episodes
+        all_summaries = await self._prepare_summaries_for_email(selected_episodes)
+        
+        # Update the all_summaries list with newly processed summaries
+        for new_summary in summaries:
+            # Find and replace the existing entry
+            for i, existing in enumerate(all_summaries):
+                if (existing['episode'].podcast == new_summary['episode'].podcast and
+                    existing['episode'].title == new_summary['episode'].title):
+                    all_summaries[i] = new_summary
+                    break
+            else:
+                # If not found in existing, add it
+                all_summaries.append(new_summary)
+        
+        return all_summaries
     
     async def _process_episodes_with_progress(self, selected_episodes: List[Episode], progress_callback: Callable) -> List[Dict]:
         """Process episodes with progress callback for UI updates"""
