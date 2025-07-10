@@ -268,7 +268,28 @@ class AudioTranscriber:
         # Track this file for cleanup
         self.temp_files.add(str(audio_file))
         
-        # Try downloading with best headers
+        # Check if this is a YouTube URL or yt-dlp search
+        if 'youtube.com' in url or 'youtu.be' in url or url.startswith('ytsearch'):
+            logger.info(f"[{correlation_id}] 🎥 Detected YouTube URL, using yt-dlp")
+            try:
+                # Use yt-dlp for YouTube downloads
+                from .audio_downloader import download_audio_with_ytdlp
+                success = await download_audio_with_ytdlp(url, audio_file)
+                if success and audio_file.exists():
+                    if validate_audio_file_smart(audio_file, correlation_id, url):
+                        logger.info(f"[{correlation_id}] ✅ YouTube download successful")
+                        return audio_file
+                    else:
+                        logger.warning(f"[{correlation_id}] YouTube download failed validation")
+                        if audio_file.exists():
+                            audio_file.unlink()
+            except Exception as e:
+                logger.error(f"[{correlation_id}] YouTube download error: {e}")
+                if audio_file.exists():
+                    audio_file.unlink()
+            return None
+        
+        # Try downloading with best headers for non-YouTube URLs
         headers = self.headers_presets[0]  # Use best headers
         
         # Try aiohttp download

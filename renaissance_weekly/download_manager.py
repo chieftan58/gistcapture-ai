@@ -240,13 +240,35 @@ class DownloadManager:
                 
                 # If all else fails, provide download instructions
                 if not audio_path:
+                    from .fetchers.youtube_cookie_helper import YouTubeCookieHelper
+                    
+                    # Provide specific YouTube URLs for manual download
+                    youtube_urls = {
+                        "118": "https://www.youtube.com/watch?v=pRoKi4VL_5s",
+                        "117": "https://www.youtube.com/watch?v=w1FRqBOxS8g", 
+                        "115": "https://www.youtube.com/watch?v=YwmQzWGyrRQ",
+                        "114": "https://www.youtube.com/watch?v=TVg_DK8-kMw",
+                    }
+                    
+                    # Extract episode number
+                    import re
+                    ep_match = re.search(r'Ep\.?\s*(\d+)', episode.title, re.IGNORECASE)
+                    ep_num = ep_match.group(1) if ep_match else None
+                    youtube_url = youtube_urls.get(ep_num, "")
+                    
                     status.last_error = (
-                        "YouTube bot protection detected. Options:\n"
-                        "1) Export YouTube cookies to ~/.config/renaissance-weekly/cookies/youtube_cookies.txt\n"
-                        "2) Use Manual URL button with direct YouTube link\n"
-                        "3) Visit YouTube and download manually"
+                        f"YouTube authentication required. Options:\n"
+                        f"1) Export browser cookies - see instructions\n"
+                        f"2) Manual download from: {youtube_url}\n"
+                        f"3) Use 'Manual URL' button with YouTube link"
                     )
-                    logger.info("American Optimist download failed - YouTube authentication required")
+                    
+                    # Log detailed instructions once
+                    if not hasattr(self, '_youtube_instructions_shown'):
+                        logger.info(YouTubeCookieHelper.get_cookie_instructions())
+                        self._youtube_instructions_shown = True
+                    
+                    logger.info(f"American Optimist {episode.title} - YouTube auth required")
                     return None
             
             # Special handling for podcasts that need YouTube-first approach

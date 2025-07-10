@@ -1125,23 +1125,45 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
 - Website: https://www.americanoptimist.com embeds YouTube videos
 - YouTube Channel: https://www.youtube.com/c/americanoptimist
 
-**Implementation**:
-1. Created `AmericanOptimistHandler` in `/fetchers/american_optimist_handler.py`
-2. Direct YouTube URL mappings for episodes 114-118:
+**Implementation Complete**:
+
+1. **YouTube URL Mapping**: Created `AmericanOptimistHandler` with direct YouTube URLs:
    - Ep 118 (Marc Andreessen): https://www.youtube.com/watch?v=pRoKi4VL_5s
    - Ep 117 (Dave Rubin): https://www.youtube.com/watch?v=w1FRqBOxS8g
    - Ep 115 (Scott Wu): https://www.youtube.com/watch?v=YwmQzWGyrRQ
    - Ep 114 (Flying Cars): https://www.youtube.com/watch?v=TVg_DK8-kMw
 
-3. Integrated into `download_manager.py`:
-   - Automatically detects American Optimist episodes
-   - Maps to YouTube URLs instead of Substack
+2. **YouTube Download Integration**:
+   - Modified `download_audio_simple()` to detect YouTube URLs
+   - Added `download_audio_with_ytdlp()` async function
+   - Automatically tries browser cookies (Firefox, Chrome, etc.)
    - Falls back to YouTube search for unmapped episodes
 
-**YouTube Bot Protection**:
-If YouTube blocks with "Sign in to confirm you're not a bot", options:
-1. Export YouTube cookies to `~/.config/renaissance-weekly/cookies/youtube_cookies.txt`
-2. Use Manual URL button in UI with direct YouTube links
-3. Use yt-dlp with browser cookies: `yt-dlp --cookies-from-browser firefox [url]`
+3. **Enhanced Error Handling**:
+   - Created `YouTubeCookieHelper` for better error messages
+   - Provides specific YouTube URLs in error messages
+   - Shows detailed cookie export instructions
 
-**Result**: American Optimist episodes can now be downloaded from YouTube, bypassing Cloudflare-protected Substack entirely
+**YouTube Authentication Required**:
+Due to bot protection, you need to provide authentication:
+
+**Option 1: Browser Cookies (Recommended)**
+```bash
+# Install browser extension:
+# Firefox: "cookies.txt" by Lennon Hill
+# Chrome: "Get cookies.txt LOCALLY"
+
+# Export cookies from YouTube.com
+# Save to: ~/.config/renaissance-weekly/cookies/youtube_cookies.txt
+```
+
+**Option 2: Use yt-dlp directly**
+```bash
+yt-dlp --cookies-from-browser firefox "https://www.youtube.com/watch?v=pRoKi4VL_5s" \
+       --extract-audio --audio-format mp3 -o "american_optimist_ep118.mp3"
+```
+
+**Option 3: Manual Download**
+Use the YouTube URLs above with online converters or browser extensions
+
+**Status**: Code implementation is complete. American Optimist episodes will download automatically once YouTube authentication is provided via cookies.

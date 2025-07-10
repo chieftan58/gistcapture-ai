@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 import time
 import subprocess
+import asyncio
 
 from ..utils.logging import get_logger
 from ..monitoring import monitor
@@ -724,4 +725,75 @@ class PlatformAudioDownloader:
         except Exception as e:
             logger.error(f"yt-dlp final attempt failed: {e}")
             
+        return False
+
+
+async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
+    """Async wrapper for YouTube download using yt-dlp"""
+    try:
+        logger.info(f"🎥 Downloading from YouTube/yt-dlp: {url[:80]}...")
+        
+        # Prepare yt-dlp command
+        cmd = [
+            'python', '-m', 'yt_dlp',
+            '-f', 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
+            '--extract-audio',
+            '--audio-format', 'mp3',
+            '--audio-quality', '192K',
+            '--no-playlist',
+            '--quiet',
+            '--no-warnings',
+            '-o', str(output_path),
+            url
+        ]
+        
+        # Try with cookies from browser first
+        browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
+        
+        for browser in browsers:
+            try:
+                # Try with browser cookies
+                cmd_with_cookies = cmd[:2] + ['--cookies-from-browser', browser] + cmd[2:]
+                
+                process = await asyncio.create_subprocess_exec(
+                    *cmd_with_cookies,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0 and output_path.exists():
+                    logger.info(f"✅ YouTube download successful with {browser} cookies")
+                    return True
+                    
+            except Exception as e:
+                logger.debug(f"Failed with {browser} cookies: {e}")
+                continue
+        
+        # Try without cookies
+        logger.info("Trying yt-dlp without browser cookies...")
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0 and output_path.exists():
+            logger.info("✅ YouTube download successful without cookies")
+            return True
+        else:
+            # Log the error for debugging
+            if stderr:
+                error_msg = stderr.decode().strip()
+                if "Sign in to confirm" in error_msg:
+                    logger.error("YouTube requires authentication - please export cookies")
+                else:
+                    logger.error(f"yt-dlp error: {error_msg[:200]}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"YouTube download error: {e}")
         return False
