@@ -106,15 +106,19 @@ class AssemblyAITranscriber:
                     return None
                     
                 # Wait for completion with timeout
-                max_wait = 600  # 10 minutes max
+                max_wait = 480  # 8 minutes max (less than episode timeout of 10 minutes)
                 poll_interval = 5  # Check every 5 seconds
                 waited = 0
                 
                 while transcript.status not in [aai.TranscriptStatus.completed, aai.TranscriptStatus.error]:
                     if waited >= max_wait:
-                        logger.error(f"AssemblyAI transcription timeout after {max_wait} seconds")
+                        logger.error(f"AssemblyAI transcription timeout after {max_wait} seconds for {episode.title}")
                         self.failure_count += 1
                         self.last_failure_time = time.time()
+                        # Important: Record the failure in monitoring
+                        from ..monitoring import monitor
+                        monitor.record_failure('audio_transcription', episode.podcast, episode.title,
+                                             'Timeout', f'AssemblyAI timeout after {max_wait}s')
                         return None
                         
                     await asyncio.sleep(poll_interval)

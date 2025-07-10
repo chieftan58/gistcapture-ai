@@ -777,6 +777,10 @@ class RenaissanceWeekly:
                                 f"[{self.correlation_id}] Episode {index+1} ({episode_id}) timed out after {episode_timeout}s"
                             )
                             last_exception = asyncio.TimeoutError(f"Episode processing timed out after {episode_timeout}s")
+                            # Update processing status on timeout (thread-safe)
+                            if self._processing_status:
+                                with self._status_lock:
+                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
                             if attempt < max_retries - 1:
                                 logger.warning(f"[{self.correlation_id}] Retrying episode {index+1}...")
                                 continue

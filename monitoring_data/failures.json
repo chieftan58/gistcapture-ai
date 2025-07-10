@@ -1,215 +1,5 @@
 [
   {
-    "timestamp": "2025-07-01T04:04:13.502712",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:04:13.675330",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:04:13.926553",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "AllStrategiesFailed",
-    "error_message": "All download strategies failed",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:04:17.307121",
-    "component": "summarization",
-    "podcast": "Tim Ferriss",
-    "episode_title": "#817: 4-Hour Workweek Success Stories \u2014 Charlie Houpert on Building \u201cCharisma on Command\u201d to 10M+ Subscribers, From Charging $10 for Seminars to Making Millions, Living in Brazil, Critical Early Decisions, and The Secret to Freedom",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:04:43.008883",
-    "component": "audio_transcription",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "TranscriptionFailed",
-    "error_message": "Failed to transcribe audio",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:10:23.873244",
-    "component": "transcript_fetch",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:10:24.539697",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:10:24.717594",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:10:52.952441",
-    "component": "audio_transcription",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "TranscriptionFailed",
-    "error_message": "Failed to transcribe audio",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:38:39.244731",
-    "component": "transcript_fetch",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:38:39.936301",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:38:40.109774",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:38:40.265933",
-    "component": "transcript_fetch",
-    "podcast": "A16Z",
-    "episode_title": "Where We Are in the AI Cycle",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T04:38:41.103996",
-    "component": "transcript_fetch",
-    "podcast": "All-In",
-    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:17.871490",
-    "component": "transcript_fetch",
-    "podcast": "Forward Guidance",
-    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:17.875142",
-    "component": "transcript_fetch",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:17.877324",
-    "component": "transcript_fetch",
-    "podcast": "No Priors",
-    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:19.256467",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:19.466723",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:38.852443",
-    "component": "summarization",
-    "podcast": "No Priors",
-    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-01T21:32:40.394036",
-    "component": "summarization",
-    "podcast": "Forward Guidance",
-    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T00:24:11.671109",
     "component": "summarization",
     "podcast": "A16Z",
@@ -9994,6 +9784,216 @@
     "component": "transcript_fetch",
     "podcast": "The Doctor's Farmacy",
     "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T21:06:05.198540",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-09T21:06:05.979609",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP735: Compounding with Character w/ Guy Spier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:48.208655",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Conquering Depression",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:48.222050",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Conquering Depression",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:48.397379",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Only Assets That Beat Fiat Debasement | Raoul Pal & Julien Bittel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:52.779950",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "Unpacking The Crypto Treasury Meta",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:54.262745",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "PBS fights for its future, with President & CEO Paula Kerger",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:56.011204",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "All Roads Lead To Debasement | Weekly Roundup",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:18:57.861976",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How Baby2Baby stepped up as LA wildfires raged, with co-CEOs Norah Weinstein and Kelly Sawyer Patricof",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:21:17.830735",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #487 Larry McDonald: The Great Migration To Hard Assets",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:21:34.978759",
+    "component": "transcript_fetch",
+    "podcast": "Market Huddle",
+    "episode_title": "The Economy Is Near Stall Speed (Guest: Peter Berezin)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:22:14.131245",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#964 - Simon Sinek - How To Find Meaning When Life Feels Overwhelming",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:22:51.841751",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#962 - Lyman Stone - The Real Reason Birth Rates Are Falling",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:22:52.352700",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#963 - John Lisle - Investigating The True History Of MKUltra & CIA Mind Control",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:24:00.188383",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Chai-2: The AI Model Accelerating Drug Discovery with Chai Discovery Co-Founders Jack Dent and Joshua Meier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:24:26.065138",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Arianna Huffington: Why Willpower Fails \u2014 and What to Do Instead",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:24:51.463650",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Sharper, Stronger, Smarter: Build a Better Brain at Any Age",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:24:51.733257",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Bonus: Why Chronic Disease Is Exploding (Full Conversation with Daniel Schmachtenberger)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:25:15.966014",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP735: Compounding with Character w/ Guy Spier",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:25:16.899281",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "BTC242: Bitcoin Core Vs. Knots w/ NVK (BItcoin Podcast)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T01:25:47.207434",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,
