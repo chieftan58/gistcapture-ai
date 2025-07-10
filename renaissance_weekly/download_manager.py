@@ -208,6 +208,37 @@ class DownloadManager:
                 if audio_path:
                     return audio_path
                     
+            # Special handling for podcasts that need YouTube-first approach
+            youtube_first_podcasts = ["American Optimist", "Dwarkesh Podcast", "The Drive"]
+            logger.info(f"Checking if {episode.podcast} needs YouTube-first handling...")
+            if episode.podcast in youtube_first_podcasts:
+                logger.info(f"🎯 Special YouTube-first handling for {episode.podcast}: {episode.title}")
+                
+                # Try YouTube first
+                try:
+                    from .fetchers.youtube_enhanced import YouTubeEnhancedFetcher
+                    async with YouTubeEnhancedFetcher() as yt_fetcher:
+                        youtube_url = await yt_fetcher.find_episode_on_youtube(episode)
+                        if youtube_url:
+                            logger.info(f"Found YouTube URL: {youtube_url}")
+                            audio_path = await self._try_download(
+                                episode,
+                                youtube_url,
+                                'youtube_priority',
+                                status
+                            )
+                            if audio_path:
+                                return audio_path
+                except Exception as e:
+                    logger.error(f"YouTube search failed for American Optimist: {e}")
+                
+                # If YouTube fails, try browser automation on Substack URL
+                if episode.audio_url and 'substack.com' in episode.audio_url:
+                    logger.info(f"YouTube failed, trying browser automation for Substack URL")
+                    audio_path = await self._try_browser_download(episode, status)
+                    if audio_path:
+                        return audio_path
+                    
             # Try multiple audio sources
             try:
                 # Get podcast config for this episode
@@ -325,7 +356,7 @@ class DownloadManager:
             
             # Import browser downloader
             try:
-                from ..transcripts.browser_downloader import BrowserDownloader, PLAYWRIGHT_AVAILABLE
+                from .transcripts.browser_downloader import BrowserDownloader, PLAYWRIGHT_AVAILABLE
                 
                 if not PLAYWRIGHT_AVAILABLE:
                     error_msg = "Playwright not installed. Run: playwright install chromium"

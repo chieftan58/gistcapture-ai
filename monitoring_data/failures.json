@@ -1,25 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T00:47:44.318539",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:47:44.551459",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T00:47:44.600641",
     "component": "summarization",
     "podcast": "All-In",
@@ -9996,6 +9976,26 @@
     "episode_title": "TIP734: My Investment Philosophy w/ Clay Finck",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T15:46:20.768273",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-10T15:46:20.979088",
+    "component": "audio_download",
+    "podcast": "American Optimist",
+    "episode_title": "https://api.substack.com/feed/podcast/167438211/c0bcea42c2f887030be97d4c8d58c088",
+    "error_type": "ValidationFailed",
+    "error_message": "Downloaded file failed validation",
     "retry_count": 0,
     "resolved": false
   }

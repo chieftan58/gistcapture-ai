@@ -8,7 +8,7 @@ from ..models import Episode
 from ..database import PodcastDatabase
 from ..utils.logging import get_logger
 from ..fetchers.youtube_enhanced import YouTubeEnhancedFetcher
-from ..fetchers.browser_automation import get_audio_with_browser
+from ..transcripts.browser_downloader import BrowserDownloader
 from ..fetchers.audio_sources import AudioSourceFinder
 from ..transcripts.finder import TranscriptFinder
 from ..transcripts.transcriber import AudioTranscriber
@@ -185,14 +185,37 @@ class RetryHandler:
     async def _retry_with_browser(self, episode: Episode) -> Tuple[bool, Optional[str]]:
         """Retry using browser automation for Cloudflare sites"""
         try:
-            audio_url = await get_audio_with_browser(episode)
-            if audio_url:
-                episode.audio_url = audio_url
-                transcript = await self.transcriber.transcribe_episode(episode, 'full')
-                if transcript:
-                    summary = await self.summarizer.generate_summary(episode, transcript)
-                    if summary:
-                        return True, summary
+            if not episode.audio_url:
+                logger.error("No audio URL available for browser download")
+                return False, None
+                
+            # Use browser downloader to get the audio file
+            async with BrowserDownloader() as downloader:
+                # Try Substack-specific handler if it's a Substack URL
+                if 'substack.com' in episode.audio_url:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
+                        success = await downloader.handle_substack(episode.audio_url, tmp_file.name)
+                        if success:
+                            # Transcribe the downloaded file
+                            episode.audio_url = f"file://{tmp_file.name}"
+                            transcript = await self.transcriber.transcribe_episode(episode, 'full')
+                            if transcript:
+                                summary = await self.summarizer.generate_summary(episode, transcript)
+                                if summary:
+                                    return True, summary
+                else:
+                    # Use general browser download
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
+                        success = await downloader.download_with_browser(episode.audio_url, tmp_file.name)
+                        if success:
+                            episode.audio_url = f"file://{tmp_file.name}"
+                            transcript = await self.transcriber.transcribe_episode(episode, 'full')
+                            if transcript:
+                                summary = await self.summarizer.generate_summary(episode, transcript)
+                                if summary:
+                                    return True, summary
                         
         except Exception as e:
             logger.error(f"Browser automation retry failed: {e}")

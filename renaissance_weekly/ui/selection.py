@@ -1118,9 +1118,13 @@ class EpisodeSelector:
                                     <h3 class="episode-podcast-name">${{podcast}}</h3>
                                     <div class="episode-count">${{episodesByPodcast[podcast].length}} episode${{episodesByPodcast[podcast].length !== 1 ? 's' : ''}}</div>
                                 </div>
-                                <div class="episodes-list">
+                                <div class="episodes-list" style="padding-top: 1px;">
                                     ${{episodesByPodcast[podcast].map(ep => `
-                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" id="episode-${{ep.id.replace(/[|:]/g, '_')}}" onclick="toggleEpisode('${{ep.id.replace(/'/g, "\\'").replace(/"/g, '\\"')}}')">
+                                        <div class="episode-item ${{APP_STATE.selectedEpisodes.has(ep.id) ? 'selected' : ''}}" 
+                                             id="episode-${{ep.id.replace(/[|:]/g, '_')}}" 
+                                             data-episode-id="${{ep.id.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}}"
+                                             onclick="toggleEpisode('${{ep.id.replace(/'/g, "\\'").replace(/"/g, '\\"')}}', event)"
+                                             style="position: relative; pointer-events: auto;">
                                             <div class="episode-checkbox"></div>
                                             <div class="episode-content">
                                                 <div class="episode-title">${{formatEpisodeTitle(ep.title)}}${{ep.has_transcript ? '<span class="transcript-indicator"></span>' : ''}}</div>
@@ -2432,15 +2436,31 @@ class EpisodeSelector:
             document.querySelector('.button-primary').disabled = APP_STATE.selectedPodcasts.size === 0;
         }}
         
-        function toggleEpisode(id) {{
+        function toggleEpisode(id, event) {{
+            console.log('toggleEpisode called with id:', id);
+            
+            // Prevent event bubbling and default behavior
+            if (event) {{
+                event.stopPropagation();
+                event.preventDefault();
+            }}
+            
             const safeId = id.replace(/[|:]/g, '_');
             const episode = document.getElementById('episode-' + safeId);
+            
+            if (!episode) {{
+                console.error('Episode element not found:', safeId);
+                return;
+            }}
+            
             if (APP_STATE.selectedEpisodes.has(id)) {{
                 APP_STATE.selectedEpisodes.delete(id);
                 episode.classList.remove('selected');
+                console.log('Episode deselected:', id);
             }} else {{
                 APP_STATE.selectedEpisodes.add(id);
                 episode.classList.add('selected');
+                console.log('Episode selected:', id);
             }}
             updateEpisodeCount();
         }}
@@ -3511,6 +3531,21 @@ class EpisodeSelector:
         // Initial render
         render();
         
+        // Add event delegation for episode clicks to handle any timing issues
+        document.addEventListener('click', function(e) {{
+            // Check if click is on episode item or its children
+            const episodeItem = e.target.closest('.episode-item');
+            if (episodeItem) {{
+                // Get the episode ID from the data attribute
+                const episodeId = episodeItem.getAttribute('data-episode-id');
+                if (episodeId) {{
+                    console.log('Click intercepted on episode:', episodeId);
+                    // Don't call toggleEpisode here since onclick should handle it
+                    // This is just for debugging
+                }}
+            }}
+        }}, true); // Use capture phase to catch events early
+        
         // Start checking for state updates after a brief delay
         setTimeout(() => {{
             APP_STATE.globalPollInterval = setInterval(async () => {{
@@ -3967,6 +4002,18 @@ class EpisodeSelector:
             border-bottom: 1px solid var(--gray-100);
             cursor: pointer;
             transition: var(--transition);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .episodes-list {
+            position: relative;
+        }
+        
+        .episode-item:first-child {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 24px;
         }
         
         .episode-item:hover {

@@ -34,6 +34,11 @@ class YouTubeEnhancedFetcher:
             "channel_id": "UCznv7Vf9nBdJYvBagFdAHWw",  # Tim Ferriss channel
             "channel_name": "Tim Ferriss",
             "search_variants": ["Tim Ferriss Show", "Tim Ferriss Podcast"]
+        },
+        "The Drive": {
+            "channel_id": "UC1W8ShdwtUKhJgPVYoOlzRg",  # Peter Attia's channel
+            "channel_name": "Peter Attia MD",
+            "search_variants": ["The Drive Peter Attia", "Peter Attia The Drive", "The Drive Podcast"]
         }
     }
     
@@ -91,14 +96,42 @@ class YouTubeEnhancedFetcher:
         # Extract key terms from episode title
         title_terms = self._extract_search_terms(episode.title)
         
-        # Try channel-specific search queries
-        queries = [
-            f"{title_terms} channel:{channel_info['channel_id']}",
-            f"{title_terms} {channel_info['channel_name']}",
-            f"{episode.title[:50]} {channel_info['channel_name']}"
-        ]
+        # Special handling for American Optimist
+        if episode.podcast == "American Optimist":
+            # Extract episode number if present
+            ep_match = re.search(r'Ep\.?\s*(\d+)', episode.title, re.IGNORECASE)
+            ep_number = ep_match.group(1) if ep_match else None
+            
+            queries = []
+            if ep_number:
+                # Prioritize episode number searches
+                queries.extend([
+                    f"American Optimist Ep {ep_number} full episode",
+                    f"Joe Lonsdale American Optimist Episode {ep_number}",
+                    f"American Optimist {ep_number} {channel_info['channel_name']}"
+                ])
+            
+            # Add guest-based searches
+            guest_match = re.search(r':\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', episode.title)
+            if guest_match:
+                guest_name = guest_match.group(1)
+                queries.extend([
+                    f"American Optimist {guest_name} full episode",
+                    f"Joe Lonsdale {guest_name} interview"
+                ])
+            
+            # Add fallback with shorter title
+            queries.append(f"{title_terms[:30]} American Optimist")
+        else:
+            # Original logic for other podcasts
+            queries = [
+                f"{title_terms} channel:{channel_info['channel_id']}",
+                f"{title_terms} {channel_info['channel_name']}",
+                f"{episode.title[:50]} {channel_info['channel_name']}"
+            ]
         
         for query in queries:
+            logger.info(f"Trying query: {query}")
             result = await self._perform_youtube_search(query, episode)
             if result:
                 return result
@@ -169,6 +202,7 @@ class YouTubeEnhancedFetcher:
         ])
         
         for query in queries:
+            logger.info(f"Trying query: {query}")
             result = await self._perform_youtube_search(query, episode)
             if result:
                 return result
@@ -269,6 +303,31 @@ class YouTubeEnhancedFetcher:
         episode_title_lower = episode.title.lower()
         podcast_name_lower = episode.podcast.lower()
         
+        # Special handling for American Optimist
+        if episode.podcast == "American Optimist":
+            # Check for Joe Lonsdale's channel
+            if "joe lonsdale" in channel_title.lower():
+                # Look for episode number match
+                ep_match = re.search(r'Ep\.?\s*(\d+)', episode.title, re.IGNORECASE)
+                if ep_match:
+                    ep_number = ep_match.group(1)
+                    if f"ep {ep_number}" in video_title_lower or f"episode {ep_number}" in video_title_lower:
+                        return True
+                
+                # Look for guest name match
+                guest_match = re.search(r':\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', episode.title)
+                if guest_match:
+                    guest_name = guest_match.group(1).lower()
+                    if guest_name in video_title_lower:
+                        # Avoid clips by checking for "full" indicators
+                        if any(term in video_title_lower for term in ["full episode", "interview", "conversation"]):
+                            return True
+                        # Accept if video title has similar structure
+                        if "american optimist" in video_title_lower:
+                            return True
+            return False
+        
+        # Original logic for other podcasts
         # Check for podcast name in video or channel title
         if podcast_name_lower not in video_title_lower and podcast_name_lower not in channel_title:
             # Check for known channel mappings

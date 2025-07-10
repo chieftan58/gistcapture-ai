@@ -1026,3 +1026,46 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
    - Cleaner separation of concerns
 
 **Result**: Email now sends immediately when user clicks "Send Email" button
+
+### Recent Updates (2025-01-10) - American Optimist YouTube Download Fixes:
+
+**Problem**: American Optimist, Dwarkesh Podcast, and The Drive episodes were failing immediately with "yt-dlp YouTube download failed" errors
+
+**Root Causes**:
+1. Import path errors prevented YouTube enhanced search from running
+2. Only American Optimist had special YouTube-first handling
+3. Dwarkesh and The Drive were skipping enhanced search and going straight to fallback
+
+**Fixes Implemented**:
+1. **Fixed import paths** in download_manager.py:
+   - Changed to relative imports: `.fetchers.youtube_enhanced` and `.transcripts.browser_downloader`
+
+2. **Extended YouTube-first handling** to all problematic podcasts:
+   - Added Dwarkesh Podcast and The Drive to `youtube_first_podcasts` list
+   - All three now get enhanced YouTube search treatment
+
+3. **Added YouTube channel mapping** for The Drive:
+   - Channel ID: UC1W8ShdwtUKhJgPVYoOlzRg (Peter Attia MD)
+   - Search variants include "The Drive Peter Attia", "Peter Attia The Drive"
+
+4. **Enhanced YouTube search** for American Optimist:
+   - Prioritizes episode number searches (e.g., "American Optimist Ep 118 full episode")
+   - Extracts guest names for better queries
+   - Improved matching to avoid clips and find full episodes
+
+5. **Browser automation fallback** ready for Cloudflare-protected content
+
+**Result**: These podcasts should now successfully find and download episodes from YouTube instead of failing immediately
+
+### Recent Updates (2025-01-10) - UI Episode Selection Fix:
+
+**Problem**: Cannot click/select the top episode in the episode selection screen
+
+**Attempted Fixes**:
+1. Added event parameter handling and stopPropagation
+2. Added position: relative and z-index to episode items
+3. Added data-episode-id attribute for reliable identification
+4. Added debug logging to track click events
+5. Fixed CSS overflow issues that might block clicks
+
+**Status**: Issue identified but requires further investigation. The "All" button works, suggesting the state management is correct but click events aren't reaching the first episode item properly.
