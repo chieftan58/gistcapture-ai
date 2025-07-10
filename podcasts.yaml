@@ -30,8 +30,8 @@ podcasts:
     website: "https://americanoptimist.substack.com"
     search_term: "Joe Lonsdale American Optimist"
     retry_strategy:
-      primary: "youtube_search"
-      fallback: "apple_podcasts"
+      primary: "apple_podcasts"
+      fallback: "youtube_search"
       skip_rss: true
       youtube_channel: "UCBZjspOTvT5nyDWcHAfaVZQ"  # Joe Lonsdale's channel
       youtube_search_terms: ["Joe Lonsdale", "American Optimist Podcast"]

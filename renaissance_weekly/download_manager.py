@@ -11,6 +11,7 @@ import logging
 from .models import Episode
 from .transcripts.transcriber import AudioTranscriber
 from .fetchers.audio_sources import AudioSourceFinder
+from .fetchers.american_optimist_handler import AmericanOptimistHandler
 from .utils.logging import get_logger
 from .utils.helpers import exponential_backoff_with_jitter
 from .config import TEMP_DIR
@@ -208,8 +209,48 @@ class DownloadManager:
                 if audio_path:
                     return audio_path
                     
+            # Special handling for American Optimist (YouTube-based)
+            if AmericanOptimistHandler.should_use_special_handling(episode):
+                logger.info(f"🎥 Special YouTube handling for American Optimist: {episode.title}")
+                
+                # Use the handler to enhance the episode
+                enhanced_episode = AmericanOptimistHandler.enhance_episode_for_download(episode)
+                
+                # Try downloading with enhanced URL
+                audio_path = await self._try_download(
+                    enhanced_episode,
+                    enhanced_episode.audio_url,
+                    'american_optimist_youtube',
+                    status
+                )
+                if audio_path:
+                    return audio_path
+                
+                # Try alternative sources
+                alternative_sources = AmericanOptimistHandler.get_alternative_sources(episode)
+                for i, alt_url in enumerate(alternative_sources):
+                    audio_path = await self._try_download(
+                        episode,
+                        alt_url,
+                        f'american_optimist_alt_{i+1}',
+                        status
+                    )
+                    if audio_path:
+                        return audio_path
+                
+                # If all else fails, provide download instructions
+                if not audio_path:
+                    status.last_error = (
+                        "YouTube bot protection detected. Options:\n"
+                        "1) Export YouTube cookies to ~/.config/renaissance-weekly/cookies/youtube_cookies.txt\n"
+                        "2) Use Manual URL button with direct YouTube link\n"
+                        "3) Visit YouTube and download manually"
+                    )
+                    logger.info("American Optimist download failed - YouTube authentication required")
+                    return None
+            
             # Special handling for podcasts that need YouTube-first approach
-            youtube_first_podcasts = ["American Optimist", "Dwarkesh Podcast", "The Drive"]
+            youtube_first_podcasts = ["Dwarkesh Podcast", "The Drive"]
             logger.info(f"Checking if {episode.podcast} needs YouTube-first handling...")
             if episode.podcast in youtube_first_podcasts:
                 logger.info(f"🎯 Special YouTube-first handling for {episode.podcast}: {episode.title}")
@@ -230,7 +271,7 @@ class DownloadManager:
                             if audio_path:
                                 return audio_path
                 except Exception as e:
-                    logger.error(f"YouTube search failed for American Optimist: {e}")
+                    logger.error(f"YouTube search failed: {e}")
                 
                 # If YouTube fails, try browser automation on Substack URL
                 if episode.audio_url and 'substack.com' in episode.audio_url:

@@ -235,7 +235,7 @@ class ReliableEpisodeFetcher:
         elif primary_strategy == "apple_podcasts" and "apple_id" in podcast_config:
             methods_tried.append("Apple Podcasts (primary)")
             episodes = await self._comprehensive_apple_search(
-                podcast_name, podcast_config["apple_id"], days_back, correlation_id
+                podcast_name, podcast_config["apple_id"], days_back, correlation_id, skip_rss
             )
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
@@ -259,7 +259,7 @@ class ReliableEpisodeFetcher:
         if "apple_id" in podcast_config and podcast_config["apple_id"] and primary_strategy != "apple_podcasts":
             methods_tried.append("Apple Podcasts")
             episodes = await self._comprehensive_apple_search(
-                podcast_name, podcast_config["apple_id"], days_back, correlation_id
+                podcast_name, podcast_config["apple_id"], days_back, correlation_id, skip_rss
             )
             for ep in episodes:
                 all_episodes[self._episode_key(ep)] = ep
@@ -616,48 +616,52 @@ class ReliableEpisodeFetcher:
             return []
     
     async def _comprehensive_apple_search(self, podcast_name: str, apple_id: str, 
-                                         days_back: int, correlation_id: str) -> List[Episode]:
+                                         days_back: int, correlation_id: str, skip_rss: bool = False) -> List[Episode]:
         """Comprehensive Apple Podcasts search with multiple strategies"""
         episodes = []
         session = self._get_http_session()
         
         logger.info(f"[{correlation_id}]   🍎 Searching Apple Podcasts (ID: {apple_id})")
         
-        # Strategy 1: Direct lookup API
-        try:
-            lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
-            logger.debug(f"[{correlation_id}]     Trying Apple lookup: {lookup_url}")
-            response = session.get(lookup_url, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                logger.debug(f"[{correlation_id}]     Apple lookup response: {data.get('resultCount', 0)} results")
+        # For podcasts with skip_rss=true (like Substack), go straight to episode API
+        if skip_rss:
+            logger.info(f"[{correlation_id}]     Skip RSS enabled - using direct episode API")
+        else:
+            # Strategy 1: Direct lookup API for RSS feed
+            try:
+                lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcast"
+                logger.debug(f"[{correlation_id}]     Trying Apple lookup: {lookup_url}")
+                response = session.get(lookup_url, timeout=10)
                 
-                if data.get("results"):
-                    podcast_info = data["results"][0]
-                    feed_url = podcast_info.get("feedUrl")
-                    logger.info(f"[{correlation_id}]     Found feed URL: {feed_url}")
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.debug(f"[{correlation_id}]     Apple lookup response: {data.get('resultCount', 0)} results")
                     
-                    if feed_url:
-                        episodes.extend(
-                            await self._try_rss_with_fallbacks(
-                                podcast_name, feed_url, days_back, correlation_id
-                            )
-                        )
+                    if data.get("results"):
+                        podcast_info = data["results"][0]
+                        feed_url = podcast_info.get("feedUrl")
+                        logger.info(f"[{correlation_id}]     Found feed URL: {feed_url}")
                         
-                        # Cache this feed URL
-                        if podcast_name not in self.discovered_feeds_cache:
-                            self.discovered_feeds_cache[podcast_name] = []
-                        self.discovered_feeds_cache[podcast_name].append(feed_url)
+                        if feed_url:
+                            episodes.extend(
+                                await self._try_rss_with_fallbacks(
+                                    podcast_name, feed_url, days_back, correlation_id
+                                )
+                            )
+                            
+                            # Cache this feed URL
+                            if podcast_name not in self.discovered_feeds_cache:
+                                self.discovered_feeds_cache[podcast_name] = []
+                            self.discovered_feeds_cache[podcast_name].append(feed_url)
+                        else:
+                            logger.warning(f"[{correlation_id}]     No feed URL in Apple data")
                     else:
-                        logger.warning(f"[{correlation_id}]     No feed URL in Apple data")
+                        logger.warning(f"[{correlation_id}]     No results for Apple ID {apple_id}")
                 else:
-                    logger.warning(f"[{correlation_id}]     No results for Apple ID {apple_id}")
-            else:
-                logger.warning(f"[{correlation_id}]     Apple lookup failed with status {response.status_code}")
-                
-        except Exception as e:
-            logger.error(f"[{correlation_id}]     Apple lookup error: {e}")
+                    logger.warning(f"[{correlation_id}]     Apple lookup failed with status {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"[{correlation_id}]     Apple lookup error: {e}")
         
         # Strategy 2: Search API if no episodes found
         if not episodes:
@@ -701,12 +705,12 @@ class ReliableEpisodeFetcher:
             except Exception as e:
                 logger.error(f"[{correlation_id}]     Apple search error: {e}")
         
-        # Strategy 3: Try alternative Apple endpoints
-        if not episodes:
+        # Strategy 3: Try alternative Apple endpoints (or use this as primary for skip_rss)
+        if not episodes or skip_rss:
             try:
                 # Try the lookup with different parameters
-                alt_lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcastEpisode&limit=50"
-                logger.info(f"[{correlation_id}]     Trying alternative Apple lookup for episodes...")
+                alt_lookup_url = f"https://itunes.apple.com/lookup?id={apple_id}&entity=podcastEpisode&limit=200"
+                logger.info(f"[{correlation_id}]     {'Using direct episode API (skip_rss mode)' if skip_rss else 'Trying alternative Apple lookup for episodes'}...")
                 response = session.get(alt_lookup_url, timeout=10)
                 
                 if response.status_code == 200:

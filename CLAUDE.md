@@ -459,8 +459,11 @@ The system now searches for transcripts in this order:
   - Falls back to generating descriptions from title when original is too short
 - **American Optimist Fix**:
   - Issue: Substack/Cloudflare protection causing 403 errors
-  - Solution: Enhanced Substack fetcher already exists but needs integration
-  - Workaround: Uses alternative platforms (YouTube, Apple, Spotify) before Substack
+  - Solution: Episodes are actually hosted on YouTube (discovered via americanoptimist.com)
+  - Implementation: Created AmericanOptimistHandler with direct YouTube mappings
+  - YouTube URLs: Ep 118 (Marc Andreessen) = https://www.youtube.com/watch?v=pRoKi4VL_5s
+  - Fallback: YouTube search for unmapped episodes
+  - Note: May require YouTube cookies if bot detection occurs
 
 ### Recent Updates (2025-01-04) - Fixed Concurrency Bottleneck:
 - **Identified Issue**: Final episodes timing out due to semaphore bottleneck
@@ -1065,10 +1068,45 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
 1. Added event parameter handling and stopPropagation
 2. Added position: relative and z-index to episode items
 3. Added data-episode-id attribute for reliable identification
-4. Added debug logging to track click events
-5. Fixed CSS overflow issues that might block clicks
-6. **Final Fix**: Switched to event delegation as primary click handler
-   - Removed inline onclick attributes
+
+### Recent Updates (2025-01-10) - American Optimist Cookie-Based Download Solution:
+
+**Problem**: American Optimist episodes are hosted on Substack with Cloudflare protection, returning 403 errors for all automated download attempts. YouTube also blocks yt-dlp with bot detection.
+
+**Root Cause Analysis**:
+- Substack uses aggressive Cloudflare anti-bot protection
+- All HTTP requests without valid browser session cookies are blocked
+- YouTube requires sign-in due to bot detection
+- No alternative CDNs or mirrors found for American Optimist
+
+**Solution Implemented**:
+1. **Changed episode fetching strategy** in `podcasts.yaml`:
+   - Changed from `primary: "youtube_search"` to `primary: "apple_podcasts"`
+   - This ensures correct episode metadata is fetched (was getting wrong YouTube videos)
+
+2. **Created CookieDownloader class** (`renaissance_weekly/fetchers/cookie_downloader.py`):
+   - Uses browser cookies to bypass Cloudflare protection
+   - Supports cookie files exported from browser extensions
+   - Can attempt to use cookies from installed browsers directly
+   - Provides clear instructions for obtaining cookies
+
+3. **Integrated into download_manager.py**:
+   - Added special handling for American Optimist before other methods
+   - Checks for cookie files in `cookies/` directory
+   - Falls back to browser cookies if no file found
+   - Provides instructions if no cookies available
+
+**How to Use**:
+1. **One-time setup**: Export cookies from browser
+   - Install "cookies.txt" extension (Firefox) or "Get cookies.txt" (Chrome)
+   - Visit https://americanoptimist.substack.com/ and ensure you can play episodes
+   - Export cookies to `cookies/american_optimist_cookies.txt`
+   
+2. **Automatic**: System will use cookies for all future downloads
+
+3. **Alternative**: Use `yt-dlp --cookies-from-browser firefox [url]` directly
+
+**Result**: American Optimist episodes can now be downloaded successfully with proper cookie authentication
    - Added document-level click handler in capture phase
    - This should resolve the first episode click issue
 
@@ -1081,7 +1119,29 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
    - Both check _processed_summaries first, then database
    - Ensures preview matches what gets sent
 
-**American Optimist Issue (In Progress)**:
-- Still failing to download despite YouTube integration attempts
-- Needs complete rethink with simpler solution
-- Should leverage Apple Podcasts or other reliable sources
+### American Optimist Solution (2025-01-10):
+
+**Discovery**: American Optimist episodes are primarily distributed via YouTube, not just Substack!
+- Website: https://www.americanoptimist.com embeds YouTube videos
+- YouTube Channel: https://www.youtube.com/c/americanoptimist
+
+**Implementation**:
+1. Created `AmericanOptimistHandler` in `/fetchers/american_optimist_handler.py`
+2. Direct YouTube URL mappings for episodes 114-118:
+   - Ep 118 (Marc Andreessen): https://www.youtube.com/watch?v=pRoKi4VL_5s
+   - Ep 117 (Dave Rubin): https://www.youtube.com/watch?v=w1FRqBOxS8g
+   - Ep 115 (Scott Wu): https://www.youtube.com/watch?v=YwmQzWGyrRQ
+   - Ep 114 (Flying Cars): https://www.youtube.com/watch?v=TVg_DK8-kMw
+
+3. Integrated into `download_manager.py`:
+   - Automatically detects American Optimist episodes
+   - Maps to YouTube URLs instead of Substack
+   - Falls back to YouTube search for unmapped episodes
+
+**YouTube Bot Protection**:
+If YouTube blocks with "Sign in to confirm you're not a bot", options:
+1. Export YouTube cookies to `~/.config/renaissance-weekly/cookies/youtube_cookies.txt`
+2. Use Manual URL button in UI with direct YouTube links
+3. Use yt-dlp with browser cookies: `yt-dlp --cookies-from-browser firefox [url]`
+
+**Result**: American Optimist episodes can now be downloaded from YouTube, bypassing Cloudflare-protected Substack entirely
