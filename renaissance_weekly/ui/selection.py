@@ -1199,14 +1199,14 @@ class EpisodeSelector:
             
             // Sort episodes: Failed first, then retrying, then in queue, then downloaded
             const sortedEpisodes = Object.entries(episodeDetails).sort(([, a], [, b]) => {{
-                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'pending': 2, 'queued': 2, 'downloaded': 3 }};
+                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'pending': 2, 'queued': 2, 'downloaded': 3, 'success': 3 }};
                 return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
             }});
             
             // Group episodes by status
             const failedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'failed');
             const inQueueEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'pending' || detail.status === 'queued' || detail.status === 'retrying');
-            const downloadedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'downloaded');
+            const downloadedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'downloaded' || detail.status === 'success');
             
             return `
                 <div class="header">
@@ -2696,9 +2696,9 @@ class EpisodeSelector:
         
         // Helper function for rendering download items
         function renderDownloadItem(episodeId, detail) {{
-            const statusClass = detail.status === 'downloaded' ? 'success' : (detail.status === 'failed' ? 'failed' : (detail.status === 'retrying' ? 'retrying' : 'queued'));
-            const statusText = detail.status === 'downloaded' ? 'Downloaded' : (detail.status === 'failed' ? 'Failed' : (detail.status === 'retrying' ? 'Downloading...' : 'In Queue'));
-            const statusIcon = detail.status === 'downloaded' ? '✓' : (detail.status === 'failed' ? '✗' : (detail.status === 'retrying' ? '↻' : '•'));
+            const statusClass = (detail.status === 'downloaded' || detail.status === 'success') ? 'success' : (detail.status === 'failed' ? 'failed' : (detail.status === 'retrying' ? 'retrying' : 'queued'));
+            const statusText = (detail.status === 'downloaded' || detail.status === 'success') ? 'Downloaded' : (detail.status === 'failed' ? 'Failed' : (detail.status === 'retrying' ? 'Downloading...' : 'In Queue'));
+            const statusIcon = (detail.status === 'downloaded' || detail.status === 'success') ? '✓' : (detail.status === 'failed' ? '✗' : (detail.status === 'retrying' ? '↻' : '•'));
             
             return `
                 <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
@@ -3292,7 +3292,7 @@ class EpisodeSelector:
             // Filter out failed downloads - only process successfully downloaded episodes
             const successfulEpisodes = new Set();
             Object.entries(APP_STATE.downloadStatus.episodeDetails).forEach(([episodeId, details]) => {{
-                if (details.status === 'success') {{
+                if (details.status === 'success' || details.status === 'downloaded') {{
                     successfulEpisodes.add(episodeId);
                 }}
             }});
