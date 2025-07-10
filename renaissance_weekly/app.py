@@ -383,31 +383,20 @@ class RenaissanceWeekly:
             
             await pipeline_progress.complete_item(len(summaries) > 0)
             
-            # Stage 3: Send email digest
-            # Check if email was approved through UI after processing
+            # Stage 3: Email handling
+            # The UI now handles email sending directly when the user clicks "Send Email"
+            # This ensures the email is sent at the right time after user approval
             if hasattr(self.selector, '_email_approved') and self.selector._email_approved:
-                # Email was approved in UI - use the summaries from UI
-                if hasattr(self.selector, '_final_summaries') and self.selector._final_summaries:
-                    logger.info(f"[{self.correlation_id}] 📧 Using UI-approved summaries for email")
-                    summaries = self.selector._final_summaries
-                else:
-                    logger.warning(f"[{self.correlation_id}] ⚠️ Email approved but no summaries found in UI")
-                    
-            if summaries:
+                # Email was already sent by the UI
+                logger.info(f"[{self.correlation_id}] 📧 Email already sent through UI")
                 await pipeline_progress.start_item("Email Delivery")
-                logger.info(f"\n[{self.correlation_id}] 📧 STAGE 3: Email Delivery")
-                
-                # Sort summaries to match the episode order
-                summaries = self._sort_summaries_for_email(summaries)
-                
-                if self.email_digest.send_digest(summaries):
-                    logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly digest sent successfully!")
-                    await pipeline_progress.complete_item(True)
-                else:
-                    logger.error(f"[{self.correlation_id}] ❌ Failed to send email digest")
-                    await pipeline_progress.complete_item(False)
+                await pipeline_progress.complete_item(True)
             else:
-                logger.warning(f"[{self.correlation_id}] ❌ No summaries generated - nothing to send")
+                # User chose not to send email or closed the UI
+                if summaries:
+                    logger.info(f"[{self.correlation_id}] 📧 Email not sent - user did not approve")
+                else:
+                    logger.warning(f"[{self.correlation_id}] ❌ No summaries generated - nothing to send")
             
             # Final summary
             total_time = time.time() - start_time

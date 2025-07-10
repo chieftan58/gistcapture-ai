@@ -374,15 +374,14 @@ class EpisodeSelector:
                     self._send_json({'status': 'processing_started'})
                     
                 elif self.path == '/api/send-email':
-                    # Mark email as approved and ready to send
-                    parent._email_approved = True
-                    parent.state = "complete"
-                    
+                    # Actually send the email instead of just setting flags
                     logger.info(f"[{parent._correlation_id}] 📧 Email send requested by user")
                     
-                    # Store the processed summaries for the main app
+                    # Get summaries to send
+                    summaries_to_send = []
+                    
                     if hasattr(parent, '_processed_summaries') and parent._processed_summaries:
-                        parent._final_summaries = parent._processed_summaries
+                        summaries_to_send = parent._processed_summaries
                         logger.info(f"[{parent._correlation_id}] ✅ Using {len(parent._processed_summaries)} processed summaries")
                     else:
                         # Fallback: retrieve summaries from database for successfully processed episodes
@@ -428,21 +427,62 @@ class EpisodeSelector:
                                 })
                         
                         logger.info(f"[{parent._correlation_id}] Retrieved {len(summaries)} summaries from database matching selected episodes")
-                        parent._final_summaries = summaries
+                        summaries_to_send = summaries
                     
-                    # Log what we're about to do
-                    logger.info(f"[{parent._correlation_id}] 📧 Email approval complete:")
-                    logger.info(f"[{parent._correlation_id}]    - Email approved: {parent._email_approved}")
-                    logger.info(f"[{parent._correlation_id}]    - Final summaries: {len(parent._final_summaries) if hasattr(parent, '_final_summaries') else 0}")
-                    logger.info(f"[{parent._correlation_id}]    - Signaling completion to main app")
+                    # Actually send the email
+                    email_sent = False
+                    error_message = None
                     
-                    self._send_json({'status': 'success'})
+                    if summaries_to_send:
+                        try:
+                            # Import email digest module
+                            from ..email.digest import EmailDigest
+                            from ..config import EMAIL_TO, EMAIL_FROM
+                            
+                            logger.info(f"[{parent._correlation_id}] 📧 Sending email digest...")
+                            logger.info(f"[{parent._correlation_id}]    - Recipients: {EMAIL_TO}")
+                            logger.info(f"[{parent._correlation_id}]    - From: {EMAIL_FROM}")
+                            logger.info(f"[{parent._correlation_id}]    - Summaries: {len(summaries_to_send)}")
+                            
+                            # Sort summaries before sending
+                            summaries_to_send = sorted(
+                                summaries_to_send,
+                                key=lambda x: x['episode'].published,
+                                reverse=True
+                            )
+                            
+                            # Send the email
+                            email_digest = EmailDigest()
+                            email_sent = email_digest.send_digest(summaries_to_send)
+                            
+                            if email_sent:
+                                logger.info(f"[{parent._correlation_id}] ✅ Email sent successfully!")
+                                parent.state = "complete"
+                                parent._email_approved = True
+                                parent._final_summaries = summaries_to_send
+                            else:
+                                logger.error(f"[{parent._correlation_id}] ❌ Failed to send email")
+                                error_message = "Failed to send email - check logs for details"
+                                
+                        except Exception as e:
+                            logger.error(f"[{parent._correlation_id}] ❌ Error sending email: {e}", exc_info=True)
+                            error_message = str(e)
+                    else:
+                        error_message = "No summaries available to send"
+                        logger.error(f"[{parent._correlation_id}] ❌ {error_message}")
                     
-                    # Signal completion after response is sent
-                    threading.Thread(
-                        target=lambda: (time.sleep(0.1), parent._selection_complete.set()),
-                        daemon=True
-                    ).start()
+                    # Send response
+                    if email_sent:
+                        self._send_json({'status': 'success', 'message': 'Email sent successfully!'})
+                    else:
+                        self._send_json({'status': 'error', 'message': error_message or 'Failed to send email'})
+                    
+                    # Signal completion after a short delay
+                    if email_sent:
+                        threading.Thread(
+                            target=lambda: (time.sleep(0.5), parent._selection_complete.set()),
+                            daemon=True
+                        ).start()
                     
                 elif self.path == '/api/start-download':
                     # Start downloading episodes
@@ -2089,6 +2129,7 @@ class EpisodeSelector:
         function renderComplete() {{
             // Get email from configuration or use default
             const emailTo = '{EMAIL_TO or "your email"}';
+            const message = APP_STATE.emailMessage || 'Email sent successfully!';
             
             return `
                 <div class="header">
@@ -2099,7 +2140,8 @@ class EpisodeSelector:
                 <div class="container">
                     <div class="loading-content" style="margin: 100px auto;">
                         <div style="font-size: 60px; color: #34C759; margin-bottom: 20px;">✓</div>
-                        <h2>Sending email digest to ${{emailTo}}...</h2>
+                        <h2>${{message}}</h2>
+                        <p style="margin-top: 10px; color: #666;">Sent to: ${{emailTo}}</p>
                         <p style="margin-top: 20px; color: #666;">This window will close automatically.</p>
                     </div>
                 </div>
@@ -3443,12 +3485,15 @@ class EpisodeSelector:
                         method: 'POST'
                     }});
                     
-                    if (response.ok) {{
+                    const result = await response.json();
+                    
+                    if (response.ok && result.status === 'success') {{
                         APP_STATE.state = 'complete';
+                        APP_STATE.emailMessage = result.message || 'Email sent successfully!';
                         render();
-                        setTimeout(() => window.close(), 3000);
+                        setTimeout(() => window.close(), 5000);
                     }} else {{
-                        alert('Failed to send email');
+                        alert('Failed to send email: ' + (result.message || 'Unknown error'));
                     }}
                 }} catch (error) {{
                     console.error('Failed to send email:', error);

@@ -998,3 +998,31 @@ Implemented a dedicated download stage in the UI pipeline that provides visibili
 - Prevents OOM by calculating safe task count
 - Different limits for test vs full mode
 - Result: No more process kills from memory exhaustion
+
+### Recent Updates (2025-01-10) - Fixed Email Not Sending After UI Approval:
+
+**Problem**: User clicks "Send Email" button in UI but email never sends
+
+**Root Cause**: 
+- The UI was only setting flags (`_email_approved`, `_final_summaries`) when user clicked send
+- The main app.py code had already passed the email sending logic by the time these flags were set
+- The email check happened in the wrong place - after `run_complete_selection` returned
+
+**Fix Implemented**:
+1. **Moved email sending into the UI handler** (`/api/send-email` endpoint)
+   - UI now directly calls `EmailDigest.send_digest()` when user clicks send
+   - Retrieves summaries from database for selected episodes
+   - Sends email immediately upon user approval
+   - Returns success/error response to frontend
+
+2. **Updated frontend JavaScript**:
+   - Shows success/error messages
+   - Displays "Email sent successfully!" confirmation
+   - Window closes after 5 seconds on success
+
+3. **Simplified app.py flow**:
+   - Removed redundant email sending logic after processing
+   - Now just checks if email was sent by UI
+   - Cleaner separation of concerns
+
+**Result**: Email now sends immediately when user clicks "Send Email" button
