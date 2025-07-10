@@ -24,6 +24,22 @@ class EmailDigest:
         """Send Renaissance Weekly digest"""
         try:
             logger.info("📧 Preparing Renaissance Weekly digest...")
+            logger.info(f"   Email From: {EMAIL_FROM}")
+            logger.info(f"   Email To: {EMAIL_TO}")
+            logger.info(f"   Number of summaries: {len(summaries)}")
+            
+            # Validate inputs
+            if not summaries:
+                logger.error("No summaries provided to send_digest")
+                return False
+                
+            if not EMAIL_TO:
+                logger.error("EMAIL_TO is not configured")
+                return False
+                
+            if not sendgrid_client:
+                logger.error("SendGrid client is not initialized")
+                return False
             
             # Summaries should already be sorted by app.py
             # But ensure they maintain the order: alphabetical by podcast, then date descending

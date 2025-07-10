@@ -27,4 +27,10 @@ openai_client = OpenAI(
 # Log rate limiter initialization
 logger.info("OpenAI client initialized with global rate limiter (45 req/min effective)")
 
-sendgrid_client = SendGridAPIClient(os.getenv("SENDGRID_API_KEY"))
+sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
+if not sendgrid_api_key:
+    logger.warning("SENDGRID_API_KEY not found in environment variables")
+    sendgrid_client = None
+else:
+    logger.info(f"SendGrid client initialized with API key: {sendgrid_api_key[:10]}...")
+    sendgrid_client = SendGridAPIClient(sendgrid_api_key)

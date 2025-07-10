@@ -370,6 +370,15 @@ class RenaissanceWeekly:
             await pipeline_progress.complete_item(len(summaries) > 0)
             
             # Stage 3: Send email digest
+            # Check if email was approved through UI after processing
+            if hasattr(self.selector, '_email_approved') and self.selector._email_approved:
+                # Email was approved in UI - use the summaries from UI
+                if hasattr(self.selector, '_final_summaries') and self.selector._final_summaries:
+                    logger.info(f"[{self.correlation_id}] 📧 Using UI-approved summaries for email")
+                    summaries = self.selector._final_summaries
+                else:
+                    logger.warning(f"[{self.correlation_id}] ⚠️ Email approved but no summaries found in UI")
+                    
             if summaries:
                 await pipeline_progress.start_item("Email Delivery")
                 logger.info(f"\n[{self.correlation_id}] 📧 STAGE 3: Email Delivery")

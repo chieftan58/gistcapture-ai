@@ -378,17 +378,21 @@ class EpisodeSelector:
                     parent._email_approved = True
                     parent.state = "complete"
                     
+                    logger.info(f"[{parent._correlation_id}] 📧 Email send requested by user")
+                    
                     # Store the processed summaries for the main app
                     if hasattr(parent, '_processed_summaries') and parent._processed_summaries:
                         parent._final_summaries = parent._processed_summaries
+                        logger.info(f"[{parent._correlation_id}] ✅ Using {len(parent._processed_summaries)} processed summaries")
                     else:
                         # Fallback: retrieve summaries from database for successfully processed episodes
                         logger.info(f"[{parent._correlation_id}] No processed summaries in memory, retrieving from database")
-                        from ..database import Database
-                        db = Database()
+                        from ..database import PodcastDatabase
+                        db = PodcastDatabase()
                         
                         # Get recent episodes with summaries
                         episodes_with_summaries = db.get_episodes_with_summaries(days_back=parent.configuration.get('lookback_days', 7))
+                        logger.info(f"[{parent._correlation_id}] Found {len(episodes_with_summaries)} episodes with summaries in database")
                         
                         # Convert database records to summary format expected by email digest
                         summaries = []
@@ -397,16 +401,40 @@ class EpisodeSelector:
                             # Check if this episode was in our selected episodes
                             episode_id = f"{ep['podcast']}|{ep['title']}|{ep['published']}"
                             if parent._selected_episode_indices and episode_id in parent._selected_episode_indices:
+                                # Create Episode object from database record
+                                from ..models import Episode
+                                from datetime import datetime
+                                
+                                # Parse the published date
+                                published = ep['published']
+                                if isinstance(published, str):
+                                    published = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                                
+                                episode_obj = Episode(
+                                    podcast=ep['podcast'],
+                                    title=ep['title'],
+                                    published=published,
+                                    audio_url=ep.get('audio_url'),
+                                    transcript_url=ep.get('transcript_url'),
+                                    description=ep.get('description', ''),
+                                    link=ep.get('link', ''),
+                                    duration=ep.get('duration', ''),
+                                    guid=ep.get('guid', '')
+                                )
+                                
                                 summaries.append({
-                                    'podcast': ep['podcast'],
-                                    'title': ep['title'],
-                                    'summary': ep['summary'],
-                                    'published': ep['published'],
-                                    'audio_url': ep['audio_url']
+                                    'episode': episode_obj,
+                                    'summary': ep['summary']
                                 })
                         
-                        logger.info(f"[{parent._correlation_id}] Retrieved {len(summaries)} summaries from database")
+                        logger.info(f"[{parent._correlation_id}] Retrieved {len(summaries)} summaries from database matching selected episodes")
                         parent._final_summaries = summaries
+                    
+                    # Log what we're about to do
+                    logger.info(f"[{parent._correlation_id}] 📧 Email approval complete:")
+                    logger.info(f"[{parent._correlation_id}]    - Email approved: {parent._email_approved}")
+                    logger.info(f"[{parent._correlation_id}]    - Final summaries: {len(parent._final_summaries) if hasattr(parent, '_final_summaries') else 0}")
+                    logger.info(f"[{parent._correlation_id}]    - Signaling completion to main app")
                     
                     self._send_json({'status': 'success'})
                     
