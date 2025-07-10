@@ -56,6 +56,8 @@ class EpisodeSelector:
         self._episodes_to_download = []
         self._manual_download_queue = []
         self._browser_download_queue = []
+        self._download_app = None  # Will hold reference to the running app
+        self._expanded_episodes = set()  # Track which episodes have expanded details
     
     def run_complete_selection(self, days_back: int = 7, fetch_callback: Callable = None) -> Tuple[List[Episode], Dict]:
         """Run the complete selection process in a single page"""
@@ -529,13 +531,28 @@ class EpisodeSelector:
                             self._send_json({'status': 'processing'})
                             return
                     
-                    # Otherwise queue for later
-                    parent._manual_download_queue.append({
-                        'episode_id': episode_id,
-                        'url': url
-                    })
+                    # Otherwise, if download thread exists, retry there
+                    if hasattr(parent, '_download_app') and parent._download_app:
+                        # Create a task to retry the download
+                        import asyncio
+                        loop = parent._download_app._loop
+                        if loop and not loop.is_closed():
+                            # Get the download manager and trigger retry
+                            dm = parent._download_app._download_manager
+                            if dm:
+                                # Schedule the retry in the event loop
+                                future = asyncio.run_coroutine_threadsafe(
+                                    dm._retry_with_manual_url(episode_id, url),
+                                    loop
+                                )
+                                logger.info(f"[{parent._correlation_id}] Scheduled manual URL retry for {episode_id}")
+                                self._send_json({'status': 'processing'})
+                                return
                     
-                    self._send_json({'status': 'queued'})
+                    # If no active download manager, create a standalone download task
+                    logger.info(f"[{parent._correlation_id}] Creating standalone download for manual URL")
+                    parent._start_manual_download(episode_id, url)
+                    self._send_json({'status': 'processing'})
                     
                 elif self.path == '/api/browser-download':
                     # Handle browser-based download
@@ -837,7 +854,10 @@ class EpisodeSelector:
                 breakdown: {{}}
             }},
             emailPreview: null,
-            processingCancelled: false
+            processingCancelled: false,
+            expandedEpisodes: new Set(),  // Track expanded download details
+            downloadInterval: null,  // Polling interval for download status
+            downloadStatus: null  // Current download status
         }};
         
         console.log('APP_STATE initialized:', APP_STATE);
@@ -1313,6 +1333,12 @@ class EpisodeSelector:
                             <div class="progress-fill" style="width: ${{total > 0 ? (processedCount / total * 100) : 0}}%"></div>
                         </div>
                         
+                        ${{processedCount < total ? `
+                            <div style="text-align: center; margin: 16px 0; color: #666;">
+                                <em>Processing ${{total - processedCount}} remaining episodes...</em>
+                            </div>
+                        ` : ''}}
+                        
                         <div class="download-details">
                             ${{failedEpisodes.length > 0 ? `
                                 <div class="episode-section">
@@ -1359,7 +1385,8 @@ class EpisodeSelector:
                                 Cancel Downloads
                             </button>
                             
-                            <button class="button primary" onclick="continueWithDownloads()" ${{downloaded === 0 ? 'disabled' : ''}}>
+                            <button class="button primary" onclick="continueWithDownloads()" 
+                                    ${{processedCount < total || downloaded === 0 ? 'disabled' : ''}}>
                                 ${{failed > 0 ? `Continue with ${{downloaded}} Episodes` : 'Continue to Processing'}}
                             </button>
                         </div>
@@ -1525,6 +1552,28 @@ class EpisodeSelector:
                         border-radius: 8px;
                         padding: 16px;
                         margin: -8px 0 12px 0;
+                    }}
+                    
+                    /* Prevent clicks inside details panel from bubbling up */
+                    .download-details-panel * {{
+                        pointer-events: auto;
+                    }}
+                    
+                    .download-item.expandable {{
+                        cursor: pointer;
+                    }}
+                    
+                    .download-item.expandable .troubleshoot-actions {{
+                        pointer-events: auto;
+                    }}
+                    
+                    .expand-icon {{
+                        display: inline-block;
+                        width: 16px;
+                        margin-right: 8px;
+                        color: #666;
+                        font-size: 12px;
+                        vertical-align: middle;
                     }}
                     
                     .attempt-history {{
@@ -2789,9 +2838,12 @@ class EpisodeSelector:
             
             return `
                 <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
-                     ${{detail.status === 'failed' ? `onclick="toggleDownloadDetails('${{episodeId}}')"` : ''}}>
+                     ${{detail.status === 'failed' ? `onclick="toggleDownloadDetails('${{episodeId}}', event)"` : ''}}>
                     <div class="episode-info">
-                        <div class="episode-title">${{detail.episode || detail.title || episodeId}}</div>
+                        <div class="episode-title">
+                            ${{detail.status === 'failed' ? `<span id="toggle-${{episodeId}}" class="expand-icon">${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? '▼' : '▶'}}</span>` : ''}}
+                            ${{detail.episode || detail.title || episodeId}}
+                        </div>
                         ${{detail.status === 'failed' ? `<div class="error-message">${{detail.lastError}}</div>` : ''}}
                         ${{detail.status === 'retrying' ? `<div class="attempt-info">Attempt ${{detail.attemptCount}} - ${{detail.currentStrategy}}</div>` : ''}}
                     </div>
@@ -2801,7 +2853,7 @@ class EpisodeSelector:
                     </div>
                 </div>
                 ${{detail.status === 'failed' ? `
-                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: none;">
+                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};" onclick="event.stopPropagation()">
                         <div class="attempt-history">
                             <h4>Attempt History:</h4>
                             ${{(detail.history || []).map(h => `
@@ -3220,7 +3272,10 @@ class EpisodeSelector:
                     
                     // Check if downloads are complete
                     if (status.downloaded + status.failed >= status.total && status.total > 0) {{
-                        clearInterval(APP_STATE.downloadInterval);
+                        // Only stop polling if no failed episodes or if user has left the download page
+                        if (status.failed === 0 || APP_STATE.state !== 'download') {{
+                            clearInterval(APP_STATE.downloadInterval);
+                        }}
                         
                         // Automatically proceed if all successful
                         if (status.failed === 0) {{
@@ -3234,20 +3289,35 @@ class EpisodeSelector:
             }}, 1000);
         }}
         
-        function toggleDownloadDetails(episodeId) {{
+        function toggleDownloadDetails(episodeId, event) {{
+            // Prevent event from bubbling up
+            if (event) {{
+                event.stopPropagation();
+            }}
+            
             const detailsDiv = document.getElementById(`details-${{episodeId}}`);
             const toggleIcon = document.getElementById(`toggle-${{episodeId}}`);
             
             if (detailsDiv.style.display === 'none' || !detailsDiv.style.display) {{
                 detailsDiv.style.display = 'block';
                 toggleIcon.textContent = '▼';
+                // Track expanded state
+                if (!APP_STATE.expandedEpisodes) APP_STATE.expandedEpisodes = new Set();
+                APP_STATE.expandedEpisodes.add(episodeId);
             }} else {{
                 detailsDiv.style.display = 'none';
                 toggleIcon.textContent = '▶';
+                // Track collapsed state
+                if (APP_STATE.expandedEpisodes) {{
+                    APP_STATE.expandedEpisodes.delete(episodeId);
+                }}
             }}
         }}
         
         async function viewDetailedLogs(episodeId) {{
+            // Prevent any propagation
+            if (event) event.stopPropagation();
+            
             const episode = APP_STATE.downloadStatus.episodeDetails[episodeId];
             if (!episode) return;
             
@@ -3262,10 +3332,17 @@ class EpisodeSelector:
         }}
         
         async function tryManualUrl(episodeId) {{
-            const url = prompt('Enter direct URL to audio file:');
+            const url = prompt('Enter direct URL to audio file (MP3, WAV, etc.):\\n\\nFor YouTube URLs, the system will automatically download and convert to MP3.');
             if (!url) return;
             
             try {{
+                // Update UI to show it's retrying
+                if (APP_STATE.downloadStatus && APP_STATE.downloadStatus.episodeDetails[episodeId]) {{
+                    APP_STATE.downloadStatus.episodeDetails[episodeId].status = 'retrying';
+                    APP_STATE.downloadStatus.episodeDetails[episodeId].lastError = 'Retrying with manual URL...';
+                    render();
+                }}
+                
                 const response = await fetch('/api/manual-download', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
@@ -3275,14 +3352,34 @@ class EpisodeSelector:
                     }})
                 }});
                 
+                const result = await response.json();
+                
                 if (response.ok) {{
-                    alert('Manual download started...');
+                    // Ensure polling is active to see the update
+                    if (!APP_STATE.downloadInterval) {{
+                        startDownloadPolling();
+                    }}
+                    
+                    // Show success feedback
+                    const episodeTitle = APP_STATE.downloadStatus.episodeDetails[episodeId]?.episode || episodeId;
+                    alert(`Manual download started for: ${{episodeTitle.substring(0, 50)}}...\\n\\nThis may take a few moments. The page will update automatically when complete.`);
+                    
+                    // Keep polling active to see status updates
+                    if (!APP_STATE.downloadInterval) {{
+                        startDownloadPolling();
+                    }}
                 }} else {{
-                    alert('Failed to start manual download');
+                    alert('Failed to start manual download: ' + (result.message || 'Unknown error'));
                 }}
             }} catch (error) {{
                 console.error('Manual download error:', error);
                 alert('Error: ' + error.message);
+                
+                // Revert status on error
+                if (APP_STATE.downloadStatus && APP_STATE.downloadStatus.episodeDetails[episodeId]) {{
+                    APP_STATE.downloadStatus.episodeDetails[episodeId].status = 'failed';
+                    render();
+                }}
             }}
         }}
         
@@ -4919,8 +5016,9 @@ class EpisodeSelector:
                 # Create app instance
                 app = RenaissanceWeekly()
                 
-                # Store the download manager reference
+                # Store the download manager reference and event loop
                 self._download_app = app
+                self._download_app._loop = loop  # Store the event loop reference
                 
                 # Define progress callback to update UI status
                 def download_progress_callback(status):
@@ -5007,6 +5105,118 @@ class EpisodeSelector:
         }
         
         return debug_info
+    
+    def _start_manual_download(self, episode_id: str, url: str):
+        """Start a standalone manual download after the download phase is complete"""
+        logger.info(f"[{self._correlation_id}] Starting standalone manual download for {episode_id}")
+        
+        # Find the episode
+        episode = None
+        for ep in self.episode_cache:
+            if f"{ep.podcast}|{ep.title}|{ep.published}" == episode_id:
+                episode = ep
+                break
+        
+        if not episode:
+            logger.error(f"[{self._correlation_id}] Episode not found for manual download: {episode_id}")
+            return
+        
+        # Create a thread to handle the manual download
+        def run_manual_download():
+            try:
+                logger.info(f"[{self._correlation_id}] Running manual download for {episode.title}")
+                
+                # Import necessary modules
+                from ..app import RenaissanceWeekly
+                from ..transcripts.transcriber import AudioTranscriber
+                import asyncio
+                
+                # Create a new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                # Create transcriber to handle the download
+                transcriber = AudioTranscriber()
+                
+                # Download the audio file
+                async def download_with_url():
+                    try:
+                        # Check if this is a local file path
+                        from pathlib import Path
+                        
+                        if url.startswith('/') or url.startswith('~') or url.startswith('file://'):
+                            # Handle local file path
+                            local_path = Path(url.replace('file://', '').replace('~', str(Path.home())))
+                            
+                            if local_path.exists() and local_path.is_file():
+                                # Copy to our audio directory
+                                from ..config import AUDIO_DIR
+                                from ..utils.helpers import slugify
+                                import shutil
+                                
+                                AUDIO_DIR.mkdir(exist_ok=True)
+                                date_str = episode.published.strftime('%Y%m%d')
+                                safe_podcast = slugify(episode.podcast)[:30]
+                                safe_title = slugify(episode.title)[:50]
+                                audio_path = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
+                                
+                                # Copy the file
+                                shutil.copy2(local_path, audio_path)
+                                logger.info(f"[{self._correlation_id}] ✅ Copied local file to: {audio_path}")
+                            else:
+                                logger.error(f"[{self._correlation_id}] ❌ Local file not found: {local_path}")
+                                audio_path = None
+                        else:
+                            # Use the transcriber's download method for URLs
+                            audio_path = await transcriber.download_audio_simple(
+                                episode,
+                                url,
+                                f"manual-{episode.title[:20]}"
+                            )
+                        
+                        if audio_path and audio_path.exists():
+                            logger.info(f"[{self._correlation_id}] ✅ Manual download successful: {audio_path}")
+                            
+                            # Update download status
+                            with self._status_lock:
+                                if self._download_status and 'episodeDetails' in self._download_status:
+                                    if episode_id in self._download_status['episodeDetails']:
+                                        self._download_status['episodeDetails'][episode_id]['status'] = 'success'
+                                        self._download_status['episodeDetails'][episode_id]['lastError'] = None
+                                        self._download_status['downloaded'] = self._download_status.get('downloaded', 0) + 1
+                                        self._download_status['failed'] = max(0, self._download_status.get('failed', 1) - 1)
+                            
+                            # Update episode cache with successful download
+                            episode.audio_url = str(audio_path)
+                            
+                            return True
+                        else:
+                            logger.error(f"[{self._correlation_id}] ❌ Manual download failed - no file created")
+                            return False
+                            
+                    except Exception as e:
+                        logger.error(f"[{self._correlation_id}] ❌ Manual download error: {e}")
+                        return False
+                
+                # Run the download
+                success = loop.run_until_complete(download_with_url())
+                
+                if not success:
+                    # Update status to show failure
+                    with self._status_lock:
+                        if self._download_status and 'episodeDetails' in self._download_status:
+                            if episode_id in self._download_status['episodeDetails']:
+                                self._download_status['episodeDetails'][episode_id]['status'] = 'failed'
+                                self._download_status['episodeDetails'][episode_id]['lastError'] = 'Manual download failed'
+                
+                loop.close()
+                
+            except Exception as e:
+                logger.error(f"[{self._correlation_id}] Manual download thread error: {e}", exc_info=True)
+        
+        # Start the download thread
+        download_thread = threading.Thread(target=run_manual_download, daemon=True)
+        download_thread.start()
     
     def _generate_email_preview(self):
         """Generate a preview of the email that will be sent"""

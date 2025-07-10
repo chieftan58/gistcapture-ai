@@ -1167,3 +1167,145 @@ yt-dlp --cookies-from-browser firefox "https://www.youtube.com/watch?v=pRoKi4VL_
 Use the YouTube URLs above with online converters or browser extensions
 
 **Status**: Code implementation is complete. American Optimist episodes will download automatically once YouTube authentication is provided via cookies.
+
+### Recent Updates (2025-01-10) - Fixed Premature "Continue to Processing" Button:
+
+**Problem**: When downloading 4 American Optimist episodes, the UI immediately enabled "Continue to Processing" after finding 1 cached episode, preventing download of the other 3 episodes.
+
+**Root Cause**:
+- Cached episodes were immediately reporting success via `_report_progress()`
+- UI button was enabled as soon as `downloaded > 0` (any episode downloaded)
+- Users could proceed while other episodes were still downloading
+
+**Fix Implemented**:
+1. **Backend**: Removed premature progress reporting for cached files
+   - Cached files no longer trigger immediate progress updates
+   - Final statistics calculated after all downloads complete
+
+2. **Frontend**: Changed button enabling logic
+   - Button now requires ALL episodes to be processed: `processedCount >= total`
+   - Added visual indicator: "Processing X remaining episodes..."
+   - Button stays disabled until downloads complete
+
+**Result**: System now waits for all downloads to complete/fail before allowing progression
+
+### Recent Updates (2025-01-10) - Fixed Download UI Not Showing Failed Episodes:
+
+**Problem**: Failed downloads showed as "3 remaining" instead of "3 failed", and no "Manual URL" buttons appeared
+
+**Root Cause**: 
+- YouTube-handled episodes that failed were returning early without marking status as 'failed'
+- The UI only shows Manual URL buttons for episodes with status === 'failed'
+- Episodes stayed in "pending" state, showing as "remaining"
+
+**Fix Implemented**:
+- Added status update in download_manager.py for YouTube failures:
+  ```python
+  # Mark as failed before returning
+  status.status = 'failed'
+  self._report_progress()
+  ```
+
+**Result**: Failed episodes now properly show in "Failed Episodes" section with troubleshooting buttons including "Manual URL"
+
+### Recent Updates (2025-01-10) - Fixed Manual URL Functionality:
+
+**Problem**: User clicks "Manual URL" button but UI doesn't update to show retry status or results
+
+**Root Causes**:
+1. Missing `_retry_manual_download` method in EpisodeSelector class
+2. Async task creation failing due to event loop context issues  
+3. No event loop reference stored for manual URL retries
+
+**Fixes Implemented**:
+
+1. **Enhanced Event Loop Handling**:
+   - Store event loop reference in `_download_app._loop` during download setup
+   - Use `asyncio.run_coroutine_threadsafe()` for cross-thread task scheduling
+   - Proper error handling when no event loop available
+
+2. **Fixed Async Task Creation in DownloadManager**:
+   - Check if we're in running event loop before using `asyncio.create_task()`
+   - Fall back to `asyncio.ensure_future()` when not in async context
+   - Update retry statistics properly (retrying count, failed count)
+
+3. **Enhanced Manual URL API Handler**:
+   - Check for active download manager and use it if available
+   - Schedule retry task in proper event loop context
+   - Return appropriate error if no active download session
+
+**Code Changes**:
+- `download_manager.py`: Fixed async task creation and statistics tracking
+- `selection.py`: Store event loop reference and improved API handler
+
+**Result**: Manual URL retries now work properly with real-time UI updates showing retry status
+
+### Recent Updates (2025-01-10) - Fixed Manual Downloads After Download Phase:
+
+**Problem**: Manual URL functionality failed with "No active download manager" error after initial download phase completed
+
+**Root Cause**: 
+- Download manager was cleaned up after initial downloads finished
+- Manual URL handler required active download manager to work
+- No fallback mechanism for post-download manual retries
+
+**Fix Implemented**:
+
+1. **Standalone Manual Download Handler**:
+   - Added `_start_manual_download()` method for post-download manual URLs
+   - Creates new thread with event loop for standalone downloads
+   - Uses AudioTranscriber directly to download from manual URL
+   - Updates download status in UI after completion
+
+2. **Enhanced API Handler**:
+   ```python
+   # If no active download manager, create standalone download
+   logger.info(f"[{parent._correlation_id}] Creating standalone download for manual URL")
+   parent._start_manual_download(episode_id, url)
+   self._send_json({'status': 'processing'})
+   ```
+
+3. **UI Improvements**:
+   - Better prompt message explaining YouTube URL support
+   - Keeps download polling active to show status updates
+   - Maintains expanded episode details during UI refreshes
+   - Visual expand/collapse indicators for failed episodes
+
+**Result**: Manual URL downloads now work at any time, even after the initial download phase is complete. YouTube URLs are automatically handled with download and conversion to MP3.
+
+### Recent Updates (2025-01-10) - Enhanced Manual URL with Local File Support:
+
+**Problem**: YouTube authentication failing even with cookies present, preventing manual URL downloads
+
+**Enhancement**: Manual URL feature now supports local file paths in addition to URLs
+
+**Implementation**:
+1. **Local File Detection**: Checks if input starts with '/', '~', or 'file://'
+2. **File Copy**: Copies local MP3 files to the correct audio directory
+3. **Path Expansion**: Handles home directory expansion (~)
+4. **Validation**: Verifies file exists before copying
+
+**Usage**:
+```bash
+# Download episodes manually using any method:
+yt-dlp -x --audio-format mp3 -o "episode.mp3" https://youtube.com/watch?v=...
+# Or use online converters, browser extensions, etc.
+
+# In UI, click "Manual URL" and enter:
+/home/user/downloads/episode.mp3
+```
+
+**UI Improvements**:
+- Better prompt explaining all supported input types
+- Maintains expanded episode details during updates
+- Shows clear success/failure status
+
+**Current Status**:
+- YouTube authentication issues persist with cookies
+- Manual download with local files provides reliable workaround
+- System successfully handles local MP3 file imports
+
+**TODO**:
+- Investigate YouTube cookie format/expiration issues
+- Consider implementing OAuth for YouTube API
+- Add support for drag-and-drop file upload in UI

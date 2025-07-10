@@ -12,6 +12,7 @@ from .models import Episode
 from .transcripts.transcriber import AudioTranscriber
 from .fetchers.audio_sources import AudioSourceFinder
 from .fetchers.american_optimist_handler import AmericanOptimistHandler
+from .fetchers.universal_youtube_handler import UniversalYouTubeHandler
 from .utils.logging import get_logger
 from .utils.helpers import exponential_backoff_with_jitter
 from .config import TEMP_DIR
@@ -105,9 +106,33 @@ class DownloadManager:
         }
         
     def add_manual_url(self, episode_id: str, url: str):
-        """Add manual URL for an episode"""
+        """Add manual URL for an episode and retry download"""
         self._manual_url_queue[episode_id] = url
         logger.info(f"Added manual URL for {episode_id}: {url}")
+        
+        # If episode exists and is failed, trigger immediate retry
+        if episode_id in self.download_status:
+            status = self.download_status[episode_id]
+            if status.status == 'failed':
+                # Mark as retrying
+                status.status = 'retrying'
+                self.stats['retrying'] = self.stats.get('retrying', 0) + 1
+                self.stats['failed'] = max(0, self.stats.get('failed', 0) - 1)
+                self._report_progress()
+                
+                # Create task to retry download with manual URL
+                # Check if we're in an event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're in an async context, create task directly
+                        asyncio.create_task(self._retry_with_manual_url(episode_id, url))
+                    else:
+                        # We're not in an async context, schedule it
+                        asyncio.ensure_future(self._retry_with_manual_url(episode_id, url))
+                except RuntimeError:
+                    # No event loop, log error
+                    logger.error(f"Cannot retry {episode_id} - no event loop available")
         
     def request_browser_download(self, episode_id: str):
         """Request browser-based download for an episode"""
@@ -147,6 +172,9 @@ class DownloadManager:
                 self.stats['downloaded'] += 1
             elif status.status == 'failed':
                 self.stats['failed'] += 1
+        
+        # Send final progress report to UI
+        self._report_progress()
                 
         return self.get_status()
         
@@ -184,8 +212,8 @@ class DownloadManager:
                     # Mark as successful immediately
                     status.status = 'success'
                     status.audio_path = audio_file
-                    self.stats['downloaded'] += 1
-                    self._report_progress()
+                    # Don't increment stats or report progress for cached files
+                    # This will be done in the final statistics update
                     return audio_file
                 else:
                     logger.warning(f"Existing file invalid for {episode.title}, re-downloading")
@@ -209,100 +237,66 @@ class DownloadManager:
                 if audio_path:
                     return audio_path
                     
-            # Special handling for American Optimist (YouTube-based)
-            if AmericanOptimistHandler.should_use_special_handling(episode):
-                logger.info(f"🎥 Special YouTube handling for American Optimist: {episode.title}")
+            # Universal YouTube handling for all problematic podcasts
+            if UniversalYouTubeHandler.should_handle(episode.podcast):
+                logger.info(f"🎥 Universal YouTube handling for {episode.podcast}: {episode.title[:50]}...")
                 
-                # Use the handler to enhance the episode
-                enhanced_episode = AmericanOptimistHandler.enhance_episode_for_download(episode)
+                # Use the universal handler to enhance the episode
+                enhanced_episode = UniversalYouTubeHandler.enhance_episode(episode)
                 
                 # Try downloading with enhanced URL
-                audio_path = await self._try_download(
-                    enhanced_episode,
-                    enhanced_episode.audio_url,
-                    'american_optimist_youtube',
-                    status
+                audio_path = await asyncio.wait_for(
+                    self._try_download(
+                        enhanced_episode,
+                        enhanced_episode.audio_url,
+                        f'{episode.podcast.lower().replace(" ", "_")}_youtube',
+                        status
+                    ),
+                    timeout=300  # 5 minute timeout per attempt
                 )
                 if audio_path:
                     return audio_path
                 
-                # Try alternative sources
-                alternative_sources = AmericanOptimistHandler.get_alternative_sources(episode)
-                for i, alt_url in enumerate(alternative_sources):
-                    audio_path = await self._try_download(
-                        episode,
-                        alt_url,
-                        f'american_optimist_alt_{i+1}',
-                        status
-                    )
-                    if audio_path:
-                        return audio_path
-                
-                # If all else fails, provide download instructions
-                if not audio_path:
-                    from .fetchers.youtube_cookie_helper import YouTubeCookieHelper
-                    
-                    # Provide specific YouTube URLs for manual download
-                    youtube_urls = {
-                        "118": "https://www.youtube.com/watch?v=pRoKi4VL_5s",
-                        "117": "https://www.youtube.com/watch?v=w1FRqBOxS8g", 
-                        "115": "https://www.youtube.com/watch?v=YwmQzWGyrRQ",
-                        "114": "https://www.youtube.com/watch?v=TVg_DK8-kMw",
-                    }
-                    
-                    # Extract episode number
-                    import re
-                    ep_match = re.search(r'Ep\.?\s*(\d+)', episode.title, re.IGNORECASE)
-                    ep_num = ep_match.group(1) if ep_match else None
-                    youtube_url = youtube_urls.get(ep_num, "")
-                    
-                    status.last_error = (
-                        f"YouTube authentication required. Options:\n"
-                        f"1) Export browser cookies - see instructions\n"
-                        f"2) Manual download from: {youtube_url}\n"
-                        f"3) Use 'Manual URL' button with YouTube link"
-                    )
-                    
-                    # Log detailed instructions once
-                    if not hasattr(self, '_youtube_instructions_shown'):
-                        logger.info(YouTubeCookieHelper.get_cookie_instructions())
-                        self._youtube_instructions_shown = True
-                    
-                    logger.info(f"American Optimist {episode.title} - YouTube auth required")
-                    return None
-            
-            # Special handling for podcasts that need YouTube-first approach
-            youtube_first_podcasts = ["Dwarkesh Podcast", "The Drive"]
-            logger.info(f"Checking if {episode.podcast} needs YouTube-first handling...")
-            if episode.podcast in youtube_first_podcasts:
-                logger.info(f"🎯 Special YouTube-first handling for {episode.podcast}: {episode.title}")
-                
-                # Try YouTube first
-                try:
-                    from .fetchers.youtube_enhanced import YouTubeEnhancedFetcher
-                    async with YouTubeEnhancedFetcher() as yt_fetcher:
-                        youtube_url = await yt_fetcher.find_episode_on_youtube(episode)
-                        if youtube_url:
-                            logger.info(f"Found YouTube URL: {youtube_url}")
-                            audio_path = await self._try_download(
-                                episode,
-                                youtube_url,
-                                'youtube_priority',
-                                status
+                # Try manual URLs if available
+                manual_urls = UniversalYouTubeHandler.get_manual_urls(episode.podcast)
+                for i, (key, url) in enumerate(manual_urls.items()):
+                    if key.lower() in episode.title.lower():
+                        try:
+                            audio_path = await asyncio.wait_for(
+                                self._try_download(
+                                    episode,
+                                    url,
+                                    f'{episode.podcast.lower().replace(" ", "_")}_manual_{i+1}',
+                                    status
+                                ),
+                                timeout=300
                             )
                             if audio_path:
                                 return audio_path
-                except Exception as e:
-                    logger.error(f"YouTube search failed: {e}")
+                        except asyncio.TimeoutError:
+                            logger.warning(f"Download timeout for {episode.title[:50]}...")
+                            continue
                 
-                # If YouTube fails, try browser automation on Substack URL
-                if episode.audio_url and 'substack.com' in episode.audio_url:
-                    logger.info(f"YouTube failed, trying browser automation for Substack URL")
-                    audio_path = await self._try_browser_download(episode, status)
-                    if audio_path:
-                        return audio_path
+                # If all else fails, provide download instructions
+                status.last_error = UniversalYouTubeHandler.get_download_instructions(episode)
+                
+                # Log detailed instructions once per podcast
+                instructions_key = f'_youtube_instructions_{episode.podcast.replace(" ", "_")}'
+                if not hasattr(self, instructions_key):
+                    from .fetchers.youtube_cookie_helper import YouTubeCookieHelper
+                    logger.info(YouTubeCookieHelper.get_cookie_instructions())
+                    setattr(self, instructions_key, True)
+                
+                logger.info(f"{episode.podcast} download failed - YouTube auth required: {episode.title[:50]}...")
+                
+                # Mark as failed before returning
+                status.status = 'failed'
+                self._report_progress()
+                return None
+            
+            # Regular download handling for non-YouTube podcasts
                     
-            # Try multiple audio sources
+            # Try multiple audio sources with timeout
             try:
                 # Get podcast config for this episode
                 podcast_config = None
@@ -313,39 +307,62 @@ class DownloadManager:
                         episode.apple_podcast_id = podcast_config['apple_id']
                         logger.info(f"Set apple_podcast_id={episode.apple_podcast_id} for {episode.podcast}")
                 
-                sources = await self.audio_finder.find_all_audio_sources(episode, podcast_config)
-                logger.info(f"Found {len(sources)} audio sources for {episode.title}")
+                # Add timeout to audio source finding
+                sources = await asyncio.wait_for(
+                    self.audio_finder.find_all_audio_sources(episode, podcast_config),
+                    timeout=120  # 2 minutes to find sources
+                )
+                logger.info(f"Found {len(sources)} audio sources for {episode.title[:50]}...")
                 
                 for i, source_url in enumerate(sources):
                     if self._cancelled:
                         break
-                        
-                    audio_path = await self._try_download(
-                        episode, 
-                        source_url, 
-                        f'multi_source_{i+1}',
-                        status
-                    )
-                    if audio_path:
-                        return audio_path
+                    
+                    try:
+                        audio_path = await asyncio.wait_for(
+                            self._try_download(
+                                episode, 
+                                source_url, 
+                                f'multi_source_{i+1}',
+                                status
+                            ),
+                            timeout=300  # 5 minutes per download
+                        )
+                        if audio_path:
+                            return audio_path
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Source {i+1} timeout for {episode.title[:50]}...")
+                        continue
                         
                 # Try original URL as last resort
                 if episode.audio_url and not self._cancelled:
-                    audio_path = await self._try_download(
-                        episode, 
-                        episode.audio_url, 
-                        'original_rss',
-                        status
-                    )
-                    if audio_path:
-                        return audio_path
+                    try:
+                        audio_path = await asyncio.wait_for(
+                            self._try_download(
+                                episode, 
+                                episode.audio_url, 
+                                'original_rss',
+                                status
+                            ),
+                            timeout=300
+                        )
+                        if audio_path:
+                            return audio_path
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Original RSS timeout for {episode.title[:50]}...")
                         
                 # Final fallback: Try yt-dlp YouTube download
                 if not self._cancelled:
-                    logger.info(f"🎥 All sources failed, trying yt-dlp YouTube fallback for {episode.title}")
-                    audio_path = await self._try_ytdlp_fallback(episode, status)
-                    if audio_path:
-                        return audio_path
+                    logger.info(f"🎥 All sources failed, trying yt-dlp YouTube fallback for {episode.title[:50]}...")
+                    try:
+                        audio_path = await asyncio.wait_for(
+                            self._try_ytdlp_fallback(episode, status),
+                            timeout=600  # 10 minutes for YouTube fallback
+                        )
+                        if audio_path:
+                            return audio_path
+                    except asyncio.TimeoutError:
+                        logger.warning(f"YouTube fallback timeout for {episode.title[:50]}...")
                         
             except Exception as e:
                 logger.error(f"Error finding audio sources for {episode.title}: {e}")
@@ -666,3 +683,32 @@ class DownloadManager:
         except Exception as e:
             logger.error(f"Failed to load download state: {e}")
             return False
+            
+    async def _retry_with_manual_url(self, episode_id: str, url: str):
+        """Retry download with manually provided URL"""
+        if episode_id not in self.download_status:
+            logger.error(f"Episode {episode_id} not found in download status")
+            return
+            
+        status = self.download_status[episode_id]
+        episode = status.episode
+        
+        logger.info(f"Retrying download for {episode.title} with manual URL: {url}")
+        
+        # Try the manual URL
+        audio_path = await self._try_download(episode, url, 'manual_url_retry', status)
+        
+        if audio_path:
+            logger.info(f"✅ Manual URL download successful for {episode.title}")
+            status.status = 'success'
+            status.audio_path = audio_path
+            self.stats['downloaded'] = self.stats.get('downloaded', 0) + 1
+            self.stats['retrying'] = max(0, self.stats.get('retrying', 0) - 1)
+        else:
+            logger.error(f"❌ Manual URL download failed for {episode.title}")
+            status.status = 'failed'
+            status.last_error = "Manual URL download failed"
+            self.stats['failed'] = self.stats.get('failed', 0) + 1
+            self.stats['retrying'] = max(0, self.stats.get('retrying', 0) - 1)
+            
+        self._report_progress()
