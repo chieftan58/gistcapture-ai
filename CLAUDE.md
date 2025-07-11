@@ -1309,3 +1309,30 @@ yt-dlp -x --audio-format mp3 -o "episode.mp3" https://youtube.com/watch?v=...
 - Investigate YouTube cookie format/expiration issues
 - Consider implementing OAuth for YouTube API
 - Add support for drag-and-drop file upload in UI
+
+### Recent Updates (2025-01-11) - Fixed Critical UI Issues:
+
+1. **Fixed Email Sending**: 
+   - Added proper headers and body to sendEmail() POST request
+   - System now retrieves summaries from database when not in memory
+   - Email sends successfully through complete UI flow
+
+2. **Fixed Database Index Error**:
+   - Added missing DROP INDEX for `idx_episodes_processing_status`
+   - Prevents database recreation on each run
+   - Preserves existing summaries and transcripts
+
+3. **Fixed Episode Processing Tracking**:
+   - Added finally block to ensure episodes removed from `currently_processing`
+   - Fixed asyncio.CancelledError handling to not mark cancelled episodes as failed
+   - Ensures all episodes properly accounted for in Results
+
+4. **Fixed UI Navigation**:
+   - Changed Results page Continue button to go directly to Email (removed Review stage)
+   - Button properly disabled when no episodes processed
+
+5. **System Design Clarification**:
+   - `python main.py` is the correct way to run the application
+   - Opens UI for episode selection → processes episodes → shows results → sends email
+   - Complete flow works in single browser tab with proper state management
+   - Database stores all audio files, transcripts, and summaries for reuse
