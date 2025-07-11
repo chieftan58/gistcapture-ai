@@ -4,7 +4,7 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Any
 from html import escape
 from sendgrid.helpers.mail import Mail
 
@@ -20,8 +20,12 @@ logger = get_logger(__name__)
 class EmailDigest:
     """Handle email digest creation and sending"""
     
-    def send_digest(self, summaries: List[Dict]) -> bool:
-        """Send Renaissance Weekly digest"""
+    def send_digest(self, summaries: List[Dict]) -> Dict[str, Any]:
+        """Send Renaissance Weekly digest
+        
+        Returns:
+            Dict with 'success' bool and optional 'error' message
+        """
         try:
             logger.info("📧 Preparing Renaissance Weekly digest...")
             logger.info(f"   Email From: {EMAIL_FROM}")
@@ -30,16 +34,19 @@ class EmailDigest:
             
             # Validate inputs
             if not summaries:
-                logger.error("No summaries provided to send_digest")
-                return False
+                error_msg = "No summaries provided to send_digest"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg}
                 
             if not EMAIL_TO:
-                logger.error("EMAIL_TO is not configured")
-                return False
+                error_msg = "EMAIL_TO is not configured"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg}
                 
             if not sendgrid_client:
-                logger.error("SendGrid client is not initialized")
-                return False
+                error_msg = "SendGrid client is not initialized"
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg}
             
             # Summaries should already be sorted by app.py
             # But ensure they maintain the order: alphabetical by podcast, then date descending
@@ -87,16 +94,18 @@ class EmailDigest:
                     
                     if response.status_code == 202:
                         logger.info("✅ Email sent successfully!")
-                        return True
+                        return {"success": True}
                     else:
-                        logger.error(f"Email failed with status {response.status_code}")
+                        error_msg = f"Email failed with status {response.status_code}"
+                        logger.error(error_msg)
                         if hasattr(response, 'body'):
                             logger.error(f"Response body: {response.body}")
+                            error_msg += f" - {response.body}"
                         
                         # Don't retry on client errors (4xx)
                         if 400 <= response.status_code < 500:
                             logger.error("Client error - not retrying")
-                            return False
+                            return {"success": False, "error": error_msg}
                             
                 except Exception as e:
                     logger.error(f"Email attempt {attempt + 1} failed: {e}")
@@ -107,12 +116,14 @@ class EmailDigest:
                     time.sleep(retry_delay)
                     retry_delay *= 2  # Exponential backoff
             
-            logger.error(f"Email failed after {max_retries} attempts")
-            return False
+            error_msg = f"Email failed after {max_retries} attempts"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
                 
         except Exception as e:
-            logger.error(f"Email setup error: {e}")
-            return False
+            error_msg = f"Email setup error: {e}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
     
     def generate_html_preview(self, summaries: List[Dict]) -> str:
         """Generate HTML preview content (without full HTML document structure)"""

@@ -265,52 +265,65 @@ class AudioTranscriber:
                 logger.warning(f"[{correlation_id}] Cached file invalid, re-downloading")
                 audio_file.unlink()
         
-        # Track this file for cleanup
+        # Track this file for cleanup on failure
+        should_cleanup = True
         self.temp_files.add(str(audio_file))
         
-        # Check if this is a YouTube URL or yt-dlp search
-        if 'youtube.com' in url or 'youtu.be' in url or url.startswith('ytsearch'):
-            logger.info(f"[{correlation_id}] 🎥 Detected YouTube URL, using yt-dlp")
+        try:
+            # Check if this is a YouTube URL or yt-dlp search
+            if 'youtube.com' in url or 'youtu.be' in url or url.startswith('ytsearch'):
+                logger.info(f"[{correlation_id}] 🎥 Detected YouTube URL, using yt-dlp")
+                try:
+                    # Use yt-dlp for YouTube downloads
+                    from .audio_downloader import download_audio_with_ytdlp
+                    success = await download_audio_with_ytdlp(url, audio_file)
+                    if success and audio_file.exists():
+                        if validate_audio_file_smart(audio_file, correlation_id, url):
+                            logger.info(f"[{correlation_id}] ✅ YouTube download successful")
+                            should_cleanup = False  # Success, don't cleanup
+                            return audio_file
+                        else:
+                            logger.warning(f"[{correlation_id}] YouTube download failed validation")
+                            if audio_file.exists():
+                                audio_file.unlink()
+                except Exception as e:
+                    logger.error(f"[{correlation_id}] YouTube download error: {e}")
+                    if audio_file.exists():
+                        audio_file.unlink()
+                return None
+            
+            # Try downloading with best headers for non-YouTube URLs
+            headers = self.headers_presets[0]  # Use best headers
+            
+            # Try aiohttp download
             try:
-                # Use yt-dlp for YouTube downloads
-                from .audio_downloader import download_audio_with_ytdlp
-                success = await download_audio_with_ytdlp(url, audio_file)
+                success = await self._download_with_aiohttp_validated(
+                    url, audio_file, headers, correlation_id
+                )
                 if success and audio_file.exists():
                     if validate_audio_file_smart(audio_file, correlation_id, url):
-                        logger.info(f"[{correlation_id}] ✅ YouTube download successful")
+                        logger.info(f"[{correlation_id}] ✅ Download successful")
+                        should_cleanup = False  # Success, don't cleanup
                         return audio_file
                     else:
-                        logger.warning(f"[{correlation_id}] YouTube download failed validation")
+                        logger.warning(f"[{correlation_id}] Downloaded file failed validation")
                         if audio_file.exists():
                             audio_file.unlink()
             except Exception as e:
-                logger.error(f"[{correlation_id}] YouTube download error: {e}")
+                logger.warning(f"[{correlation_id}] Download failed: {e}")
                 if audio_file.exists():
                     audio_file.unlink()
+            
             return None
-        
-        # Try downloading with best headers for non-YouTube URLs
-        headers = self.headers_presets[0]  # Use best headers
-        
-        # Try aiohttp download
-        try:
-            success = await self._download_with_aiohttp_validated(
-                url, audio_file, headers, correlation_id
-            )
-            if success and audio_file.exists():
-                if validate_audio_file_smart(audio_file, correlation_id, url):
-                    logger.info(f"[{correlation_id}] ✅ Download successful")
-                    return audio_file
-                else:
-                    logger.warning(f"[{correlation_id}] Downloaded file failed validation")
-                    if audio_file.exists():
+        finally:
+            # Cleanup on failure
+            if should_cleanup:
+                self.temp_files.discard(str(audio_file))
+                if audio_file.exists():
+                    try:
                         audio_file.unlink()
-        except Exception as e:
-            logger.warning(f"[{correlation_id}] Download failed: {e}")
-            if audio_file.exists():
-                audio_file.unlink()
-        
-        return None
+                    except Exception:
+                        pass
     
     async def _download_audio_with_fallbacks(self, episode: Episode, correlation_id: str) -> Optional[Path]:
         """Download audio with multiple fallback strategies and exponential backoff"""

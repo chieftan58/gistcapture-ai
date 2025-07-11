@@ -667,8 +667,9 @@ class RenaissanceWeekly:
             )
             
             if existing_summary:
-                logger.info(f"[{self.correlation_id}] ✅ Skipping {episode.title} - already has summary ({len(existing_summary)} chars)")
+                logger.info(f"[{self.correlation_id}] 💾 CACHED: {episode.podcast} - {episode.title[:50]}... ({len(existing_summary)} chars)")
             else:
+                logger.info(f"[{self.correlation_id}] 🔄 NEEDS PROCESSING: {episode.podcast} - {episode.title[:50]}...")
                 episodes_to_process.append(episode)
         
         logger.info(f"[{self.correlation_id}] 📊 Processing needed for {len(episodes_to_process)}/{len(episodes)} episodes")
@@ -698,6 +699,11 @@ class RenaissanceWeekly:
         # Filter episodes that need processing BEFORE creating any async tasks
         episodes_to_process = self.filter_episodes_needing_processing(selected_episodes)
         
+        # Log cache status
+        cached_count = len(selected_episodes) - len(episodes_to_process)
+        if cached_count > 0:
+            logger.info(f"[{self.correlation_id}] 💾 Found {cached_count} episodes with cached summaries")
+        
         # If all episodes already have summaries, return them directly
         if not episodes_to_process:
             logger.info(f"[{self.correlation_id}] 🎉 All episodes already have summaries! Skipping processing.")
@@ -716,14 +722,15 @@ class RenaissanceWeekly:
         
         summaries = []
         
-        # Initialize processing status for UI
-        self._processing_status = {
-            'total': len(episodes_to_process),
-            'completed': 0,
-            'failed': 0,
-            'currently_processing': set(),  # Track multiple episodes being processed
-            'errors': []
-        }
+        # Initialize processing status for UI (thread-safe)
+        with self._status_lock:
+            self._processing_status = {
+                'total': len(episodes_to_process),
+                'completed': 0,
+                'failed': 0,
+                'currently_processing': set(),  # Track multiple episodes being processed
+                'errors': []
+            }
         
         # Get optimal concurrency with separate limits for different services
         whisper_concurrency_limit = 3  # Whisper API: 3 requests per minute
@@ -926,6 +933,7 @@ class RenaissanceWeekly:
                 return None
                 
             episode_id = f"{episode.podcast}:{episode.title[:30]}"
+            episode_key = f"{episode.podcast}:{episode.title}"
             episode_timeout = 600  # 10 minutes per episode
         
             try:
@@ -934,7 +942,7 @@ class RenaissanceWeekly:
                 # Update processing status if available (thread-safe)
                 if self._processing_status:
                     with self._status_lock:
-                        self._processing_status['currently_processing'].add(f"{episode.podcast}:{episode.title}")
+                        self._processing_status['currently_processing'].add(episode_key)
             
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -964,7 +972,7 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 with self._status_lock:
                                     self._processing_status['completed'] += 1
-                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
+                                    self._processing_status['currently_processing'].discard(episode_key)
                         
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -979,7 +987,7 @@ class RenaissanceWeekly:
                             if self._processing_status:
                                 with self._status_lock:
                                     self._processing_status['failed'] += 1
-                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
+                                    self._processing_status['currently_processing'].discard(episode_key)
                         
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:
@@ -995,7 +1003,7 @@ class RenaissanceWeekly:
                             # Update processing status on timeout (thread-safe)
                             if self._processing_status:
                                 with self._status_lock:
-                                    self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
+                                    self._processing_status['currently_processing'].discard(episode_key)
                             if attempt < max_retries - 1:
                                 logger.warning(f"[{self.correlation_id}] Retrying episode {index+1}...")
                                 continue
@@ -1013,6 +1021,10 @@ class RenaissanceWeekly:
                         else:
                             raise
                 
+            except asyncio.CancelledError:
+                # Don't mark cancelled episodes as failed
+                logger.info(f"[{self.correlation_id}] Episode {episode_id} was cancelled")
+                raise  # Re-raise to propagate cancellation
             except Exception as e:
                 logger.error(
                     f"[{self.correlation_id}] Failed to process {episode_id} after {max_retries} attempts: {e}"
@@ -1024,19 +1036,34 @@ class RenaissanceWeekly:
                 if self._processing_status:
                     with self._status_lock:
                         self._processing_status['failed'] += 1
-                        self._processing_status['currently_processing'].discard(f"{episode.podcast}:{episode.title}")
+                        self._processing_status['currently_processing'].discard(episode_key)
             
                 # Call progress callback if available
                 if hasattr(self, '_progress_callback') and self._progress_callback:
                     self._progress_callback(episode, 'failed', e)
                     if self._processing_status:
                         with self._status_lock:
-                            self._processing_status['errors'].append({
-                                'episode': f"{episode.podcast}: {episode.title}",
-                                'message': str(e)[:200]  # Limit error message length
-                            })
+                            # Limit error list to prevent unbounded memory growth
+                            MAX_ERRORS = 100
+                            if len(self._processing_status['errors']) < MAX_ERRORS:
+                                self._processing_status['errors'].append({
+                                    'episode': f"{episode.podcast}: {episode.title}",
+                                    'message': str(e)[:200]  # Limit error message length
+                                })
+                            elif len(self._processing_status['errors']) == MAX_ERRORS:
+                                # Add a final message indicating truncation
+                                self._processing_status['errors'].append({
+                                    'episode': "...",
+                                    'message': f"Error list truncated after {MAX_ERRORS} errors"
+                                })
             
                 return None
+            finally:
+                # CRITICAL FIX: Always remove from currently_processing, regardless of outcome
+                if self._processing_status:
+                    with self._status_lock:
+                        self._processing_status['currently_processing'].discard(episode_key)
+                        logger.debug(f"[{self.correlation_id}] Removed {episode_key} from currently_processing")
     
     async def _monitor_resources(self, initial_concurrency: int):
         """Monitor system resources and log warnings if needed"""
@@ -1753,9 +1780,27 @@ class RenaissanceWeekly:
         # Cancel all active tasks
         if self._active_tasks:
             logger.info(f"[{self.correlation_id}] 🛑 Cancelling {len(self._active_tasks)} active tasks...")
+            # Cancel tasks first
             for task in self._active_tasks:
                 if not task.done():
                     task.cancel()
+            
+            # Then await them to ensure proper cleanup
+            async def cleanup_tasks():
+                try:
+                    await asyncio.gather(*self._active_tasks, return_exceptions=True)
+                except Exception as e:
+                    logger.warning(f"[{self.correlation_id}] Task cleanup warning: {e}")
+            
+            # Schedule cleanup in the event loop if we're in one
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(cleanup_tasks())
+            except RuntimeError:
+                # Not in an async context, tasks will be cleaned up by their own event loop
+                pass
+            
+            # Clear the list after cleanup
             self._active_tasks = []
     
     async def download_episodes(self, episodes: List[Episode], progress_callback: Optional[Callable] = None) -> Dict:

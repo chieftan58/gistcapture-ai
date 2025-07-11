@@ -1,315 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T00:48:05.970234",
-    "component": "summarization",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:06.485587",
-    "component": "summarization",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:06.587708",
-    "component": "transcript_fetch",
-    "podcast": "Dwarkesh Podcast",
-    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:07.704801",
-    "component": "audio_download",
-    "podcast": "Dwarkesh Podcast",
-    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:07.858655",
-    "component": "transcript_fetch",
-    "podcast": "Forward Guidance",
-    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:07.883179",
-    "component": "audio_download",
-    "podcast": "Dwarkesh Podcast",
-    "episode_title": "https://api.substack.com/feed/podcast/166888604/5a254acbc40ab34721da104898bd356b",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:19.265973",
-    "component": "audio_transcription",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "TranscriptionFailed",
-    "error_message": "Failed to transcribe audio",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:20.628231",
-    "component": "transcript_fetch",
-    "podcast": "Forward Guidance",
-    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:25.273870",
-    "component": "summarization",
-    "podcast": "Forward Guidance",
-    "episode_title": "The Stablecoin Future, Macro Moves & Big Tech Embracing Crypto | Permissionless IV Recap",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:26.855449",
-    "component": "transcript_fetch",
-    "podcast": "Forward Guidance",
-    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:34.954281",
-    "component": "summarization",
-    "podcast": "Forward Guidance",
-    "episode_title": "The Fed\u2019s New Mandate Is Financing The Deficit | Weekly Roundup",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:35.550930",
-    "component": "transcript_fetch",
-    "podcast": "Founders",
-    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:37.083221",
-    "component": "audio_transcription",
-    "podcast": "Dwarkesh Podcast",
-    "episode_title": "Godfather of Synthetic Bio on De-Aging, De-Extinction, & Weaponized Mirror Life \u2014 George Church",
-    "error_type": "TranscriptionFailed",
-    "error_message": "Failed to transcribe audio",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:37.590273",
-    "component": "transcript_fetch",
-    "podcast": "Founders",
-    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:46.033605",
-    "component": "summarization",
-    "podcast": "Forward Guidance",
-    "episode_title": "DeFi Lending Will Eat Wall Street By 2030 | Sidney Powell",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:46.599813",
-    "component": "summarization",
-    "podcast": "Huberman Lab",
-    "episode_title": "The Chemistry of Food & Taste | Dr. Harold McGee",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:47.174100",
-    "component": "summarization",
-    "podcast": "Huberman Lab",
-    "episode_title": "Essentials: Understanding & Treating Addiction | Dr. Anna Lembke",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:47.428016",
-    "component": "summarization",
-    "podcast": "Knowledge Project",
-    "episode_title": "#235 Outliers: Jimmy Pattison \u2014 Building a $16B Empire Without Connections, Capital, or Credentials",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:49.289634",
-    "component": "transcript_fetch",
-    "podcast": "Macro Voices",
-    "episode_title": "MacroVoices #486 David Rosenberg: Navigating Choppy Waters",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:52.556933",
-    "component": "summarization",
-    "podcast": "Founders",
-    "episode_title": "Canva\u2019s $35B design biz is quietly taking over the workplace, with co-founder & COO Cliff Obrecht",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:53.836644",
-    "component": "transcript_fetch",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:56.843355",
-    "component": "summarization",
-    "podcast": "Founders",
-    "episode_title": "Building a $1.5B real estate empire, with Spencer Rascoff and Austin Allison",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:48:58.095078",
-    "component": "transcript_fetch",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:08.798204",
-    "component": "summarization",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#961 - Mark Manson - 19 Raw Lessons To Not Mess Up Your Life",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:09.336614",
-    "component": "transcript_fetch",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:14.165906",
-    "component": "summarization",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#960 - Dr Jerry Coyne - The Spiciest Ideas Of Evolutionary Biology",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:14.788968",
-    "component": "transcript_fetch",
-    "podcast": "No Priors",
-    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:32.581412",
-    "component": "summarization",
-    "podcast": "Modern Wisdom",
-    "episode_title": "#959 - Underoath - The Hidden Struggles Of Mental Health In Music",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:32.840723",
-    "component": "summarization",
-    "podcast": "No Priors",
-    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:34.671434",
-    "component": "transcript_fetch",
-    "podcast": "The Doctor's Farmacy",
-    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T00:49:34.753953",
-    "component": "transcript_fetch",
-    "podcast": "The Doctor's Farmacy",
-    "episode_title": "The Importance of Weight Training, Protein, and Muscle",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T00:49:55.309819",
     "component": "summarization",
     "podcast": "The Doctor's Farmacy",
@@ -9991,6 +9681,316 @@
   },
   {
     "timestamp": "2025-07-10T17:41:33.037277",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:32:53.976076",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Marc Andreessen on Startup Timing",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:32:54.117409",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Stablecoins & the Future Financial System",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:32:59.986880",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:36:35.191747",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Only Assets That Beat Fiat Debasement | Raoul Pal & Julien Bittel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:37:02.888377",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:37:02.902125",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:37:21.554252",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How a summer job grew into an ice cream empire, with CEO Ben Van Leeuwen",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:38:54.293955",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #488 Lyn Alden: Run It Hot!",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:39:26.730532",
+    "component": "transcript_fetch",
+    "podcast": "Modern Wisdom",
+    "episode_title": "#965 - Rick Beato - AI Bands, Spotify, TikTok & The Death Of Songwriting",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:40:08.887478",
+    "component": "transcript_fetch",
+    "podcast": "No Priors",
+    "episode_title": "Why Platforms Win and Point Solutions Fail with Rippling CEO Parker Conrad",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:40:53.741327",
+    "component": "transcript_fetch",
+    "podcast": "The Doctor's Farmacy",
+    "episode_title": "Arianna Huffington: Why Willpower Fails \u2014 and What to Do Instead",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:41:31.067367",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T00:41:56.316238",
+    "component": "transcript_fetch",
+    "podcast": "We Study Billionaires",
+    "episode_title": "TIP736: How the Best Investors Execute w/ Clay Finck",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:03:33.088548",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:03:33.101867",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:03:33.216323",
+    "component": "transcript_fetch",
+    "podcast": "Forward Guidance",
+    "episode_title": "The Only Assets That Beat Fiat Debasement | Raoul Pal & Julien Bittel",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:03:33.372704",
+    "component": "transcript_fetch",
+    "podcast": "Founders",
+    "episode_title": "How a summer job grew into an ice cream empire, with CEO Ben Van Leeuwen",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:06:00.433156",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: You Must Requalify for Your Role, Every Year",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:06:00.449711",
+    "component": "transcript_fetch",
+    "podcast": "Knowledge Project",
+    "episode_title": "#236 Harley Finkelstein: You Must Requalify for Your Role, Every Year",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:06:36.914662",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #488 Lyn Alden: Run It Hot!",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:07:01.962899",
+    "component": "transcript_fetch",
+    "podcast": "Market Huddle",
+    "episode_title": "The Economy Is Near Stall Speed (Guest: Peter Berezin)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:07:49.961840",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:23:43.848912",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Enabling Agents and Battling Bots on an AI-Centric Web",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:23:43.901932",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "How Andreessen Horowitz Disrupted VC & What\u2019s Coming Next",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:23:44.016853",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Stablecoins & the Future Financial System",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:32:49.287212",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:36:40.244840",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:36:40.258230",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Science of Stress, Testosterone, Aggression & Motivation | Dr. Robert Sapolsky",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:36:40.341613",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Conquering Depression",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:36:40.361168",
+    "component": "transcript_fetch",
+    "podcast": "Huberman Lab",
+    "episode_title": "Essentials: Understanding & Conquering Depression",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-11T01:37:23.397525",
     "component": "transcript_fetch",
     "podcast": "Tim Ferriss",
     "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",

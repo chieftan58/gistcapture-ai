@@ -1310,6 +1310,21 @@ yt-dlp -x --audio-format mp3 -o "episode.mp3" https://youtube.com/watch?v=...
 - Consider implementing OAuth for YouTube API
 - Add support for drag-and-drop file upload in UI
 
+### Recent Updates (2025-01-11) - UI Rendering and Cache Clarity Fixes:
+- **Fixed Failed Episodes Rendering Issues**:
+  - **Scroll Position Preservation**: Added scroll position saving/restoring during polling updates
+  - **Expanded State Preservation**: Maintains which episodes are expanded during UI refreshes
+  - **Flashing Prevention**: Disabled CSS transitions during polling to prevent visual flashing
+  - **Click Event Handling**: Added proper event propagation prevention for detail panels
+- **Enhanced Cache Usage Visibility**:
+  - **Clearer Logging**: Added prominent logging messages when using cached files:
+    - `💾 CACHED TRANSCRIPT: [podcast] - [title]...` for cached transcripts
+    - `💾 CACHED: [podcast] - [title]... (X chars)` for cached summaries
+    - `✅ Using existing audio file for [title]` for cached audio
+  - **Download UI Improvement**: Added "cached_file" attempt record to show when files are reused
+  - **Cache Statistics**: Shows count of cached vs new episodes at start of processing
+- **Note**: The system IS reusing cached files - the improved logging makes this more visible
+
 ### Recent Updates (2025-01-11) - Fixed Critical UI Issues:
 
 1. **Fixed Email Sending**: 

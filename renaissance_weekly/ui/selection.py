@@ -379,6 +379,10 @@ class EpisodeSelector:
                     # Actually send the email instead of just setting flags
                     logger.info(f"[{parent._correlation_id}] 📧 Email send requested by user")
                     
+                    # Prepare response variables
+                    result = {'success': False}
+                    error_message = None
+                    
                     # Get summaries to send
                     summaries_to_send = []
                     
@@ -388,16 +392,22 @@ class EpisodeSelector:
                     else:
                         # Fallback: retrieve summaries from database for successfully processed episodes
                         logger.info(f"[{parent._correlation_id}] No processed summaries in memory, retrieving from database")
+                        logger.info(f"[{parent._correlation_id}] Configuration: {parent.configuration}")
                         from ..database import PodcastDatabase
+                        from ..config import DB_PATH
+                        logger.info(f"[{parent._correlation_id}] Using database at: {DB_PATH}")
                         db = PodcastDatabase()
                         
                         # Get recent episodes with summaries
-                        episodes_with_summaries = db.get_episodes_with_summaries(days_back=parent.configuration.get('lookback_days', 7))
+                        lookback_days = parent.configuration.get('lookback_days', 7)
+                        logger.info(f"[{parent._correlation_id}] Looking for episodes from last {lookback_days} days")
+                        episodes_with_summaries = db.get_episodes_with_summaries(days_back=lookback_days)
                         logger.info(f"[{parent._correlation_id}] Found {len(episodes_with_summaries)} episodes with summaries in database")
                         
                         # Convert database records to summary format expected by email digest
                         summaries = []
-                        for ep in episodes_with_summaries:
+                        for i, ep in enumerate(episodes_with_summaries):
+                            logger.info(f"[{parent._correlation_id}] Processing episode {i+1}: {ep.get('podcast')} - {ep.get('title', 'No title')[:50]}...")
                             # Include all episodes with summaries from the database
                             # (The user has already reviewed them on the results page)
                             # Create Episode object from database record
@@ -456,29 +466,29 @@ class EpisodeSelector:
                             
                             # Send the email
                             email_digest = EmailDigest()
-                            email_sent = email_digest.send_digest(summaries_to_send)
+                            result = email_digest.send_digest(summaries_to_send)
                             
-                            if email_sent:
+                            if result.get('success'):
                                 logger.info(f"[{parent._correlation_id}] ✅ Email sent successfully!")
                                 parent.state = "complete"
                                 parent._email_approved = True
                                 parent._final_summaries = summaries_to_send
                             else:
                                 logger.error(f"[{parent._correlation_id}] ❌ Failed to send email")
-                                error_message = "Failed to send email - check logs for details"
+                                error_message = result.get('error', 'Failed to send email - check logs for details')
                                 
                         except Exception as e:
                             logger.error(f"[{parent._correlation_id}] ❌ Error sending email: {e}", exc_info=True)
                             error_message = str(e)
                     
                     # Send response
-                    if email_sent:
+                    if result.get('success'):
                         self._send_json({'status': 'success', 'message': 'Email sent successfully!'})
                     else:
                         self._send_json({'status': 'error', 'message': error_message or 'Failed to send email'})
                     
                     # Signal completion after a short delay
-                    if email_sent:
+                    if result.get('success'):
                         threading.Thread(
                             target=lambda: (time.sleep(0.5), parent._selection_complete.set()),
                             daemon=True
@@ -1386,8 +1396,8 @@ class EpisodeSelector:
                             </button>
                             
                             <button class="button primary" onclick="continueWithDownloads()" 
-                                    ${{processedCount < total || downloaded === 0 ? 'disabled' : ''}}>
-                                ${{failed > 0 ? `Continue with ${{downloaded}} Episodes` : 'Continue to Processing'}}
+                                    ${{processedCount < total ? 'disabled' : ''}}>
+                                ${{remaining > 0 ? `Processing ${{remaining}} remaining episodes...` : failed > 0 ? `Continue with ${{downloaded}} Episodes` : 'Continue to Processing'}}
                             </button>
                         </div>
                     </div>
@@ -1544,6 +1554,7 @@ class EpisodeSelector:
                     .episodes-list {{
                         max-height: 500px;
                         overflow-y: auto;
+                        scroll-behavior: auto; /* Disable smooth scrolling during updates */
                     }}
                     
                     .download-details-panel {{
@@ -1557,6 +1568,15 @@ class EpisodeSelector:
                     /* Prevent clicks inside details panel from bubbling up */
                     .download-details-panel * {{
                         pointer-events: auto;
+                    }}
+                    
+                    /* Prevent flashing during updates */
+                    .download-item {{
+                        transition: none; /* Disable transitions during polling */
+                    }}
+                    
+                    .download-details-panel {{
+                        transition: none; /* Disable transitions for details panel */
                     }}
                     
                     .download-item.expandable {{
@@ -1603,7 +1623,7 @@ class EpisodeSelector:
         }}
         
         function renderProcessing() {{
-            const {{ total, completed, failed, currently_processing = [], errors }} = APP_STATE.processingStatus;
+            const {{ total, completed, failed, currently_processing = [], errors }} = APP_STATE.processingStatus || {{}};
             const progress = total > 0 ? ((completed + failed) / total * 100) : 0;
             const remaining = total - completed - failed;
             const estimatedMinutesRemaining = remaining * (APP_STATE.configuration.transcription_mode === 'test' ? 0.5 : 5);
@@ -1918,7 +1938,7 @@ class EpisodeSelector:
         }}
         
         function renderResults() {{
-            const {{ total, completed, failed, errors }} = APP_STATE.processingStatus;
+            const {{ total, completed, failed, errors }} = APP_STATE.processingStatus || {{}};
             const successRate = total > 0 ? (completed / total * 100).toFixed(1) : 0;
             
             return `
@@ -1969,8 +1989,8 @@ class EpisodeSelector:
                                 Cancel & Exit
                             </button>
                             
-                            <button class="button primary" onclick="proceedToReview()">
-                                Continue →
+                            <button class="button primary" onclick="proceedToEmail()" ${{completed < 1 ? 'disabled' : ''}}>
+                                ${{completed < 1 ? 'No Episodes Processed' : 'Proceed to Email'}}
                             </button>
                         </div>
                     </div>
@@ -2853,7 +2873,7 @@ class EpisodeSelector:
                     </div>
                 </div>
                 ${{detail.status === 'failed' ? `
-                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};" onclick="event.stopPropagation()">
+                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onmouseup="event.stopPropagation()">
                         <div class="attempt-history">
                             <h4>Attempt History:</h4>
                             ${{(detail.history || []).map(h => `
@@ -2879,6 +2899,16 @@ class EpisodeSelector:
         function render() {{
             const app = document.getElementById('app');
             
+            // Save scroll positions before render (for download state)
+            let savedScrollPositions = {{}};
+            if (APP_STATE.state === 'download') {{
+                // Find all scrollable sections
+                const scrollableSections = app.querySelectorAll('.episode-group');
+                scrollableSections.forEach((section, index) => {{
+                    savedScrollPositions[index] = section.scrollTop;
+                }});
+            }}
+            
             switch (APP_STATE.state) {{
                 case 'podcast_selection':
                     app.innerHTML = renderPodcastSelection();
@@ -2894,6 +2924,15 @@ class EpisodeSelector:
                     break;
                 case 'download':
                     app.innerHTML = renderDownload();
+                    // Restore scroll positions after render
+                    setTimeout(() => {{
+                        const scrollableSections = app.querySelectorAll('.episode-group');
+                        scrollableSections.forEach((section, index) => {{
+                            if (savedScrollPositions[index] !== undefined) {{
+                                section.scrollTop = savedScrollPositions[index];
+                            }}
+                        }});
+                    }}, 0);
                     break;
                 case 'processing':
                     app.innerHTML = renderProcessing();
@@ -3147,6 +3186,9 @@ class EpisodeSelector:
         async function updateProcessingStatus() {{
             try {{
                 const response = await fetch('/api/processing-status');
+                if (!response.ok) {{
+                    throw new Error(`Status update failed: ${{response.status}}`);
+                }}
                 const status = await response.json();
                 
                 APP_STATE.processingStatus = {{
@@ -3162,6 +3204,15 @@ class EpisodeSelector:
                 // Check if processing is complete
                 if (status.completed + status.failed >= status.total && status.total > 0) {{
                     clearInterval(APP_STATE.statusInterval);
+                    
+                    // Make sure we have the final status
+                    APP_STATE.processingStatus = {{
+                        ...APP_STATE.processingStatus,
+                        ...status
+                    }};
+                    
+                    // Log the final status for debugging
+                    console.log('Final processing status:', APP_STATE.processingStatus);
                     
                     // Update server state
                     try {{
@@ -3260,14 +3311,32 @@ class EpisodeSelector:
                     const response = await fetch('/api/download-status');
                     const status = await response.json();
                     
+                    // Preserve expanded episodes state during updates
+                    const previousExpanded = APP_STATE.expandedEpisodes || new Set();
+                    
                     APP_STATE.downloadStatus = {{
                         ...APP_STATE.downloadStatus,
                         ...status
                     }};
                     
+                    // Restore expanded state
+                    APP_STATE.expandedEpisodes = previousExpanded;
+                    
                     // Update the display
                     if (APP_STATE.state === 'download') {{
+                        // Save scroll position before render
+                        const container = document.querySelector('.episodes-list');
+                        const scrollTop = container ? container.scrollTop : 0;
+                        
                         render();
+                        
+                        // Restore scroll position after render
+                        requestAnimationFrame(() => {{
+                            const newContainer = document.querySelector('.episodes-list');
+                            if (newContainer && scrollTop > 0) {{
+                                newContainer.scrollTop = scrollTop;
+                            }}
+                        }});
                     }}
                     
                     // Check if downloads are complete
@@ -3597,7 +3666,11 @@ class EpisodeSelector:
             if (confirm('Send the email digest?')) {{
                 try {{
                     const response = await fetch('/api/send-email', {{
-                        method: 'POST'
+                        method: 'POST',
+                        headers: {{'Content-Type': 'application/json'}},
+                        body: JSON.stringify({{
+                            send_email: true
+                        }})
                     }});
                     
                     const result = await response.json();
@@ -3649,12 +3722,15 @@ class EpisodeSelector:
             APP_STATE.globalPollInterval = setInterval(async () => {{
                 // Only poll server state when in server-controlled states
                 const serverControlledStates = ['podcast_selection', 'loading'];
+                const clientControlledStates = ['cost_estimate', 'download', 'processing', 'results', 'email_approval'];
+                
                 // Only include episode_selection if we haven't loaded episodes yet
                 if (APP_STATE.state === 'episode_selection' && APP_STATE.episodes.length === 0) {{
                     serverControlledStates.push('episode_selection');
                 }}
                 
-                if (!serverControlledStates.includes(APP_STATE.state) || 
+                // Skip polling if in client-controlled state or terminal states
+                if (clientControlledStates.includes(APP_STATE.state) || 
                     APP_STATE.state === 'complete' || 
                     APP_STATE.state === 'error') {{
                     return;

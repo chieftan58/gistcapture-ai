@@ -121,18 +121,22 @@ class DownloadManager:
                 self._report_progress()
                 
                 # Create task to retry download with manual URL
-                # Check if we're in an event loop
+                # Use run_coroutine_threadsafe for cross-thread scheduling
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # We're in an async context, create task directly
-                        asyncio.create_task(self._retry_with_manual_url(episode_id, url))
-                    else:
-                        # We're not in an async context, schedule it
-                        asyncio.ensure_future(self._retry_with_manual_url(episode_id, url))
+                    # Try to get the running loop
+                    loop = asyncio.get_running_loop()
+                    # We're already in the loop, create task directly
+                    asyncio.create_task(self._retry_with_manual_url(episode_id, url))
                 except RuntimeError:
-                    # No event loop, log error
-                    logger.error(f"Cannot retry {episode_id} - no event loop available")
+                    # Not in async context, check if we have a stored loop reference
+                    if hasattr(self, '_event_loop') and self._event_loop:
+                        # Schedule in the download loop using threadsafe method
+                        asyncio.run_coroutine_threadsafe(
+                            self._retry_with_manual_url(episode_id, url),
+                            self._event_loop
+                        )
+                    else:
+                        logger.error(f"Cannot retry {episode_id} - no event loop available")
         
     def request_browser_download(self, episode_id: str):
         """Request browser-based download for an episode"""
@@ -148,6 +152,9 @@ class DownloadManager:
         """Download multiple episodes concurrently"""
         self.stats['total'] = len(episodes)
         self.stats['startTime'] = time.time()
+        
+        # Store the event loop for cross-thread operations
+        self._event_loop = asyncio.get_running_loop()
         
         # Store podcast configs for audio finder
         if podcast_configs:
@@ -212,6 +219,12 @@ class DownloadManager:
                     # Mark as successful immediately
                     status.status = 'success'
                     status.audio_path = audio_file
+                    
+                    # Add a successful attempt record to show it was cached
+                    cached_attempt = DownloadAttempt(str(audio_file), 'cached_file')
+                    cached_attempt.complete(True, None)
+                    status.add_attempt(cached_attempt)
+                    
                     # Don't increment stats or report progress for cached files
                     # This will be done in the final statistics update
                     return audio_file

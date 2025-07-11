@@ -98,6 +98,7 @@ class PodcastDatabase:
         # Drop existing indexes if they exist (to avoid conflicts)
         cursor.execute("DROP INDEX IF EXISTS idx_episodes_podcast_published")
         cursor.execute("DROP INDEX IF EXISTS idx_episodes_guid")
+        cursor.execute("DROP INDEX IF EXISTS idx_episodes_processing_status")
         
         # Create new indexes
         cursor.execute("""
@@ -109,10 +110,19 @@ class PodcastDatabase:
             CREATE INDEX idx_episodes_guid 
             ON episodes(guid)
         """)
+        
+        # Add index on processing_status for frequent queries
+        cursor.execute("""
+            CREATE INDEX idx_episodes_processing_status 
+            ON episodes(processing_status)
+        """)
     
     def _migrate_database(self, conn: sqlite3.Connection, existing_columns: set):
-        """Migrate database to new schema"""
+        """Migrate database to new schema with proper transaction handling"""
         cursor = conn.cursor()
+        
+        # Start a transaction
+        cursor.execute("BEGIN TRANSACTION")
         
         try:
             # Create a temporary table with the new schema
@@ -163,12 +173,17 @@ class PodcastDatabase:
             cursor.execute("DROP TABLE episodes")
             cursor.execute("ALTER TABLE episodes_new RENAME TO episodes")
             
+            # Recreate indexes
+            self._create_indexes(conn)
+            
+            # Commit the transaction
+            cursor.execute("COMMIT")
             logger.info("✅ Database migration completed successfully")
             
         except sqlite3.Error as e:
             logger.error(f"Migration failed: {e}")
-            # Rollback by dropping the temporary table if it exists
-            cursor.execute("DROP TABLE IF EXISTS episodes_new")
+            # Rollback the entire transaction
+            cursor.execute("ROLLBACK")
             raise
     
     def _backup_and_recreate(self):
@@ -214,23 +229,33 @@ class PodcastDatabase:
                     'updated_at': datetime.now().isoformat()
                 }
                 
-                # Try to update existing record first
+                # Use INSERT OR REPLACE for atomic operation
+                # First check if record exists to preserve the ID
                 cursor.execute("""
-                    UPDATE episodes 
-                    SET audio_url = ?, transcript_url = ?, description = ?, 
-                        link = ?, duration = ?, guid = ?, transcript = ?, 
-                        transcript_source = ?, summary = ?, updated_at = ?
+                    SELECT id FROM episodes
                     WHERE podcast = ? AND title = ? AND published = ?
-                """, (
-                    episode_data['audio_url'], episode_data['transcript_url'],
-                    episode_data['description'], episode_data['link'],
-                    episode_data['duration'], episode_data['guid'],
-                    episode_data['transcript'], episode_data['transcript_source'],
-                    episode_data['summary'], episode_data['updated_at'],
-                    episode_data['podcast'], episode_data['title'], episode_data['published']
-                ))
+                """, (episode_data['podcast'], episode_data['title'], episode_data['published']))
                 
-                if cursor.rowcount == 0:
+                existing_id = cursor.fetchone()
+                
+                if existing_id:
+                    # Update existing record using REPLACE
+                    cursor.execute("""
+                        REPLACE INTO episodes (
+                            id, podcast, title, published, audio_url, transcript_url,
+                            description, link, duration, guid, transcript,
+                            transcript_source, summary, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        existing_id[0],  # Preserve the existing ID
+                        episode_data['podcast'], episode_data['title'], episode_data['published'],
+                        episode_data['audio_url'], episode_data['transcript_url'],
+                        episode_data['description'], episode_data['link'],
+                        episode_data['duration'], episode_data['guid'],
+                        episode_data['transcript'], episode_data['transcript_source'],
+                        episode_data['summary'], episode_data['updated_at']
+                    ))
+                else:
                     # Insert new record
                     cursor.execute("""
                         INSERT INTO episodes (

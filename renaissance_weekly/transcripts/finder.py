@@ -55,7 +55,9 @@ class TranscriptFinder:
         # Check database cache first
         cached_transcript, cached_source = self.db.get_transcript(episode)
         if cached_transcript:
-            logger.info(f"✅ Found cached transcript (source: {cached_source.value})")
+            logger.info(f"💾 CACHED TRANSCRIPT: {episode.podcast} - {episode.title[:50]}...")
+            logger.info(f"   Source: {cached_source.value}")
+            logger.info(f"   Length: {len(cached_transcript)} chars")
             return cached_transcript, cached_source
         
         # Check if this is a podcast that should prioritize YouTube
