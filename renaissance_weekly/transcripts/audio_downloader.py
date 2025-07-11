@@ -747,31 +747,8 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
             url
         ]
         
-        # First try with exported cookie file if available
-        from ..fetchers.youtube_cookie_helper import YouTubeCookieHelper
-        cookie_file = YouTubeCookieHelper.find_cookie_file()
-        
-        if cookie_file:
-            try:
-                logger.info(f"🍪 Using cookie file: {cookie_file}")
-                cmd_with_file = cmd[:2] + ['--cookies', str(cookie_file)] + cmd[2:]
-                
-                process = await asyncio.create_subprocess_exec(
-                    *cmd_with_file,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                
-                stdout, stderr = await process.communicate()
-                
-                if process.returncode == 0 and output_path.exists():
-                    logger.info("✅ YouTube download successful with cookie file")
-                    return True
-                    
-            except Exception as e:
-                logger.debug(f"Failed with cookie file: {e}")
-        
-        # Try with cookies from browser 
+        # Skip cookie file check - we know it's in wrong format
+        # Go directly to browser cookies which are more reliable
         browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
         
         for browser in browsers:
@@ -812,8 +789,17 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
             # Log the error for debugging
             if stderr:
                 error_msg = stderr.decode().strip()
-                if "Sign in to confirm" in error_msg:
-                    logger.error("YouTube requires authentication - please export cookies")
+                if "Sign in to confirm" in error_msg or "bot" in error_msg.lower():
+                    logger.error("\n" + "="*60)
+                    logger.error("❌ YouTube requires authentication")
+                    logger.error("="*60)
+                    logger.error("\nSOLUTION 1: Use browser directly")
+                    logger.error("1. Open Firefox/Chrome and ensure you're logged into YouTube")
+                    logger.error("2. The system will use your browser cookies automatically")
+                    logger.error("\nSOLUTION 2: Manual download")
+                    logger.error("1. Download manually: yt-dlp -x --audio-format mp3 \"<youtube_url>\"")
+                    logger.error("2. Click 'Manual URL' in UI and provide the local file path")
+                    logger.error("="*60 + "\n")
                 else:
                     logger.error(f"yt-dlp error: {error_msg[:200]}")
             return False

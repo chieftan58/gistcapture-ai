@@ -13,6 +13,7 @@ from .transcripts.transcriber import AudioTranscriber
 from .fetchers.audio_sources import AudioSourceFinder
 from .fetchers.american_optimist_handler import AmericanOptimistHandler
 from .fetchers.universal_youtube_handler import UniversalYouTubeHandler
+from .download_strategies.smart_router import SmartDownloadRouter
 from .utils.logging import get_logger
 from .utils.helpers import exponential_backoff_with_jitter
 from .config import TEMP_DIR
@@ -95,6 +96,10 @@ class DownloadManager:
         self._manual_url_queue: Dict[str, str] = {}
         self._browser_download_queue: List[str] = []
         self._cancelled = False
+        self.transcription_mode = 'test'  # Default, will be set by app.py
+        
+        # Initialize smart router for bulletproof downloads
+        self.smart_router = SmartDownloadRouter()
         
         # Download statistics
         self.stats = {
@@ -239,154 +244,92 @@ class DownloadManager:
             status.status = 'downloading'
             self._report_progress()
             
-            # Check for manual URL
+            # Check for manual URL first
             if ep_id in self._manual_url_queue:
                 url = self._manual_url_queue.pop(ep_id)
-                audio_path = await self._try_download(episode, url, 'manual_url', status)
-                if audio_path:
-                    return audio_path
+                logger.info(f"🔧 Using manual URL: {url[:80]}...")
+                
+                # For local files, just copy them
+                if url.startswith('/') or url.startswith('~') or url.startswith('file://'):
+                    try:
+                        import shutil
+                        from pathlib import Path
+                        
+                        source_path = Path(url.replace('file://', '')).expanduser()
+                        if source_path.exists():
+                            shutil.copy2(source_path, audio_file)
+                            logger.info(f"✅ Copied local file: {source_path}")
+                            
+                            status.status = 'success'
+                            status.audio_path = audio_file
+                            self.stats['downloaded'] += 1
+                            self._report_progress()
+                            return audio_file
+                    except Exception as e:
+                        logger.error(f"Failed to copy local file: {e}")
+                
+                # For URLs, use smart router
+                episode_info = {
+                    'podcast': episode.podcast,
+                    'title': episode.title,
+                    'audio_url': url,
+                    'published': episode.published
+                }
+                
+                success = await self.smart_router.download_with_fallback(episode_info, audio_file)
+                if success:
+                    status.status = 'success'
+                    status.audio_path = audio_file
+                    self.stats['downloaded'] += 1
+                    self._report_progress()
+                    return audio_file
                     
-            # Check for browser download request
-            if ep_id in self._browser_download_queue:
-                self._browser_download_queue.remove(ep_id)
-                audio_path = await self._try_browser_download(episode, status)
-                if audio_path:
-                    return audio_path
-                    
-            # Universal YouTube handling for all problematic podcasts
-            if UniversalYouTubeHandler.should_handle(episode.podcast):
-                logger.info(f"🎥 Universal YouTube handling for {episode.podcast}: {episode.title[:50]}...")
-                
-                # Use the universal handler to enhance the episode
-                enhanced_episode = UniversalYouTubeHandler.enhance_episode(episode)
-                
-                # Try downloading with enhanced URL
-                audio_path = await asyncio.wait_for(
-                    self._try_download(
-                        enhanced_episode,
-                        enhanced_episode.audio_url,
-                        f'{episode.podcast.lower().replace(" ", "_")}_youtube',
-                        status
-                    ),
-                    timeout=300  # 5 minute timeout per attempt
-                )
-                if audio_path:
-                    return audio_path
-                
-                # Try manual URLs if available
-                manual_urls = UniversalYouTubeHandler.get_manual_urls(episode.podcast)
-                for i, (key, url) in enumerate(manual_urls.items()):
-                    if key.lower() in episode.title.lower():
-                        try:
-                            audio_path = await asyncio.wait_for(
-                                self._try_download(
-                                    episode,
-                                    url,
-                                    f'{episode.podcast.lower().replace(" ", "_")}_manual_{i+1}',
-                                    status
-                                ),
-                                timeout=300
-                            )
-                            if audio_path:
-                                return audio_path
-                        except asyncio.TimeoutError:
-                            logger.warning(f"Download timeout for {episode.title[:50]}...")
-                            continue
-                
-                # If all else fails, provide download instructions
-                status.last_error = UniversalYouTubeHandler.get_download_instructions(episode)
-                
-                # Log detailed instructions once per podcast
-                instructions_key = f'_youtube_instructions_{episode.podcast.replace(" ", "_")}'
-                if not hasattr(self, instructions_key):
-                    from .fetchers.youtube_cookie_helper import YouTubeCookieHelper
-                    logger.info(YouTubeCookieHelper.get_cookie_instructions())
-                    setattr(self, instructions_key, True)
-                
-                logger.info(f"{episode.podcast} download failed - YouTube auth required: {episode.title[:50]}...")
-                
-                # Mark as failed before returning
-                status.status = 'failed'
-                self._report_progress()
-                return None
+            # Use smart router for all downloads (replaces all complex logic above)
+            episode_info = {
+                'podcast': episode.podcast,
+                'title': episode.title,
+                'audio_url': episode.audio_url,
+                'published': episode.published
+            }
             
-            # Regular download handling for non-YouTube podcasts
-                    
-            # Try multiple audio sources with timeout
+            # Record download attempt start
+            attempt = DownloadAttempt(episode.audio_url, 'smart_router')
+            status.add_attempt(attempt)
+            
             try:
-                # Get podcast config for this episode
-                podcast_config = None
-                if hasattr(self, 'podcast_configs') and episode.podcast in self.podcast_configs:
-                    podcast_config = self.podcast_configs[episode.podcast]
-                    # Set apple_podcast_id on episode if not already set
-                    if not episode.apple_podcast_id and 'apple_id' in podcast_config:
-                        episode.apple_podcast_id = podcast_config['apple_id']
-                        logger.info(f"Set apple_podcast_id={episode.apple_podcast_id} for {episode.podcast}")
-                
-                # Add timeout to audio source finding
-                sources = await asyncio.wait_for(
-                    self.audio_finder.find_all_audio_sources(episode, podcast_config),
-                    timeout=120  # 2 minutes to find sources
+                # Use smart router to try all strategies until one succeeds
+                success = await asyncio.wait_for(
+                    self.smart_router.download_with_fallback(episode_info, audio_file),
+                    timeout=600  # 10 minutes total for all strategies
                 )
-                logger.info(f"Found {len(sources)} audio sources for {episode.title[:50]}...")
                 
-                for i, source_url in enumerate(sources):
-                    if self._cancelled:
-                        break
+                if success:
+                    attempt.complete(True)
+                    status.status = 'success'
+                    status.audio_path = audio_file
+                    self.stats['downloaded'] += 1
+                    self._report_progress()
+                    logger.info(f"✅ Smart router succeeded for {episode.title}")
+                    return audio_file
+                else:
+                    attempt.complete(False, "All strategies failed")
+                    status.status = 'failed'
+                    status.last_error = "All download strategies failed"
                     
-                    try:
-                        audio_path = await asyncio.wait_for(
-                            self._try_download(
-                                episode, 
-                                source_url, 
-                                f'multi_source_{i+1}',
-                                status
-                            ),
-                            timeout=300  # 5 minutes per download
-                        )
-                        if audio_path:
-                            return audio_path
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Source {i+1} timeout for {episode.title[:50]}...")
-                        continue
-                        
-                # Try original URL as last resort
-                if episode.audio_url and not self._cancelled:
-                    try:
-                        audio_path = await asyncio.wait_for(
-                            self._try_download(
-                                episode, 
-                                episode.audio_url, 
-                                'original_rss',
-                                status
-                            ),
-                            timeout=300
-                        )
-                        if audio_path:
-                            return audio_path
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Original RSS timeout for {episode.title[:50]}...")
-                        
-                # Final fallback: Try yt-dlp YouTube download
-                if not self._cancelled:
-                    logger.info(f"🎥 All sources failed, trying yt-dlp YouTube fallback for {episode.title[:50]}...")
-                    try:
-                        audio_path = await asyncio.wait_for(
-                            self._try_ytdlp_fallback(episode, status),
-                            timeout=600  # 10 minutes for YouTube fallback
-                        )
-                        if audio_path:
-                            return audio_path
-                    except asyncio.TimeoutError:
-                        logger.warning(f"YouTube fallback timeout for {episode.title[:50]}...")
-                        
-            except Exception as e:
-                logger.error(f"Error finding audio sources for {episode.title}: {e}")
-                status.last_error = str(e)
+            except asyncio.TimeoutError:
+                attempt.complete(False, "Download timeout")
+                status.status = 'failed'
+                status.last_error = "Download timeout (10 minutes exceeded)"
+                logger.warning(f"⏰ Smart router timeout for {episode.title}")
                 
-            # Mark as failed if no successful download
-            status.status = 'failed'
-            status.last_error = status.last_error or "All download strategies failed"
+            except Exception as e:
+                attempt.complete(False, str(e))
+                status.status = 'failed'
+                status.last_error = str(e)
+                logger.error(f"❌ Smart router error for {episode.title}: {e}")
+            
+            # Update stats and progress
+            self.stats['failed'] += 1
             self._report_progress()
             return None
             

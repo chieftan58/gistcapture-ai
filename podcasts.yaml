@@ -32,7 +32,7 @@ podcasts:
     retry_strategy:
       primary: "apple_podcasts"
       fallback: "youtube_search"
-      skip_rss: true
+      # Use RSS/Apple for episode fetching, YouTube for download fallback
       youtube_channel: "UCBZjspOTvT5nyDWcHAfaVZQ"  # Joe Lonsdale's channel
       youtube_search_terms: ["Joe Lonsdale", "American Optimist Podcast"]
     
@@ -53,9 +53,9 @@ podcasts:
     website: "https://dwarkeshpatel.substack.com"
     search_term: "Dwarkesh Podcast"
     retry_strategy:
-      primary: "youtube_search"
-      fallback: "apple_podcasts"
-      skip_rss: true  # Skip Substack RSS due to Cloudflare
+      primary: "apple_podcasts"
+      fallback: "youtube_search"
+      # Use RSS feed for episode fetching, YouTube only for download fallback
       youtube_channel: "UCCaEbmz8gvyJHXFR42uSbXQ"  # Dwarkesh Patel channel
       youtube_search_terms: ["Dwarkesh Patel", "Dwarkesh Podcast"]
     
