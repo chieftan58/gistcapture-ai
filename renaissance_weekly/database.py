@@ -41,7 +41,8 @@ class PodcastDatabase:
                     required_columns = {
                         'podcast', 'title', 'published', 'audio_url', 
                         'transcript_url', 'description', 'link', 'duration', 
-                        'guid', 'transcript', 'transcript_source', 'summary'
+                        'guid', 'transcript', 'transcript_source', 'summary',
+                        'transcription_mode'
                     }
                     
                     if not required_columns.issubset(columns):
@@ -79,6 +80,7 @@ class PodcastDatabase:
                 transcript TEXT,
                 transcript_source TEXT,
                 summary TEXT,
+                transcription_mode TEXT DEFAULT 'test',
                 processing_status TEXT DEFAULT 'pending',
                 failure_reason TEXT,
                 retry_count INTEGER DEFAULT 0,
@@ -141,6 +143,7 @@ class PodcastDatabase:
                     transcript TEXT,
                     transcript_source TEXT,
                     summary TEXT,
+                    transcription_mode TEXT DEFAULT 'test',
                     processing_status TEXT DEFAULT 'pending',
                     failure_reason TEXT,
                     retry_count INTEGER DEFAULT 0,
@@ -159,15 +162,27 @@ class PodcastDatabase:
                 'id', 'podcast', 'title', 'published', 'audio_url', 
                 'transcript_url', 'description', 'link', 'duration', 
                 'guid', 'transcript', 'transcript_source', 'summary',
-                'created_at', 'updated_at'
+                'transcription_mode', 'created_at', 'updated_at'
             })
             
             if common_columns:
-                columns_str = ', '.join(common_columns)
-                cursor.execute(f"""
-                    INSERT INTO episodes_new ({columns_str})
-                    SELECT {columns_str} FROM episodes
-                """)
+                # If transcription_mode doesn't exist in old table, add it with default 'test'
+                if 'transcription_mode' not in existing_columns and 'transcription_mode' in common_columns:
+                    # Remove transcription_mode from common columns  
+                    common_columns_without_mode = common_columns - {'transcription_mode'}
+                    if common_columns_without_mode:
+                        columns_str = ', '.join(common_columns_without_mode)
+                        cursor.execute(f"""
+                            INSERT INTO episodes_new ({columns_str}, transcription_mode)
+                            SELECT {columns_str}, 'test' FROM episodes
+                        """)
+                        logger.info("Added transcription_mode='test' to existing records during migration")
+                else:
+                    columns_str = ', '.join(common_columns)
+                    cursor.execute(f"""
+                        INSERT INTO episodes_new ({columns_str})
+                        SELECT {columns_str} FROM episodes
+                    """)
             
             # Drop old table and rename new table
             cursor.execute("DROP TABLE episodes")
@@ -206,7 +221,7 @@ class PodcastDatabase:
     
     def save_episode(self, episode: Episode, transcript: Optional[str] = None, 
                      transcript_source: Optional[TranscriptSource] = None,
-                     summary: Optional[str] = None) -> int:
+                     summary: Optional[str] = None, transcription_mode: str = 'test') -> int:
         """Save or update an episode in the database"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -226,6 +241,7 @@ class PodcastDatabase:
                     'transcript': transcript,
                     'transcript_source': transcript_source.value if transcript_source else None,
                     'summary': summary,
+                    'transcription_mode': transcription_mode,
                     'updated_at': datetime.now().isoformat()
                 }
                 
@@ -244,8 +260,8 @@ class PodcastDatabase:
                         REPLACE INTO episodes (
                             id, podcast, title, published, audio_url, transcript_url,
                             description, link, duration, guid, transcript,
-                            transcript_source, summary, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            transcript_source, summary, transcription_mode, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         existing_id[0],  # Preserve the existing ID
                         episode_data['podcast'], episode_data['title'], episode_data['published'],
@@ -253,7 +269,8 @@ class PodcastDatabase:
                         episode_data['description'], episode_data['link'],
                         episode_data['duration'], episode_data['guid'],
                         episode_data['transcript'], episode_data['transcript_source'],
-                        episode_data['summary'], episode_data['updated_at']
+                        episode_data['summary'], episode_data['transcription_mode'], 
+                        episode_data['updated_at']
                     ))
                 else:
                     # Insert new record
@@ -261,15 +278,15 @@ class PodcastDatabase:
                         INSERT INTO episodes (
                             podcast, title, published, audio_url, transcript_url,
                             description, link, duration, guid, transcript,
-                            transcript_source, summary
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            transcript_source, summary, transcription_mode
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         episode_data['podcast'], episode_data['title'], episode_data['published'],
                         episode_data['audio_url'], episode_data['transcript_url'],
                         episode_data['description'], episode_data['link'],
                         episode_data['duration'], episode_data['guid'],
                         episode_data['transcript'], episode_data['transcript_source'],
-                        episode_data['summary']
+                        episode_data['summary'], episode_data['transcription_mode']
                     ))
                 
                 conn.commit()
@@ -279,19 +296,28 @@ class PodcastDatabase:
             logger.error(f"Database error saving episode: {e}")
             return -1
     
-    def get_transcript(self, episode: Episode) -> Tuple[Optional[str], Optional[TranscriptSource]]:
-        """Get cached transcript for an episode"""
+    def get_transcript(self, episode: Episode, transcription_mode: str = None) -> Tuple[Optional[str], Optional[TranscriptSource]]:
+        """Get cached transcript for an episode matching the transcription mode"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
                 # Try to find by guid first (most reliable)
                 if episode.guid:
-                    cursor.execute("""
-                        SELECT transcript, transcript_source 
-                        FROM episodes 
-                        WHERE guid = ? AND transcript IS NOT NULL
-                    """, (episode.guid,))
+                    if transcription_mode:
+                        cursor.execute("""
+                            SELECT transcript, transcript_source 
+                            FROM episodes 
+                            WHERE guid = ? AND transcript IS NOT NULL
+                            AND transcription_mode = ?
+                        """, (episode.guid, transcription_mode))
+                    else:
+                        # Backwards compatibility - if no mode specified, get any
+                        cursor.execute("""
+                            SELECT transcript, transcript_source 
+                            FROM episodes 
+                            WHERE guid = ? AND transcript IS NOT NULL
+                        """, (episode.guid,))
                     result = cursor.fetchone()
                     if result:
                         transcript, source_str = result
@@ -299,12 +325,21 @@ class PodcastDatabase:
                         return transcript, source
                 
                 # Fall back to matching by podcast, title, and date
-                cursor.execute("""
-                    SELECT transcript, transcript_source 
-                    FROM episodes 
-                    WHERE podcast = ? AND title = ? AND date(published) = date(?)
-                    AND transcript IS NOT NULL
-                """, (episode.podcast, episode.title, episode.published.isoformat()))
+                if transcription_mode:
+                    cursor.execute("""
+                        SELECT transcript, transcript_source 
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ? AND date(published) = date(?)
+                        AND transcript IS NOT NULL AND transcription_mode = ?
+                    """, (episode.podcast, episode.title, episode.published.isoformat(), transcription_mode))
+                else:
+                    # Backwards compatibility
+                    cursor.execute("""
+                        SELECT transcript, transcript_source 
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ? AND date(published) = date(?)
+                        AND transcript IS NOT NULL
+                    """, (episode.podcast, episode.title, episode.published.isoformat()))
                 
                 result = cursor.fetchone()
                 if result:
@@ -380,8 +415,8 @@ class PodcastDatabase:
             logger.error(f"Database error getting episodes with summaries: {e}")
             return []
     
-    def get_episode_summary(self, podcast: str, title: str, published: datetime) -> Optional[str]:
-        """Get summary for a specific episode if it exists"""
+    def get_episode_summary(self, podcast: str, title: str, published: datetime, transcription_mode: str = None) -> Optional[str]:
+        """Get summary for a specific episode if it exists, optionally filtered by mode"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -392,12 +427,21 @@ class PodcastDatabase:
                 else:
                     published_str = published
                 
-                cursor.execute("""
-                    SELECT summary 
-                    FROM episodes 
-                    WHERE podcast = ? AND title = ? AND published = ?
-                    AND summary IS NOT NULL
-                """, (podcast, title, published_str))
+                if transcription_mode:
+                    cursor.execute("""
+                        SELECT summary 
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ? AND published = ?
+                        AND summary IS NOT NULL AND transcription_mode = ?
+                    """, (podcast, title, published_str, transcription_mode))
+                else:
+                    # Backwards compatibility
+                    cursor.execute("""
+                        SELECT summary 
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ? AND published = ?
+                        AND summary IS NOT NULL
+                    """, (podcast, title, published_str))
                 
                 row = cursor.fetchone()
                 return row[0] if row else None

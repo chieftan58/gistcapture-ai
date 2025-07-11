@@ -48,14 +48,15 @@ class TranscriptFinder:
             await self.session.close()
             self._session_created = False
     
-    async def find_transcript(self, episode: Episode) -> Tuple[Optional[str], Optional[TranscriptSource]]:
+    async def find_transcript(self, episode: Episode, transcription_mode: str = None) -> Tuple[Optional[str], Optional[TranscriptSource]]:
         """Find transcript from various sources"""
         logger.info("🔍 Searching for existing transcript...")
         
-        # Check database cache first
-        cached_transcript, cached_source = self.db.get_transcript(episode)
+        # Check database cache first with mode filter
+        cached_transcript, cached_source = self.db.get_transcript(episode, transcription_mode)
         if cached_transcript:
-            logger.info(f"💾 CACHED TRANSCRIPT: {episode.podcast} - {episode.title[:50]}...")
+            mode_str = f" ({transcription_mode} mode)" if transcription_mode else ""
+            logger.info(f"💾 CACHED TRANSCRIPT{mode_str}: {episode.podcast} - {episode.title[:50]}...")
             logger.info(f"   Source: {cached_source.value}")
             logger.info(f"   Length: {len(cached_transcript)} chars")
             return cached_transcript, cached_source

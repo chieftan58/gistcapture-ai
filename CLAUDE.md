@@ -1310,6 +1310,23 @@ yt-dlp -x --audio-format mp3 -o "episode.mp3" https://youtube.com/watch?v=...
 - Consider implementing OAuth for YouTube API
 - Add support for drag-and-drop file upload in UI
 
+### Recent Updates (2025-01-11) - Fixed Test/Full Mode Cache Separation:
+- **Critical Fix: Mode-Aware Caching**:
+  - **Problem**: System was using 15-minute test summaries when running in full mode
+  - **Solution**: Added `transcription_mode` tracking throughout the caching system
+  - **Database Changes**:
+    - Added `transcription_mode` column to episodes table
+    - Updated all cache lookups to filter by mode
+    - Migration marks existing data as 'test' mode
+  - **File Naming Changes**:
+    - Audio files now include mode: `{date}_{podcast}_{title}_test.mp3` or `{date}_{podcast}_{title}_full.mp3`
+    - Prevents test and full audio files from overwriting each other
+  - **Cache Lookup Changes**:
+    - `get_episode_summary()` now filters by transcription_mode
+    - `get_transcript()` now filters by transcription_mode
+    - `find_transcript()` passes mode through the chain
+  - **Result**: Test and full mode data are now properly separated
+
 ### Recent Updates (2025-01-11) - UI Rendering and Cache Clarity Fixes:
 - **Fixed Failed Episodes Rendering Issues**:
   - **Scroll Position Preservation**: Added scroll position saving/restoring during polling updates

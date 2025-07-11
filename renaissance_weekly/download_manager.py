@@ -204,7 +204,10 @@ class DownloadManager:
             date_str = episode.published.strftime('%Y%m%d')
             safe_podcast = slugify(episode.podcast)[:30]
             safe_title = slugify(episode.title)[:50]
-            audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
+            # Get current mode from parent app or use test as default
+            current_mode = getattr(self, 'transcription_mode', 'test')
+            mode_suffix = '_test' if current_mode == 'test' else '_full'
+            audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}{mode_suffix}.mp3"
             
             # Check if already exists and is valid
             if audio_file.exists():

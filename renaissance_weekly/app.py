@@ -1129,7 +1129,7 @@ class RenaissanceWeekly:
             # Step 1: Try to find existing transcript
             logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
             logger.info(f"[{episode_id}]    GUID: {episode.guid or 'None'}")
-            transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode)
+            transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode, current_mode)
             
             # If transcript found, validate it immediately
             if transcript_text:
@@ -1173,10 +1173,11 @@ class RenaissanceWeekly:
                                          'TranscriptionFailed', 'Failed to transcribe audio')
                     return None
             
-            # Save transcript to database
+            # Save transcript to database with current mode
+            current_mode = getattr(self, 'current_transcription_mode', 'test')
             try:
-                self.db.save_episode(episode, transcript_text, transcript_source)
-                logger.info(f"[{episode_id}] 💾 Transcript saved to database")
+                self.db.save_episode(episode, transcript_text, transcript_source, transcription_mode=current_mode)
+                logger.info(f"[{episode_id}] 💾 Transcript saved to database ({current_mode} mode)")
             except Exception as e:
                 logger.warning(f"[{episode_id}] Failed to save transcript to database: {e}")
             
@@ -1188,10 +1189,10 @@ class RenaissanceWeekly:
                 logger.info(f"[{episode_id}] ✅ Summary generated successfully!")
                 logger.info(f"[{episode_id}] 📏 Summary length: {len(summary)} characters")
                 monitor.record_success('summarization', episode.podcast)
-                # Save summary to database
+                # Save summary to database with current mode
                 try:
-                    self.db.save_episode(episode, transcript_text, transcript_source, summary)
-                    logger.info(f"[{episode_id}] 💾 Summary saved to database")
+                    self.db.save_episode(episode, transcript_text, transcript_source, summary, transcription_mode=current_mode)
+                    logger.info(f"[{episode_id}] 💾 Summary saved to database ({current_mode} mode)")
                 except Exception as e:
                     logger.warning(f"[{episode_id}] Failed to save summary to database: {e}")
             else:
@@ -1812,6 +1813,9 @@ class RenaissanceWeekly:
             concurrency=10,  # 10 concurrent downloads
             progress_callback=progress_callback
         )
+        
+        # Pass current transcription mode to download manager
+        download_manager.transcription_mode = getattr(self, 'current_transcription_mode', 'test')
         
         # Store reference for cancellation support
         self._download_manager = download_manager
