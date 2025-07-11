@@ -1488,6 +1488,8 @@ class EpisodeSelector:
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
+                        position: relative;
+                        z-index: 1;
                     }}
                     
                     .download-item.success {{
@@ -1563,6 +1565,8 @@ class EpisodeSelector:
                         border-radius: 8px;
                         padding: 16px;
                         margin: -8px 0 12px 0;
+                        position: relative;
+                        z-index: 10;
                     }}
                     
                     /* Prevent clicks inside details panel from bubbling up */
@@ -1581,6 +1585,11 @@ class EpisodeSelector:
                     
                     .download-item.expandable {{
                         cursor: pointer;
+                        user-select: none;
+                    }}
+                    
+                    .download-item.expandable:hover {{
+                        background: #f9f9f9;
                     }}
                     
                     .download-item.expandable .troubleshoot-actions {{
@@ -2858,7 +2867,7 @@ class EpisodeSelector:
             
             return `
                 <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
-                     ${{detail.status === 'failed' ? `onclick="toggleDownloadDetails('${{episodeId}}', event)"` : ''}}>
+                     ${{detail.status === 'failed' ? `data-episode-id="${{episodeId.replace(/"/g, '&quot;')}}" onclick="toggleDownloadDetails('${{episodeId}}', event)"` : ''}}>
                     <div class="episode-info">
                         <div class="episode-title">
                             ${{detail.status === 'failed' ? `<span id="toggle-${{episodeId}}" class="expand-icon">${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? '▼' : '▶'}}</span>` : ''}}
@@ -2873,7 +2882,7 @@ class EpisodeSelector:
                     </div>
                 </div>
                 ${{detail.status === 'failed' ? `
-                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onmouseup="event.stopPropagation()">
+                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};">
                         <div class="attempt-history">
                             <h4>Attempt History:</h4>
                             ${{(detail.history || []).map(h => `
@@ -3359,6 +3368,8 @@ class EpisodeSelector:
         }}
         
         function toggleDownloadDetails(episodeId, event) {{
+            console.log('toggleDownloadDetails called for:', episodeId);
+            
             // Prevent event from bubbling up
             if (event) {{
                 event.stopPropagation();
@@ -3366,6 +3377,11 @@ class EpisodeSelector:
             
             const detailsDiv = document.getElementById(`details-${{episodeId}}`);
             const toggleIcon = document.getElementById(`toggle-${{episodeId}}`);
+            
+            if (!detailsDiv || !toggleIcon) {{
+                console.error('Could not find details or toggle elements for:', episodeId);
+                return;
+            }}
             
             if (detailsDiv.style.display === 'none' || !detailsDiv.style.display) {{
                 detailsDiv.style.display = 'block';
@@ -3713,6 +3729,24 @@ class EpisodeSelector:
                 if (episodeId) {{
                     console.log('Event delegation handling click for episode:', episodeId);
                     toggleEpisode(episodeId, e);
+                }}
+            }}
+            
+            // Handle download item clicks
+            const downloadItem = e.target.closest('.download-item.expandable');
+            if (downloadItem && !e.target.closest('.troubleshoot-actions')) {{
+                // Prevent default and stop propagation
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Extract episode ID from the onclick attribute or find it in the DOM
+                const onclickAttr = downloadItem.getAttribute('onclick');
+                if (onclickAttr) {{
+                    const match = onclickAttr.match(/toggleDownloadDetails\('([^']+)'/);
+                    if (match && match[1]) {{
+                        console.log('Event delegation handling click for download item:', match[1]);
+                        toggleDownloadDetails(match[1], e);
+                    }}
                 }}
             }}
         }}, true); // Use capture phase to catch events early
