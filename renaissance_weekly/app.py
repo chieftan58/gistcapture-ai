@@ -1126,6 +1126,9 @@ class RenaissanceWeekly:
             return existing_summary
         
         try:
+            # Get current transcription mode
+            current_mode = getattr(self, 'current_transcription_mode', 'test')
+            
             # Step 1: Try to find existing transcript
             logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
             logger.info(f"[{episode_id}]    GUID: {episode.guid or 'None'}")
@@ -1174,7 +1177,6 @@ class RenaissanceWeekly:
                     return None
             
             # Save transcript to database with current mode
-            current_mode = getattr(self, 'current_transcription_mode', 'test')
             try:
                 self.db.save_episode(episode, transcript_text, transcript_source, transcription_mode=current_mode)
                 logger.info(f"[{episode_id}] 💾 Transcript saved to database ({current_mode} mode)")
