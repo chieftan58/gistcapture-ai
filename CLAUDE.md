@@ -1310,6 +1310,21 @@ yt-dlp -x --audio-format mp3 -o "episode.mp3" https://youtube.com/watch?v=...
 - Consider implementing OAuth for YouTube API
 - Add support for drag-and-drop file upload in UI
 
+### Recent Updates (2025-01-11) - Fixed Failed Episode Click Handling:
+- **Fixed Download Page Failed Episode Interaction**:
+  - **Problem**: Failed episodes on download page were not clickable for troubleshooting
+  - **CSS Fixes**:
+    - Added `cursor: pointer !important` to `.download-item.failed`
+    - Added z-index layering to ensure proper stacking
+    - Added pointer-events rules to prevent child elements from blocking clicks
+    - Enhanced hover effects with box-shadow
+  - **JavaScript Fixes**:
+    - Enhanced event delegation to handle dynamic content
+    - Added data-episode-id attribute for cleaner event handling
+    - Fixed event propagation issues in toggleDownloadDetails
+    - Added console logging for debugging
+  - **Result**: Failed episodes are now properly clickable to expand troubleshooting options
+
 ### Recent Updates (2025-01-11) - Fixed Test/Full Mode Cache Separation:
 - **Critical Fix: Mode-Aware Caching**:
   - **Problem**: System was using 15-minute test summaries when running in full mode

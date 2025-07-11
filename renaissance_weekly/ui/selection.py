@@ -1489,7 +1489,7 @@ class EpisodeSelector:
                         justify-content: space-between;
                         align-items: center;
                         position: relative;
-                        z-index: 1;
+                        z-index: 1; /* Ensure items are above background */
                     }}
                     
                     .download-item.success {{
@@ -1515,6 +1515,7 @@ class EpisodeSelector:
                         border-color: #666;
                         background: #f5f5f5;
                         border-left: 4px solid #333;
+                        cursor: pointer !important; /* Ensure failed items are clickable */
                     }}
                     
                     .status-badge {{
@@ -1584,16 +1585,31 @@ class EpisodeSelector:
                     }}
                     
                     .download-item.expandable {{
-                        cursor: pointer;
+                        cursor: pointer !important;
                         user-select: none;
                     }}
                     
                     .download-item.expandable:hover {{
                         background: #f9f9f9;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }}
                     
                     .download-item.expandable .troubleshoot-actions {{
                         pointer-events: auto;
+                    }}
+                    
+                    /* Ensure failed items aren't blocked by other elements */
+                    .download-item.failed * {{
+                        pointer-events: none;
+                    }}
+                    
+                    .download-item.failed {{
+                        pointer-events: auto !important;
+                    }}
+                    
+                    .download-item.failed .troubleshoot-actions,
+                    .download-item.failed .troubleshoot-actions * {{
+                        pointer-events: auto !important;
                     }}
                     
                     .expand-icon {{
@@ -2867,7 +2883,7 @@ class EpisodeSelector:
             
             return `
                 <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
-                     ${{detail.status === 'failed' ? `data-episode-id="${{episodeId.replace(/"/g, '&quot;')}}" onclick="toggleDownloadDetails('${{episodeId}}', event)"` : ''}}>
+                     ${{detail.status === 'failed' ? `data-episode-id="${{episodeId.replace(/"/g, '&quot;')}}" data-clickable="true" onclick="toggleDownloadDetails('${{episodeId.replace(/'/g, "\\\\'")}}', event)"` : ''}}>
                     <div class="episode-info">
                         <div class="episode-title">
                             ${{detail.status === 'failed' ? `<span id="toggle-${{episodeId}}" class="expand-icon">${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? '▼' : '▶'}}</span>` : ''}}
@@ -2882,7 +2898,7 @@ class EpisodeSelector:
                     </div>
                 </div>
                 ${{detail.status === 'failed' ? `
-                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};">
+                    <div id="details-${{episodeId}}" class="download-details-panel" style="display: ${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? 'block' : 'none'}};" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
                         <div class="attempt-history">
                             <h4>Attempt History:</h4>
                             ${{(detail.history || []).map(h => `
@@ -3370,8 +3386,9 @@ class EpisodeSelector:
         function toggleDownloadDetails(episodeId, event) {{
             console.log('toggleDownloadDetails called for:', episodeId);
             
-            // Prevent event from bubbling up
+            // Prevent event from bubbling up and default action
             if (event) {{
+                event.preventDefault();
                 event.stopPropagation();
             }}
             
@@ -3734,18 +3751,25 @@ class EpisodeSelector:
             
             // Handle download item clicks
             const downloadItem = e.target.closest('.download-item.expandable');
-            if (downloadItem && !e.target.closest('.troubleshoot-actions')) {{
+            if (downloadItem && !e.target.closest('.troubleshoot-actions') && !e.target.closest('.download-details-panel')) {{
                 // Prevent default and stop propagation
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // Extract episode ID from the onclick attribute or find it in the DOM
-                const onclickAttr = downloadItem.getAttribute('onclick');
-                if (onclickAttr) {{
-                    const match = onclickAttr.match(/toggleDownloadDetails\('([^']+)'/);
-                    if (match && match[1]) {{
-                        console.log('Event delegation handling click for download item:', match[1]);
-                        toggleDownloadDetails(match[1], e);
+                // Get episode ID from data attribute first, then try onclick
+                const episodeId = downloadItem.getAttribute('data-episode-id');
+                if (episodeId) {{
+                    console.log('Event delegation handling click for download item (data-attribute):', episodeId);
+                    toggleDownloadDetails(episodeId, e);
+                }} else {{
+                    // Fallback to onclick parsing
+                    const onclickAttr = downloadItem.getAttribute('onclick');
+                    if (onclickAttr) {{
+                        const match = onclickAttr.match(/toggleDownloadDetails\('([^']+)'/);
+                        if (match && match[1]) {{
+                            console.log('Event delegation handling click for download item (onclick):', match[1]);
+                            toggleDownloadDetails(match[1], e);
+                        }}
                     }}
                 }}
             }}
