@@ -16,10 +16,14 @@ class YtDlpDownloader:
     @staticmethod
     async def download_from_youtube(video_url: str, output_path: Path) -> bool:
         """Download audio from YouTube video"""
-        # Try without cookies first, then with different browsers
-        browsers = [None, 'chrome', 'firefox', 'safari', 'edge']
+        # Check for cookie file first
+        cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
         
-        for browser in browsers:
+        # Try cookie file first, then browsers
+        attempts = ['cookie_file'] if cookie_file.exists() else []
+        attempts.extend([None, 'chrome', 'firefox', 'safari', 'edge'])
+        
+        for attempt in attempts:
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': str(output_path),
@@ -34,16 +38,19 @@ class YtDlpDownloader:
                 }],
             }
             
-            # Try with browser cookies if specified
-            if browser:
+            # Handle different cookie sources
+            if attempt == 'cookie_file':
+                ydl_opts['cookiefile'] = str(cookie_file)
+                logger.info(f"📂 Trying with cookie file: {cookie_file}")
+            elif attempt:
                 try:
-                    ydl_opts['cookiesfrombrowser'] = (browser,)
-                    logger.info(f"Trying with {browser} cookies...")
+                    ydl_opts['cookiesfrombrowser'] = (attempt,)
+                    logger.info(f"🌐 Trying with {attempt} browser cookies...")
                 except Exception as e:
-                    logger.info(f"No {browser} cookies available, skipping...")
+                    logger.info(f"No {attempt} cookies available, skipping...")
                     continue
             else:
-                logger.info("Trying without cookies...")
+                logger.info("🔓 Trying without cookies...")
             
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:

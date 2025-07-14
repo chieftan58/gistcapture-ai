@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>Test Podcast</title>
+    <link>https://example.com</link>
+    <description>A test podcast for automated testing</description>
+    <language>en-us</language>
+    <itunes:author>Test Author</itunes:author>
+    
+    <item>
+      <title>Episode 3: Future of Technology with Jane Smith</title>
+      <description>In this episode, we discuss the future of technology, AI ethics, and sustainable computing with leading researcher Jane Smith.</description>
+      <pubDate>Wed, 10 Jan 2025 10:00:00 GMT</pubDate>
+      <enclosure url="https://example.com/episodes/ep3.mp3" length="52428800" type="audio/mpeg"/>
+      <guid isPermaLink="false">test-podcast-ep3</guid>
+      <link>https://example.com/episodes/3</link>
+      <itunes:duration>3600</itunes:duration>
+      <itunes:episode>3</itunes:episode>
+    </item>
+    
+    <item>
+      <title>Episode 2: Climate Science Deep Dive</title>
+      <description>A comprehensive discussion about climate science, renewable energy, and environmental policy.</description>
+      <pubDate>Wed, 03 Jan 2025 10:00:00 GMT</pubDate>
+      <enclosure url="https://example.com/episodes/ep2.mp3" length="41943040" type="audio/mpeg"/>
+      <guid isPermaLink="false">test-podcast-ep2</guid>
+      <link>https://example.com/episodes/2</link>
+      <itunes:duration>2880</itunes:duration>
+      <itunes:episode>2</itunes:episode>
+    </item>
+    
+    <item>
+      <title>Episode 1: Introduction and Welcome</title>
+      <description>Welcome to Test Podcast! In our first episode, we introduce the show and discuss what's coming.</description>
+      <pubDate>Wed, 27 Dec 2024 10:00:00 GMT</pubDate>
+      <enclosure url="https://example.com/episodes/ep1.mp3" length="20971520" type="audio/mpeg"/>
+      <guid isPermaLink="false">test-podcast-ep1</guid>
+      <link>https://example.com/episodes/1</link>
+      <itunes:duration>1440</itunes:duration>
+      <itunes:episode>1</itunes:episode>
+    </item>
+  </channel>
+</rss>

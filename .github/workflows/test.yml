@@ -1,0 +1,113 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test]"
+    
+    - name: Run unit tests
+      run: |
+        pytest -m unit --cov=renaissance_weekly --cov-report=xml
+      env:
+        TESTING_MODE: true
+    
+    - name: Run integration tests
+      run: |
+        pytest -m integration --cov=renaissance_weekly --cov-append --cov-report=xml
+      env:
+        TESTING_MODE: true
+    
+    - name: Run E2E tests
+      if: matrix.python-version == '3.10'  # Only run on one version
+      run: |
+        pytest -m e2e --cov=renaissance_weekly --cov-append --cov-report=xml
+      env:
+        TESTING_MODE: true
+    
+    - name: Upload coverage to Codecov
+      if: matrix.python-version == '3.10'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Run Black
+      run: |
+        black --check renaissance_weekly tests
+    
+    - name: Run flake8
+      run: |
+        flake8 renaissance_weekly tests --max-line-length=100
+    
+    - name: Run mypy
+      run: |
+        mypy renaissance_weekly --ignore-missing-imports
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Bandit security scan
+      uses: gaurav-nelson/bandit-action@v1
+      with:
+        path: "renaissance_weekly"
+    
+    - name: Run safety check
+      run: |
+        pip install safety
+        safety check

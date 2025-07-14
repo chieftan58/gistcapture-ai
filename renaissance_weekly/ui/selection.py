@@ -347,6 +347,15 @@ class EpisodeSelector:
                         self._send_json({'status': 'success', 'state': parent.state})
                     else:
                         self._send_json({'status': 'error', 'message': 'Invalid state'})
+                
+                elif self.path == '/api/reset-selection':
+                    # Reset to initial state
+                    logger.info(f"[{parent._correlation_id}] 🔄 Resetting selection state")
+                    parent.state = 'podcast_selection'
+                    parent._episodes = []
+                    parent._selected_podcasts = []
+                    parent._selected_episodes = []
+                    self._send_json({'status': 'success', 'state': parent.state})
                     
                 elif self.path == '/api/retry-episodes':
                     # Retry failed episodes with alternative sources
@@ -1195,6 +1204,9 @@ class EpisodeSelector:
                     </div>
                     
                     <div class="action-bar">
+                        <button class="button secondary" onclick="backToPodcasts()">
+                            ← Back
+                        </button>
                         <div class="button-group">
                             <button class="button button-text" onclick="selectAllEpisodes()">All</button>
                             <button class="button button-text" onclick="selectNoneEpisodes()">None</button>
@@ -3086,6 +3098,37 @@ class EpisodeSelector:
         }}
         
         // New navigation functions
+        async function backToPodcasts() {{
+            // Clear selected episodes
+            APP_STATE.selectedEpisodes.clear();
+            
+            // Clear selected podcasts to truly reset
+            APP_STATE.selectedPodcasts.clear();
+            
+            // Stop any polling intervals
+            if (APP_STATE.globalPollInterval) {{
+                clearInterval(APP_STATE.globalPollInterval);
+                APP_STATE.globalPollInterval = null;
+            }}
+            
+            // Reset server state by signaling a reset
+            try {{
+                await fetch('/api/reset-selection', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to reset server state:', e);
+            }}
+            
+            // Go back to podcast selection state
+            APP_STATE.state = 'podcast_selection';
+            APP_STATE.episodes = [];
+            APP_STATE.selectedPodcastNames = [];
+            render();
+        }}
+        
         async function proceedToCostEstimate() {{
             // Stop any ongoing polling
             if (APP_STATE.statusInterval) {{

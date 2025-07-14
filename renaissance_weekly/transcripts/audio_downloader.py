@@ -747,14 +747,39 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
             url
         ]
         
-        # Skip cookie file check - we know it's in wrong format
-        # Go directly to browser cookies which are more reliable
+        # Try cookie file first if it exists
+        cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
+        
+        # Try cookie file first
+        if cookie_file.exists():
+            try:
+                logger.info(f"📂 Trying YouTube download with cookie file: {cookie_file}")
+                cmd_with_cookies = cmd[:-1] + ['--cookies', str(cookie_file), cmd[-1]]
+                
+                process = await asyncio.create_subprocess_exec(
+                    *cmd_with_cookies,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0 and output_path.exists() and output_path.stat().st_size > 1000:
+                    logger.info(f"✅ YouTube download successful with cookie file")
+                    return True
+                else:
+                    if stderr:
+                        logger.warning(f"Cookie file attempt failed: {stderr.decode()[:200]}")
+            except Exception as e:
+                logger.warning(f"Cookie file attempt failed: {e}")
+        
+        # Try browser cookies
         browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
         
         for browser in browsers:
             try:
                 # Try with browser cookies
-                cmd_with_cookies = cmd[:2] + ['--cookies-from-browser', browser] + cmd[2:]
+                cmd_with_cookies = cmd[:-1] + ['--cookies-from-browser', browser, cmd[-1]]
                 
                 process = await asyncio.create_subprocess_exec(
                     *cmd_with_cookies,

@@ -63,31 +63,54 @@ class YouTubeStrategy(DownloadStrategy):
         logger.info(f"🎥 Found YouTube URL: {youtube_url}")
         
         # Try downloading with different approaches
+        cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
+        
         approaches = [
-            # First try with browser cookies
-            ['yt-dlp', '--cookies-from-browser', 'firefox', '-x', '--audio-format', 'mp3', 
+            # First try with cookie file
+            ['python', '-m', 'yt_dlp', '--cookies', str(cookie_file), '-x', '--audio-format', 'mp3', 
+             '--quiet', '--progress', '-o', str(output_path), youtube_url],
+            
+            # Try with browser cookies
+            ['python', '-m', 'yt_dlp', '--cookies-from-browser', 'firefox', '-x', '--audio-format', 'mp3', 
              '--quiet', '--progress', '-o', str(output_path), youtube_url],
             
             # Try Chrome cookies
-            ['yt-dlp', '--cookies-from-browser', 'chrome', '-x', '--audio-format', 'mp3',
+            ['python', '-m', 'yt_dlp', '--cookies-from-browser', 'chrome', '-x', '--audio-format', 'mp3',
              '--quiet', '--progress', '-o', str(output_path), youtube_url],
             
             # Try without cookies
-            ['yt-dlp', '-x', '--audio-format', 'mp3', '--quiet', '--progress',
+            ['python', '-m', 'yt_dlp', '-x', '--audio-format', 'mp3', '--quiet', '--progress',
              '-o', str(output_path), youtube_url],
         ]
         
         last_stderr = None
         for i, cmd in enumerate(approaches):
             try:
-                logger.debug(f"Attempt {i+1}: {' '.join(cmd[:5])}...")
+                if i == 0 and cookie_file.exists():
+                    logger.info(f"📂 Using cookie file: {cookie_file}")
+                elif i == 0:
+                    logger.warning(f"⚠️ Cookie file not found: {cookie_file}")
+                    
+                logger.info(f"🎬 Attempt {i+1}: {' '.join(cmd[:5])}...")
                 
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await process.communicate()
+                
+                # Add timeout to prevent hanging
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(),
+                        timeout=300  # 5 minute timeout
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"❌ YouTube download timeout after 5 minutes")
+                    process.terminate()
+                    await process.wait()
+                    continue
+                    
                 last_stderr = stderr  # Store for error reporting
                 
                 if process.returncode == 0 and output_path.exists():
@@ -97,9 +120,13 @@ class YouTubeStrategy(DownloadStrategy):
                         return True, None
                     else:
                         output_path.unlink()  # Remove empty file
+                        logger.warning(f"❌ Downloaded file too small: {file_size} bytes")
+                else:
+                    if stderr:
+                        logger.warning(f"❌ Attempt {i+1} failed: {stderr.decode()[:200]}")
                         
             except Exception as e:
-                logger.debug(f"Approach {i+1} failed: {e}")
+                logger.warning(f"❌ Approach {i+1} exception: {str(e)}")
                 continue
         
         # All approaches failed

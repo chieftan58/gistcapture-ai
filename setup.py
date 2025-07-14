@@ -16,6 +16,26 @@ setup(
         "requests>=2.28.0",
         "python-dateutil>=2.8.0",
     ],
+    extras_require={
+        "test": [
+            "pytest>=7.0.0",
+            "pytest-asyncio>=0.21.0",
+            "pytest-cov>=4.0.0",
+            "pytest-timeout>=2.1.0",
+            "pytest-mock>=3.10.0",
+            "pytest-xdist>=3.0.0",
+            "pytest-watch>=4.2.0",
+            "responses>=0.22.0",
+            "faker>=18.0.0",
+            "aioresponses>=0.7.4",
+        ],
+        "dev": [
+            "black>=23.0.0",
+            "flake8>=6.0.0",
+            "mypy>=1.0.0",
+            "isort>=5.12.0",
+        ]
+    },
     entry_points={
         "console_scripts": [
             "renaissance-weekly=main:main",

@@ -1,15 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:08:39.603464",
-    "component": "summarization",
-    "podcast": "A16Z",
-    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T01:08:39.951914",
     "component": "transcript_fetch",
     "podcast": "American Optimist",
@@ -9994,6 +9984,16 @@
     "component": "transcript_fetch",
     "podcast": "Cognitive Revolution",
     "episode_title": "Cracking the Medical Code: Why Cleveland Clinic Doctors Love Their Ambience Healthcare AI Scribe",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-14T15:41:20.646191",
+    "component": "transcript_fetch",
+    "podcast": "A16Z",
+    "episode_title": "Aaron Levie on AI's Enterprise Adoption",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,
