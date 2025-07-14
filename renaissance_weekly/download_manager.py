@@ -87,11 +87,27 @@ class EpisodeDownloadStatus:
             # Get audio format from file extension
             self.audio_format = self.audio_path.suffix.lower().lstrip('.')
             
-            # Extract duration using pydub (already imported in the module)
+            # Extract duration using mutagen (memory efficient - doesn't load entire file)
             try:
-                from pydub import AudioSegment
-                audio = AudioSegment.from_file(str(self.audio_path))
-                self.downloaded_duration = len(audio) / (1000 * 60)  # Convert ms to minutes
+                from mutagen import File
+                audio_file = File(str(self.audio_path))
+                if audio_file and audio_file.info:
+                    self.downloaded_duration = audio_file.info.length / 60  # Convert seconds to minutes
+                else:
+                    # Fallback: Try ffprobe if mutagen fails
+                    import subprocess
+                    import json
+                    cmd = [
+                        'ffprobe', '-v', 'quiet', '-print_format', 'json',
+                        '-show_streams', str(self.audio_path)
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        data = json.loads(result.stdout)
+                        for stream in data.get('streams', []):
+                            if stream.get('codec_type') == 'audio' and 'duration' in stream:
+                                self.downloaded_duration = float(stream['duration']) / 60
+                                break
             except Exception as e:
                 logger.debug(f"Could not extract duration from {self.audio_path}: {e}")
                 
@@ -298,6 +314,44 @@ class DownloadManager:
         except Exception as e:
             logger.warning(f"Memory check failed: {e}")
             return True, "Memory check failed"
+    
+    async def _monitor_memory_usage(self):
+        """Monitor memory usage during downloads and log warnings"""
+        try:
+            import psutil
+            
+            warning_threshold = 80  # Warn at 80% memory usage
+            critical_threshold = 90  # Critical at 90% memory usage
+            last_warning_percent = 0
+            
+            while True:
+                try:
+                    memory = psutil.virtual_memory()
+                    percent_used = memory.percent
+                    available_gb = memory.available / (1024**3)
+                    
+                    # Log critical memory usage
+                    if percent_used > critical_threshold and percent_used > last_warning_percent + 5:
+                        logger.error(f"🚨 CRITICAL MEMORY: {percent_used:.1f}% used, only {available_gb:.1f}GB available!")
+                        last_warning_percent = percent_used
+                    # Log high memory usage
+                    elif percent_used > warning_threshold and percent_used > last_warning_percent + 5:
+                        logger.warning(f"⚠️ HIGH MEMORY: {percent_used:.1f}% used, {available_gb:.1f}GB available")
+                        last_warning_percent = percent_used
+                    
+                    # Check every 10 seconds
+                    await asyncio.sleep(10)
+                    
+                except Exception as e:
+                    logger.debug(f"Memory monitoring error: {e}")
+                    await asyncio.sleep(10)
+                    
+        except asyncio.CancelledError:
+            logger.debug("Memory monitoring stopped")
+            raise
+        except ImportError:
+            logger.debug("psutil not available for memory monitoring")
+            return
         
     async def download_episodes(self, episodes: List[Episode], podcast_configs: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
         """Download multiple episodes concurrently"""
@@ -313,6 +367,10 @@ class DownloadManager:
                 logger.warning(f"Reducing concurrency from {self.concurrency} to 2 due to low memory")
                 self._download_semaphore = asyncio.Semaphore(2)
                 self.concurrency = 2
+            # Also reduce YouTube concurrency
+            if hasattr(self, '_youtube_semaphore'):
+                self._youtube_semaphore = asyncio.Semaphore(1)
+                logger.warning("Reduced YouTube concurrency to 1 due to low memory")
         
         # Store the event loop for cross-thread operations
         self._event_loop = asyncio.get_running_loop()
@@ -334,8 +392,18 @@ class DownloadManager:
             # Create download tasks
             tasks = [self._download_episode(episode) for episode in episodes]
             
+            # Start memory monitoring task
+            memory_monitor_task = asyncio.create_task(self._monitor_memory_usage())
+            
             # Run downloads concurrently
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Cancel memory monitoring
+            memory_monitor_task.cancel()
+            try:
+                await memory_monitor_task
+            except asyncio.CancelledError:
+                pass
         
         # Update final statistics
         for ep_id, status in self.download_status.items():

@@ -8,8 +8,8 @@
       "consecutive_failures": 9
     },
     "audio_download": {
-      "total_attempts": 550,
-      "successful": 452,
+      "total_attempts": 551,
+      "successful": 453,
       "failed": 98,
       "last_failure": "2025-07-14T21:16:31.256813",
       "consecutive_failures": 0
