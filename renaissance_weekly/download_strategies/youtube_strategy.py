@@ -165,13 +165,20 @@ class YouTubeStrategy(DownloadStrategy):
         if "youtube.com" in original_url or "youtu.be" in original_url:
             return original_url
         
-        # Check known mappings
-        mapping_key = f"{podcast}|{title}"
+        # Check known mappings with stricter matching
+        # First try exact podcast + key terms match
         for key, url in self.EPISODE_MAPPINGS.items():
-            # Flexible matching
-            if any(word.lower() in key.lower() for word in title.split()[:3]):
-                logger.info(f"✅ Found known YouTube mapping: {key}")
-                return url
+            key_parts = key.split('|')
+            if len(key_parts) >= 2:
+                key_podcast = key_parts[0]
+                key_identifier = key_parts[1].lower()
+                
+                # Must match podcast name exactly
+                if key_podcast.lower() == podcast.lower():
+                    # Check if key identifier is in title
+                    if key_identifier in title.lower():
+                        logger.info(f"✅ Found known YouTube mapping: {key}")
+                        return url
         
         # Build search query
         channel = self.YOUTUBE_CHANNELS.get(podcast, "")

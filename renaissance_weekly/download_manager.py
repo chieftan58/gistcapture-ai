@@ -197,6 +197,8 @@ class DownloadManager:
         self.audio_finder = AudioSourceFinder()
         self.download_status: Dict[str, EpisodeDownloadStatus] = {}
         self._download_semaphore = asyncio.Semaphore(concurrency)
+        # Add separate semaphore for YouTube downloads to limit memory usage
+        self._youtube_semaphore = asyncio.Semaphore(2)  # Max 2 concurrent YouTube downloads
         self._manual_url_queue: Dict[str, str] = {}
         self._browser_download_queue: List[str] = []
         self._cancelled = False
@@ -266,11 +268,51 @@ class DownloadManager:
         """Cancel all downloads"""
         self._cancelled = True
         logger.info("Download manager cancelled")
+    
+    def _check_memory(self) -> tuple[bool, str]:
+        """Check available memory before starting downloads"""
+        try:
+            import psutil
+            
+            # Get memory info
+            memory = psutil.virtual_memory()
+            available_gb = memory.available / (1024**3)
+            total_gb = memory.total / (1024**3)
+            percent_used = memory.percent
+            
+            logger.info(f"💾 Memory status: {available_gb:.1f}GB available of {total_gb:.1f}GB total ({percent_used:.1f}% used)")
+            
+            # Warn if less than 1GB available
+            if available_gb < 1.0:
+                return False, f"Low memory: only {available_gb:.1f}GB available"
+            
+            # Warn if over 85% memory usage
+            if percent_used > 85:
+                return False, f"High memory usage: {percent_used:.1f}%"
+            
+            return True, "Memory OK"
+            
+        except ImportError:
+            logger.warning("psutil not available for memory monitoring")
+            return True, "psutil not available"
+        except Exception as e:
+            logger.warning(f"Memory check failed: {e}")
+            return True, "Memory check failed"
         
     async def download_episodes(self, episodes: List[Episode], podcast_configs: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
         """Download multiple episodes concurrently"""
         self.stats['total'] = len(episodes)
         self.stats['startTime'] = time.time()
+        
+        # Memory check before starting downloads
+        memory_ok, memory_msg = self._check_memory()
+        if not memory_ok:
+            logger.error(f"⚠️ Memory check failed: {memory_msg}")
+            # Continue anyway but with reduced concurrency
+            if self.concurrency > 2:
+                logger.warning(f"Reducing concurrency from {self.concurrency} to 2 due to low memory")
+                self._download_semaphore = asyncio.Semaphore(2)
+                self.concurrency = 2
         
         # Store the event loop for cross-thread operations
         self._event_loop = asyncio.get_running_loop()
@@ -415,7 +457,15 @@ class DownloadManager:
                     'published': episode.published
                 }
                 
-                success = await self.smart_router.download_with_fallback(episode_info, audio_file)
+                # Check if URL is YouTube for semaphore management
+                is_youtube_url = "youtube.com" in url or "youtu.be" in url
+                
+                if is_youtube_url:
+                    async with self._youtube_semaphore:
+                        logger.info(f"🎥 Using YouTube semaphore for manual URL")
+                        success = await self.smart_router.download_with_fallback(episode_info, audio_file)
+                else:
+                    success = await self.smart_router.download_with_fallback(episode_info, audio_file)
                 if success:
                     # Trim if in test mode
                     if current_mode == 'test':
@@ -453,11 +503,27 @@ class DownloadManager:
             status.add_attempt(attempt)
             
             try:
-                # Use smart router to try all strategies until one succeeds
-                success = await asyncio.wait_for(
-                    self.smart_router.download_with_fallback(episode_info, audio_file),
-                    timeout=1800  # 30 minutes total for all strategies (for very long episodes)
+                # Check if this will likely use YouTube (for memory management)
+                is_youtube_likely = (
+                    episode.podcast in ["American Optimist", "Dwarkesh Podcast"] or
+                    "youtube.com" in episode.audio_url or
+                    "youtu.be" in episode.audio_url
                 )
+                
+                # Use YouTube semaphore if likely to use YouTube
+                if is_youtube_likely:
+                    async with self._youtube_semaphore:
+                        logger.info(f"🎥 Using YouTube semaphore for {episode.podcast}")
+                        success = await asyncio.wait_for(
+                            self.smart_router.download_with_fallback(episode_info, audio_file),
+                            timeout=1800  # 30 minutes total for all strategies
+                        )
+                else:
+                    # Regular download without YouTube semaphore
+                    success = await asyncio.wait_for(
+                        self.smart_router.download_with_fallback(episode_info, audio_file),
+                        timeout=1800  # 30 minutes total for all strategies (for very long episodes)
+                    )
                 
                 if success:
                     # If we're in test mode, trim the audio file immediately after download

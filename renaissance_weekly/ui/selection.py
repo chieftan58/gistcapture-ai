@@ -2940,7 +2940,7 @@ class EpisodeSelector:
                 }} catch (e) {{
                     console.error('Error check failed:', e);
                 }}
-            }}, 1000);
+            }}, 3000);  // Reduced polling frequency from 1s to 3s
         }}
         
         function startStatusPolling() {{
@@ -3053,7 +3053,7 @@ class EpisodeSelector:
                                 waitForEpisodeFetch();
                             }}, 2000);
                         }}
-                    }}, 1000);
+                    }}, 1000);  // Keep at 1s for initial fetch completion
                 }} else if (status.status === 'error') {{
                     clearInterval(APP_STATE.statusInterval);
                     clearInterval(APP_STATE.errorCheckInterval);
@@ -3065,7 +3065,7 @@ class EpisodeSelector:
                 }} catch (e) {{
                     console.error('Status polling error:', e);
                 }}
-            }}, 1000);
+            }}, 3000);  // Reduced polling frequency from 1s to 3s
         }}
         
         // Helper function for rendering download items
@@ -3507,7 +3507,7 @@ class EpisodeSelector:
                     }} catch (e) {{
                         console.error('State polling error:', e);
                     }}
-                }}, 1000);
+                }}, 3000);  // Reduced polling frequency from 1s to 3s
             }}
             
             render();
@@ -3739,7 +3739,7 @@ class EpisodeSelector:
                 }} catch (error) {{
                     console.error('Failed to update download status:', error);
                 }}
-            }}, 1000);
+            }}, 2000);  // Reduced polling frequency from 1s to 2s for downloads
         }}
         
         function toggleDownloadDetails(episodeId, event) {{
@@ -4170,7 +4170,7 @@ class EpisodeSelector:
                 }} catch (e) {{
                     console.error('State polling error:', e);
                 }}
-            }}, 1000);
+            }}, 5000);  // Reduced polling frequency from 1s to 5s for email stage
         }}, 500);
     </script>
 </body>
