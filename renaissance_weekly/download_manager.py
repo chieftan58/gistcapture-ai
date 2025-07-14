@@ -190,7 +190,7 @@ class EpisodeDownloadStatus:
 class DownloadManager:
     """Manage concurrent episode downloads with retry strategies"""
     
-    def __init__(self, concurrency: int = 10, progress_callback: Optional[Callable] = None):
+    def __init__(self, concurrency: int = 10, progress_callback: Optional[Callable] = None, transcription_mode: str = 'test'):
         self.concurrency = concurrency
         self.progress_callback = progress_callback
         self.transcriber = AudioTranscriber()
@@ -200,10 +200,11 @@ class DownloadManager:
         self._manual_url_queue: Dict[str, str] = {}
         self._browser_download_queue: List[str] = []
         self._cancelled = False
-        self.transcription_mode = 'test'  # Default, will be set by app.py
+        self.transcription_mode = transcription_mode  # Set mode from constructor
         
         # Set transcriber mode to match
         self.transcriber._current_mode = self.transcription_mode
+        logger.info(f"DownloadManager initialized with mode: {self.transcription_mode}")
         
         # Initialize smart router for bulletproof downloads
         self.smart_router = SmartDownloadRouter()
@@ -455,7 +456,7 @@ class DownloadManager:
                 # Use smart router to try all strategies until one succeeds
                 success = await asyncio.wait_for(
                     self.smart_router.download_with_fallback(episode_info, audio_file),
-                    timeout=600  # 10 minutes total for all strategies
+                    timeout=1800  # 30 minutes total for all strategies (for very long episodes)
                 )
                 
                 if success:
@@ -491,7 +492,7 @@ class DownloadManager:
             except asyncio.TimeoutError:
                 attempt.complete(False, "Download timeout")
                 status.status = 'failed'
-                status.last_error = "Download timeout (10 minutes exceeded)"
+                status.last_error = "Download timeout (30 minutes exceeded)"
                 logger.warning(f"⏰ Smart router timeout for {episode.title}")
                 
             except Exception as e:

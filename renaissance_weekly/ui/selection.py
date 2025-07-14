@@ -524,11 +524,12 @@ class EpisodeSelector:
                     # Start downloading episodes
                     episode_ids = data.get('episode_ids', [])
                     transcription_mode = data.get('mode', parent.configuration.get('transcription_mode', 'test'))
+                    episode_details = data.get('episode_details', {})
                     
                     # Set the processing mode for downloads
                     parent._processing_mode = transcription_mode
                     
-                    # Initialize download status
+                    # Initialize download status with episode details
                     parent._download_status = {
                         'total': len(episode_ids),
                         'downloaded': 0,
@@ -537,6 +538,9 @@ class EpisodeSelector:
                         'episodeDetails': {},
                         'startTime': time.time()
                     }
+                    
+                    # Store episode details for later use
+                    parent._episode_details = episode_details
                     
                     # Map episode IDs to Episode objects
                     episode_map = {}
@@ -1364,6 +1368,20 @@ class EpisodeSelector:
             const inQueueEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'pending' || detail.status === 'queued' || detail.status === 'retrying' || detail.status === 'downloading');
             const downloadedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'downloaded' || detail.status === 'success');
             
+            // Check for cookie expiration indicators
+            const youtubeAuthErrors = failedEpisodes.filter(([_, detail]) => {{
+                const lastError = detail.lastError || '';
+                const episode = detail.episode || detail.title || '';
+                const isYoutubeError = lastError.toLowerCase().includes('sign in') || 
+                                     lastError.toLowerCase().includes('bot') ||
+                                     lastError.toLowerCase().includes('authentication') ||
+                                     lastError.toLowerCase().includes('youtube') ||
+                                     (lastError.includes('403') && (episode.includes('American Optimist') || episode.includes('Dwarkesh')));
+                return detail.status === 'failed' && isYoutubeError;
+            }});
+            
+            const showCookieAlert = youtubeAuthErrors.length > 0;
+            
             return `
                 <div class="header">
                     <div class="logo">RW</div>
@@ -1373,6 +1391,73 @@ class EpisodeSelector:
                 
                 <div class="container">
                     ${{renderStageIndicator('download')}}
+                    
+                    ${{showCookieAlert ? `
+                        <div class="cookie-alert">
+                            <div class="cookie-alert-header">
+                                <span class="cookie-alert-icon">🍪</span>
+                                <strong>Cookie Authentication Required</strong>
+                            </div>
+                            <p>YouTube authentication has expired for American Optimist and/or Dwarkesh podcasts.</p>
+                            
+                            <div class="cookie-instructions">
+                                <h4>To fix this issue:</h4>
+                                
+                                <ol>
+                                    <li><strong>Open YouTube in your browser</strong>
+                                        <ul>
+                                            <li>Visit <a href="https://youtube.com" target="_blank">youtube.com</a></li>
+                                            <li>Make sure you're signed in (check top right corner)</li>
+                                            <li>Try playing any video to verify access</li>
+                                        </ul>
+                                    </li>
+                                    
+                                    <li><strong>Export your cookies</strong>
+                                        <ul>
+                                            <li>Install browser extension:
+                                                <ul>
+                                                    <li>Firefox: <em>"cookies.txt"</em> by Lennon Hill</li>
+                                                    <li>Chrome: <em>"Get cookies.txt LOCALLY"</em></li>
+                                                </ul>
+                                            </li>
+                                            <li>Click the extension icon while on youtube.com</li>
+                                            <li>Choose "Export" or "Download"</li>
+                                        </ul>
+                                    </li>
+                                    
+                                    <li><strong>Save the cookie file</strong>
+                                        <ul>
+                                            <li>Save as: <code>youtube_cookies.txt</code></li>
+                                            <li>Location: <code>~/.config/renaissance-weekly/cookies/</code></li>
+                                        </ul>
+                                    </li>
+                                    
+                                    <li><strong>Protect the cookies</strong>
+                                        <ul>
+                                            <li>Run: <code>python protect_cookies_now.py</code></li>
+                                            <li>This prevents the cookies from being overwritten</li>
+                                        </ul>
+                                    </li>
+                                </ol>
+                                
+                                <div class="cookie-note">
+                                    <strong>Note:</strong> YouTube cookies typically expire after 2 years. The protected cookies won't be overwritten by the system.
+                                </div>
+                                
+                                <details class="cookie-details">
+                                    <summary>Alternative: Manual URL method</summary>
+                                    <div class="cookie-alternative">
+                                        <p>If cookie authentication continues to fail, you can:</p>
+                                        <ol>
+                                            <li>Download episodes manually using any method (yt-dlp, online converters, etc.)</li>
+                                            <li>Click "Manual URL" on failed episodes</li>
+                                            <li>Enter the local file path (e.g., <code>/home/user/downloads/episode.mp3</code>)</li>
+                                        </ol>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    ` : ''}}
                     
                     <div class="processing-content">
                         <div class="status-overview">
@@ -3569,12 +3654,25 @@ class EpisodeSelector:
             render();
             
             try {{
+                // Build episode details with duration info
+                const selectedEpisodeDetails = {{}};
+                APP_STATE.episodes.forEach(ep => {{
+                    if (APP_STATE.selectedEpisodes.has(ep.id)) {{
+                        selectedEpisodeDetails[ep.id] = {{
+                            duration: ep.duration,
+                            title: ep.title,
+                            podcast: ep.podcast
+                        }};
+                    }}
+                }});
+                
                 const response = await fetch('/api/start-download', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{
                         episode_ids: Array.from(APP_STATE.selectedEpisodes),
-                        mode: APP_STATE.configuration.transcription_mode
+                        mode: APP_STATE.configuration.transcription_mode,
+                        episode_details: selectedEpisodeDetails
                     }})
                 }});
                 
@@ -3634,10 +3732,8 @@ class EpisodeSelector:
                             clearInterval(APP_STATE.downloadInterval);
                         }}
                         
-                        // Automatically proceed if all successful
-                        if (status.failed === 0) {{
-                            setTimeout(() => continueWithDownloads(), 1500);
-                        }}
+                        // Don't automatically proceed - require manual Continue button
+                        // User must click Continue to proceed to processing
                     }}
                     
                 }} catch (error) {{
@@ -4856,16 +4952,17 @@ class EpisodeSelector:
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
+            background: var(--gray-100);
+            color: var(--gray-600);
+            border: 1px solid var(--gray-200);
         }
         
         .mode-badge.test {
-            background: #e0f2fe;
-            color: #0369a1;
+            /* Monochromatic style */
         }
         
         .mode-badge.full {
-            background: #dcfce7;
-            color: #15803d;
+            /* Monochromatic style */
         }
         
         .mode-indicator {
@@ -5276,6 +5373,172 @@ class EpisodeSelector:
             margin-top: 32px;
             padding-top: 24px;
             border-top: 1px solid var(--gray-200);
+        }
+        
+        /* Cookie Alert Styles */
+        .cookie-alert {
+            background: #FFF8DC;
+            border: 1px solid #FFD700;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+        
+        .cookie-alert-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 18px;
+            color: var(--gray-700);
+        }
+        
+        .cookie-alert-icon {
+            font-size: 24px;
+        }
+        
+        .cookie-alert p {
+            color: var(--gray-600);
+            margin-bottom: 16px;
+        }
+        
+        .cookie-instructions {
+            background: var(--white);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+        
+        .cookie-instructions h4 {
+            color: var(--gray-700);
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        
+        .cookie-instructions ol {
+            counter-reset: steps;
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .cookie-instructions ol > li {
+            counter-increment: steps;
+            margin-bottom: 20px;
+            position: relative;
+            padding-left: 40px;
+        }
+        
+        .cookie-instructions ol > li::before {
+            content: counter(steps);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 28px;
+            height: 28px;
+            background: var(--black);
+            color: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .cookie-instructions strong {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--gray-700);
+        }
+        
+        .cookie-instructions ul {
+            list-style: none;
+            padding-left: 0;
+            margin-top: 8px;
+        }
+        
+        .cookie-instructions ul li {
+            padding-left: 20px;
+            position: relative;
+            margin-bottom: 6px;
+            color: var(--gray-600);
+            font-size: 14px;
+        }
+        
+        .cookie-instructions ul li::before {
+            content: "•";
+            position: absolute;
+            left: 8px;
+            color: var(--gray-400);
+        }
+        
+        .cookie-instructions code {
+            background: var(--gray-100);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: var(--gray-700);
+        }
+        
+        .cookie-instructions em {
+            font-style: normal;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+        
+        .cookie-note {
+            background: var(--gray-100);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+        
+        .cookie-note strong {
+            color: var(--gray-700);
+        }
+        
+        .cookie-details {
+            margin-top: 16px;
+        }
+        
+        .cookie-details summary {
+            cursor: pointer;
+            color: var(--gray-600);
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 0;
+        }
+        
+        .cookie-details summary:hover {
+            color: var(--gray-700);
+        }
+        
+        .cookie-alternative {
+            padding: 16px;
+            background: var(--gray-100);
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+        
+        .cookie-alternative p {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+        
+        .cookie-alternative ol {
+            list-style: decimal;
+            padding-left: 20px;
+        }
+        
+        .cookie-alternative ol li {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--gray-600);
         }
         """
     

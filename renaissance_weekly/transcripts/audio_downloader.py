@@ -4,11 +4,12 @@ import re
 import requests
 import os
 from urllib.parse import urlparse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from pathlib import Path
 import time
 import subprocess
 import asyncio
+from datetime import datetime, timedelta
 
 from ..utils.logging import get_logger
 from ..monitoring import monitor
@@ -50,6 +51,7 @@ class PlatformAudioDownloader:
     def download_audio(self, url: str, output_path: Path, podcast_name: str = "") -> bool:
         """Download audio with platform-specific strategy and validation"""
         logger.info(f"🎵 Downloading audio from: {url[:80]}...")
+        logger.info("📊 Using progress-based timeout: 60s stall timeout, 30min max timeout")
         domain = urlparse(url).netloc.lower()
         
         # Add small delay to avoid rate limiting
@@ -295,22 +297,8 @@ class PlatformAudioDownloader:
                         # Check content type
                         content_type = response.headers.get('Content-Type', '').lower()
                         if 'audio' in content_type or 'octet-stream' in content_type:
-                            # Download with progress
-                            total_size = int(response.headers.get('content-length', 0))
-                            downloaded = 0
-                            
-                            with open(output_path, 'wb') as f:
-                                for chunk in response.iter_content(chunk_size=8192):
-                                    if chunk:
-                                        f.write(chunk)
-                                        downloaded += len(chunk)
-                                        
-                                        if total_size > 0 and downloaded % (1024 * 1024 * 10) == 0:  # Every 10MB
-                                            progress = (downloaded / total_size) * 100
-                                            logger.debug(f"  Progress: {progress:.1f}% ({downloaded / 1_000_000:.1f}MB)")
-                            
-                            # Validate the file
-                            if output_path.exists() and output_path.stat().st_size > 1000:
+                            # Use progress-based download
+                            if self._download_with_progress(response, output_path):
                                 return True
                         else:
                             logger.warning(f"Unexpected content type: {content_type}")
@@ -365,7 +353,7 @@ class PlatformAudioDownloader:
                 '--compressed',
                 '--retry', '3',
                 '--retry-delay', '2',
-                '--max-time', '300',
+                '--max-time', '1800',  # 30 minutes for very long episodes
                 '--progress-bar',
                 url
             ]
@@ -398,17 +386,15 @@ class PlatformAudioDownloader:
                 'Accept': '*/*'
             }
             
-            response = self.session.get(url, headers=headers, stream=True, allow_redirects=True, timeout=(10, 120))
+            # Use shorter initial timeout for connection, but no read timeout
+            response = self.session.get(url, headers=headers, stream=True, allow_redirects=True, timeout=(30, None))
             
             if response.status_code == 200:
                 # Check content type
                 content_type = response.headers.get('Content-Type', '').lower()
                 if 'audio' in content_type or 'octet-stream' in content_type:
-                    with open(output_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    return True
+                    # Use progress-based download
+                    return self._download_with_progress(response, output_path)
                 
             return False
             
@@ -425,14 +411,12 @@ class PlatformAudioDownloader:
                 'Accept-Encoding': 'identity',
             }
             
-            response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
+            # Use shorter initial timeout for connection, but no read timeout
+            response = self.session.get(url, headers=headers, stream=True, timeout=(30, None), allow_redirects=True)
             
             if response.status_code == 200:
-                with open(output_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                return True
+                # Use progress-based download
+                return self._download_with_progress(response, output_path)
                 
             return False
             
@@ -463,6 +447,36 @@ class PlatformAudioDownloader:
                 'no_warnings': True,
                 'ignoreerrors': False,
             }
+            
+            # Check for manual cookie file first
+            manual_cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_manual_do_not_overwrite.txt'
+            if manual_cookie_file.exists():
+                logger.info("🔒 Using protected manual cookie file for YouTube download")
+                ydl_opts['cookiefile'] = str(manual_cookie_file)
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                
+                # Check if file was created
+                for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                    potential_path = output_path.with_suffix(suffix)
+                    if potential_path.exists():
+                        if suffix != '.mp3':
+                            # Convert to mp3 if needed
+                            try:
+                                convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                             '-ab', '192k', str(output_path), '-y']
+                                subprocess.run(convert_cmd, capture_output=True, check=True)
+                                potential_path.unlink()  # Remove original file
+                            except:
+                                # If conversion fails, just rename
+                                potential_path.rename(output_path)
+                        else:
+                            if potential_path != output_path:
+                                potential_path.rename(output_path)
+                        
+                        logger.info("✅ YouTube download successful with manual cookies")
+                        return True
             
             # Try with browser cookies first
             browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
@@ -552,14 +566,12 @@ class PlatformAudioDownloader:
                 'Range': 'bytes=0-'  # Sometimes helps with large files
             }
             
-            response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
+            # Use shorter initial timeout for connection, but no read timeout
+            response = self.session.get(url, headers=headers, stream=True, timeout=(30, None), allow_redirects=True)
             
             if response.status_code in [200, 206]:  # 206 for partial content
-                with open(output_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                return True
+                # Use progress-based download
+                return self._download_with_progress(response, output_path)
                 
             return False
             
@@ -600,21 +612,12 @@ class PlatformAudioDownloader:
             for i, headers in enumerate(approaches):
                 try:
                     logger.debug(f"Art19 attempt {i+1} with {headers.get('User-Agent', '')[:30]}...")
-                    response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
+                    # Use shorter initial timeout for connection, but no read timeout
+                    response = self.session.get(url, headers=headers, stream=True, timeout=(30, None), allow_redirects=True)
                     
                     if response.status_code == 200:
-                        total_size = int(response.headers.get('Content-Length', 0))
-                        downloaded = 0
-                        
-                        with open(output_path, 'wb') as f:
-                            for chunk in response.iter_content(chunk_size=32768):
-                                if chunk:
-                                    f.write(chunk)
-                                    downloaded += len(chunk)
-                                    if total_size > 0 and downloaded % (1024 * 1024) == 0:
-                                        progress = (downloaded / total_size) * 100
-                                        logger.debug(f"Download progress: {progress:.1f}%")
-                        return True
+                        # Use progress-based download
+                        return self._download_with_progress(response, output_path)
                     elif response.status_code == 403:
                         logger.warning(f"Art19 approach {i+1} got 403, trying next...")
                         time.sleep(1)  # Brief pause between attempts
@@ -627,6 +630,108 @@ class PlatformAudioDownloader:
             
         except Exception as e:
             logger.error(f"Art19 download error: {e}")
+            return False
+    
+    def _download_with_progress(self, response: requests.Response, output_path: Path, 
+                                 stall_timeout: int = 60, max_timeout: int = 1800,
+                                 min_speed_bps: int = 1024) -> bool:
+        """
+        Download with progress-based timeout management.
+        
+        Args:
+            response: Active response object with stream=True
+            output_path: Where to save the file
+            stall_timeout: Seconds without progress before timeout (default: 60)
+            max_timeout: Maximum total seconds allowed (default: 30 minutes)
+            min_speed_bps: Minimum bytes/second to count as progress (default: 1KB/s)
+            
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        try:
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            # Progress tracking
+            last_progress_time = datetime.now()
+            last_downloaded = 0
+            start_time = datetime.now()
+            
+            # Chunk tracking for speed calculation
+            chunk_start_time = datetime.now()
+            chunk_downloaded = 0
+            
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=32768):  # 32KB chunks
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        chunk_downloaded += len(chunk)
+                        
+                        # Calculate time since last progress
+                        now = datetime.now()
+                        time_since_progress = (now - last_progress_time).total_seconds()
+                        total_time = (now - start_time).total_seconds()
+                        
+                        # Check for stall (no progress for stall_timeout seconds)
+                        if time_since_progress > stall_timeout:
+                            logger.error(f"⏱️ Download stalled: No progress for {stall_timeout}s")
+                            return False
+                        
+                        # Check for max timeout
+                        if total_time > max_timeout:
+                            logger.error(f"⏱️ Download exceeded max timeout of {max_timeout}s")
+                            return False
+                        
+                        # Update progress tracking every second
+                        chunk_time = (now - chunk_start_time).total_seconds()
+                        if chunk_time >= 1.0:
+                            # Calculate speed
+                            speed_bps = chunk_downloaded / chunk_time if chunk_time > 0 else 0
+                            
+                            # Check if we're making meaningful progress
+                            if speed_bps >= min_speed_bps:
+                                last_progress_time = now
+                                last_downloaded = downloaded
+                            
+                            # Log progress every 50MB to reduce overhead
+                            if total_size > 0:
+                                progress = (downloaded / total_size) * 100
+                                if downloaded % (1024 * 1024 * 50) < chunk_downloaded:
+                                    speed_mbps = speed_bps / (1024 * 1024)
+                                    eta_seconds = (total_size - downloaded) / speed_bps if speed_bps > 0 else 0
+                                    eta_str = str(timedelta(seconds=int(eta_seconds)))
+                                    logger.info(f"📊 Progress: {progress:.1f}% ({downloaded / 1_000_000:.1f}MB/{total_size / 1_000_000:.1f}MB) "
+                                              f"Speed: {speed_mbps:.2f}MB/s ETA: {eta_str}")
+                            else:
+                                # No content-length, just show downloaded amount every 50MB
+                                if downloaded % (1024 * 1024 * 50) < chunk_downloaded:
+                                    speed_mbps = speed_bps / (1024 * 1024)
+                                    logger.info(f"📊 Downloaded: {downloaded / 1_000_000:.1f}MB Speed: {speed_mbps:.2f}MB/s")
+                            
+                            # Reset chunk tracking
+                            chunk_start_time = now
+                            chunk_downloaded = 0
+                
+                # Final validation
+                if downloaded < 1000:
+                    logger.warning(f"Downloaded file too small: {downloaded} bytes")
+                    if output_path.exists():
+                        output_path.unlink()
+                    return False
+                
+                # Log final stats
+                total_time = (datetime.now() - start_time).total_seconds()
+                avg_speed_mbps = (downloaded / total_time / (1024 * 1024)) if total_time > 0 else 0
+                logger.info(f"✅ Download complete: {downloaded / 1_000_000:.1f}MB in {int(total_time)}s "
+                          f"(avg {avg_speed_mbps:.2f}MB/s)")
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Download error: {e}")
+            if output_path.exists():
+                output_path.unlink()
             return False
     
     def _download_generic(self, url: str, output_path: Path) -> bool:
@@ -647,7 +752,8 @@ class PlatformAudioDownloader:
                     'Accept': accept,
                     'Accept-Encoding': 'identity',  # Avoid compressed responses
                 }
-                response = self.session.get(url, headers=headers, stream=True, timeout=(10, 120), allow_redirects=True)
+                # Use shorter initial timeout for connection, but no read timeout
+                response = self.session.get(url, headers=headers, stream=True, timeout=(30, None), allow_redirects=True)
                 
                 if response.status_code == 200:
                     # Check content type
@@ -664,28 +770,11 @@ class PlatformAudioDownloader:
                         logger.warning(f"Content too small: {content_length} bytes")
                         continue
                     
-                    # Download with progress
-                    total_size = int(content_length) if content_length else 0
-                    downloaded = 0
-                    
-                    with open(output_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                                downloaded += len(chunk)
-                                
-                                if total_size > 0 and downloaded % (1024 * 1024 * 10) == 0:  # Every 10MB
-                                    progress = (downloaded / total_size) * 100
-                                    logger.debug(f"  Progress: {progress:.1f}% ({downloaded / 1_000_000:.1f}MB)")
-                        
-                        # Validate size
-                        if downloaded < 1000:
-                            logger.warning(f"Downloaded file too small: {downloaded} bytes")
-                            if output_path.exists():
-                                output_path.unlink()
-                            continue
-                    
-                    return True
+                    # Use progress-based download
+                    if self._download_with_progress(response, output_path):
+                        return True
+                    else:
+                        continue
                     
             except Exception as e:
                 logger.debug(f"Generic download with UA '{ua}' failed: {e}")
@@ -793,8 +882,14 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
             'ignoreerrors': False,
         }
         
-        # Try cookie file first if it exists
+        # Try manual cookie file first (protected from yt-dlp overwriting)
+        manual_cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_manual_do_not_overwrite.txt'
         cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
+        
+        # Prioritize manual cookie file
+        if manual_cookie_file.exists():
+            cookie_file = manual_cookie_file
+            logger.info("🔒 Using protected manual cookie file")
         
         if cookie_file.exists():
             try:

@@ -933,7 +933,7 @@ class RenaissanceWeekly:
                 
             episode_id = f"{episode.podcast}:{episode.title[:30]}"
             episode_key = f"{episode.podcast}:{episode.title}"
-            episode_timeout = 600  # 10 minutes per episode
+            episode_timeout = 1800  # 30 minutes per episode (for very long podcasts)
         
             try:
                 await progress.start_item(episode_id)
@@ -1809,14 +1809,16 @@ class RenaissanceWeekly:
         """Download episodes using DownloadManager with concurrent downloads"""
         logger.info(f"[{self.correlation_id}] Starting download of {len(episodes)} episodes")
         
-        # Create download manager with high concurrency
-        download_manager = DownloadManager(
-            concurrency=10,  # 10 concurrent downloads
-            progress_callback=progress_callback
-        )
+        # Get current mode BEFORE creating download manager
+        current_mode = getattr(self, 'current_transcription_mode', 'test')
+        logger.info(f"[{self.correlation_id}] Creating download manager with mode: {current_mode}")
         
-        # Pass current transcription mode to download manager
-        download_manager.set_transcription_mode(getattr(self, 'current_transcription_mode', 'test'))
+        # Create download manager with reduced concurrency to save memory
+        download_manager = DownloadManager(
+            concurrency=3,  # Reduced from 10 to save memory
+            progress_callback=progress_callback,
+            transcription_mode=current_mode
+        )
         
         # Store reference for cancellation support
         self._download_manager = download_manager
