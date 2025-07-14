@@ -13,6 +13,7 @@ import assemblyai as aai
 from ..models import Episode
 from ..config import TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
 from ..utils.logging import get_logger
+from ..utils.filename_utils import generate_temp_filename
 
 logger = get_logger(__name__)
 
@@ -81,18 +82,43 @@ class AssemblyAITranscriber:
                     format_text=True,
                 )
                 
-                # In test mode, trim the audio file before uploading
+                # In test mode, trim the audio file before uploading (only if not already trimmed)
                 audio_to_transcribe = audio_path
-                if mode == 'test' and TESTING_MODE:
+                if mode == 'test':
                     max_minutes = MAX_TRANSCRIPTION_MINUTES or 15
-                    logger.info(f"Test mode: Trimming audio to {max_minutes} minutes")
                     
-                    # Trim the audio file
-                    trimmed_path = await self._trim_audio(audio_path, max_minutes)
-                    if trimmed_path:
-                        audio_to_transcribe = trimmed_path
-                    else:
-                        logger.warning("Failed to trim audio, using full file")
+                    # Check if the audio is already short enough (might be pre-trimmed by download manager)
+                    try:
+                        from pydub import AudioSegment
+                        temp_audio = AudioSegment.from_file(str(audio_path))
+                        current_duration_seconds = len(temp_audio) / 1000
+                        max_duration_seconds = max_minutes * 60
+                        
+                        if current_duration_seconds > max_duration_seconds:
+                            logger.info(f"Test mode: Audio {current_duration_seconds:.1f}s > {max_duration_seconds}s, trimming to {max_minutes} minutes")
+                            # Trim the audio file
+                            trimmed_path = await self._trim_audio(audio_path, max_minutes)
+                            if trimmed_path:
+                                audio_to_transcribe = trimmed_path
+                            else:
+                                logger.warning("Failed to trim audio, using full file")
+                        else:
+                            logger.info(f"Test mode: Audio already short enough ({current_duration_seconds:.1f}s), no trimming needed")
+                        
+                        # Clean up temp audio
+                        del temp_audio
+                        import gc
+                        gc.collect()
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to check audio duration, proceeding with trim: {e}")
+                        # Fall back to the original behavior
+                        logger.info(f"Test mode: Trimming audio to {max_minutes} minutes")
+                        trimmed_path = await self._trim_audio(audio_path, max_minutes)
+                        if trimmed_path:
+                            audio_to_transcribe = trimmed_path
+                        else:
+                            logger.warning("Failed to trim audio, using full file")
                 
                 # Create transcription job - pass the file path directly
                 transcriber = aai.Transcriber()
@@ -179,7 +205,9 @@ class AssemblyAITranscriber:
                 import shutil
                 if shutil.which('ffmpeg'):
                     temp_dir = Path(tempfile.gettempdir())
-                    trimmed_path = temp_dir / f"trimmed_{audio_path.name}"
+                    # Use shorter filename to avoid "File name too long" errors
+                    temp_filename = generate_temp_filename(f"aaai_trim_{audio_path.name}")
+                    trimmed_path = temp_dir / temp_filename
                     max_seconds = max_minutes * 60
                     
                     cmd = [
@@ -224,7 +252,9 @@ class AssemblyAITranscriber:
             
             # Create temporary file for trimmed audio
             temp_dir = Path(tempfile.gettempdir())
-            trimmed_path = temp_dir / f"trimmed_{audio_path.name}"
+            # Use shorter filename to avoid "File name too long" errors
+            temp_filename = generate_temp_filename(f"aaai_pydub_{audio_path.name}")
+            trimmed_path = temp_dir / temp_filename
             
             # Export trimmed audio
             trimmed_audio.export(str(trimmed_path), format="mp3")

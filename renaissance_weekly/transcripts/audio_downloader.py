@@ -441,59 +441,99 @@ class PlatformAudioDownloader:
             return False
     
     def _download_youtube(self, url: str, output_path: Path) -> bool:
-        """Download audio from YouTube using yt-dlp"""
+        """Download audio from YouTube using yt-dlp Python module"""
         try:
-            logger.info("🎥 Using yt-dlp for YouTube download")
+            import yt_dlp
+        except ImportError:
+            logger.error("yt-dlp module not found. Please install with: pip install yt-dlp")
+            return False
             
-            # Prepare yt-dlp command
-            cmd = [
-                'yt-dlp',
-                '-f', 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',  # Prefer m4a/mp3
-                '--extract-audio',
-                '--audio-format', 'mp3',
-                '--audio-quality', '192K',
-                '--no-playlist',
-                '--quiet',
-                '--progress',
-                '--no-warnings',
-                '-o', str(output_path.with_suffix('.%(ext)s')),  # Let yt-dlp handle extension
-                url
-            ]
+        try:
+            logger.info("🎥 Using yt-dlp Python module for YouTube download")
             
-            # Run yt-dlp
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
+                'outtmpl': str(output_path.with_suffix('.%(ext)s')),
+                'extractaudio': True,
+                'audioformat': 'mp3',
+                'audioquality': '192K',
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'ignoreerrors': False,
+            }
             
-            if result.returncode == 0:
-                # Check if file exists with mp3 extension
-                mp3_path = output_path.with_suffix('.mp3')
-                if mp3_path.exists():
-                    # Rename to expected output path if different
-                    if mp3_path != output_path:
-                        mp3_path.rename(output_path)
-                    return True
-                # Also check for m4a
-                m4a_path = output_path.with_suffix('.m4a')
-                if m4a_path.exists():
-                    # Convert to mp3 if needed
-                    try:
-                        convert_cmd = ['ffmpeg', '-i', str(m4a_path), '-acodec', 'mp3', 
-                                     '-ab', '192k', str(output_path), '-y']
-                        subprocess.run(convert_cmd, capture_output=True, check=True)
-                        m4a_path.unlink()  # Remove m4a file
-                        return True
-                    except:
-                        # If conversion fails, just rename
-                        m4a_path.rename(output_path)
+            # Try with browser cookies first
+            browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
+            
+            for browser in browsers:
+                try:
+                    ydl_opts_with_cookies = ydl_opts.copy()
+                    ydl_opts_with_cookies['cookiesfrombrowser'] = (browser,)
+                    
+                    logger.debug(f"Trying yt-dlp with {browser} cookies")
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts_with_cookies) as ydl:
+                        ydl.download([url])
+                    
+                    # Check if file was created
+                    for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                        potential_path = output_path.with_suffix(suffix)
+                        if potential_path.exists():
+                            if suffix != '.mp3':
+                                # Convert to mp3 if needed
+                                try:
+                                    convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                                 '-ab', '192k', str(output_path), '-y']
+                                    subprocess.run(convert_cmd, capture_output=True, check=True)
+                                    potential_path.unlink()  # Remove original file
+                                except:
+                                    # If conversion fails, just rename
+                                    potential_path.rename(output_path)
+                            else:
+                                if potential_path != output_path:
+                                    potential_path.rename(output_path)
+                            
+                            logger.info(f"✅ yt-dlp download successful with {browser} cookies")
+                            return True
+                            
+                except Exception as e:
+                    logger.debug(f"yt-dlp with {browser} cookies failed: {e}")
+                    continue
+            
+            # Try without cookies as fallback
+            logger.debug("Trying yt-dlp without browser cookies")
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                
+                # Check if file was created
+                for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                    potential_path = output_path.with_suffix(suffix)
+                    if potential_path.exists():
+                        if suffix != '.mp3':
+                            # Convert to mp3 if needed
+                            try:
+                                convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                             '-ab', '192k', str(output_path), '-y']
+                                subprocess.run(convert_cmd, capture_output=True, check=True)
+                                potential_path.unlink()  # Remove original file
+                            except:
+                                # If conversion fails, just rename
+                                potential_path.rename(output_path)
+                        else:
+                            if potential_path != output_path:
+                                potential_path.rename(output_path)
+                        
+                        logger.info("✅ yt-dlp download successful without cookies")
                         return True
                         
-            else:
-                logger.error(f"yt-dlp failed: {result.stderr}")
+            except Exception as e:
+                logger.error(f"yt-dlp without cookies failed: {e}")
                 
             return False
             
-        except FileNotFoundError:
-            logger.error("yt-dlp not found. Please install with: pip install yt-dlp")
-            return False
         except Exception as e:
             logger.error(f"YouTube download error: {e}")
             return False
@@ -662,7 +702,7 @@ class PlatformAudioDownloader:
             return False
             
         # Try different browsers for cookie extraction
-        browsers = ['chrome', 'firefox', 'safari', 'edge']
+        browsers = ['firefox', 'chrome', 'chromium', 'edge', 'safari']
         
         for browser in browsers:
             ydl_opts = {
@@ -675,7 +715,6 @@ class PlatformAudioDownloader:
                 'fragment_retries': 3,
                 'ignoreerrors': False,
                 'cookiesfrombrowser': (browser,),  # Try to use browser cookies
-                'user_agent': self.user_agents.get(browser, self.user_agents['chrome']),
                 'headers': {
                     'Accept': '*/*',
                     'Accept-Language': 'en-US,en;q=0.9',
@@ -714,9 +753,11 @@ class PlatformAudioDownloader:
         
         # If all browsers fail, try without cookies
         logger.info("Trying yt-dlp without browser cookies...")
-        ydl_opts['cookiesfrombrowser'] = None
+        ydl_opts_no_cookies = ydl_opts.copy()
+        ydl_opts_no_cookies.pop('cookiesfrombrowser', None)
+        
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts_no_cookies) as ydl:
                 ydl.download([url])
                 
             if self._validate_audio_file(Path(output_path)):
@@ -729,47 +770,64 @@ class PlatformAudioDownloader:
 
 
 async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
-    """Async wrapper for YouTube download using yt-dlp"""
+    """Async wrapper for YouTube download using yt-dlp Python module"""
+    try:
+        import yt_dlp
+    except ImportError:
+        logger.error("yt-dlp module not found. Please install with: pip install yt-dlp")
+        return False
+        
     try:
         logger.info(f"🎥 Downloading from YouTube/yt-dlp: {url[:80]}...")
         
-        # Prepare yt-dlp command
-        cmd = [
-            'python', '-m', 'yt_dlp',
-            '-f', 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
-            '--extract-audio',
-            '--audio-format', 'mp3',
-            '--audio-quality', '192K',
-            '--no-playlist',
-            '--quiet',
-            '--no-warnings',
-            '-o', str(output_path),
-            url
-        ]
+        # Configure yt-dlp options
+        ydl_opts = {
+            'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
+            'outtmpl': str(output_path.with_suffix('.%(ext)s')),
+            'extractaudio': True,
+            'audioformat': 'mp3',
+            'audioquality': '192K',
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': False,
+        }
         
         # Try cookie file first if it exists
         cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
         
-        # Try cookie file first
         if cookie_file.exists():
             try:
                 logger.info(f"📂 Trying YouTube download with cookie file: {cookie_file}")
-                cmd_with_cookies = cmd[:-1] + ['--cookies', str(cookie_file), cmd[-1]]
+                ydl_opts_with_cookies = ydl_opts.copy()
+                ydl_opts_with_cookies['cookiefile'] = str(cookie_file)
                 
-                process = await asyncio.create_subprocess_exec(
-                    *cmd_with_cookies,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+                # Run in executor to avoid blocking
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, _download_with_ytdlp_sync, url, ydl_opts_with_cookies)
                 
-                stdout, stderr = await process.communicate()
-                
-                if process.returncode == 0 and output_path.exists() and output_path.stat().st_size > 1000:
-                    logger.info(f"✅ YouTube download successful with cookie file")
-                    return True
-                else:
-                    if stderr:
-                        logger.warning(f"Cookie file attempt failed: {stderr.decode()[:200]}")
+                if result:
+                    # Check if file was created and rename if needed
+                    for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                        potential_path = output_path.with_suffix(suffix)
+                        if potential_path.exists():
+                            if suffix != '.mp3':
+                                # Convert to mp3 if needed
+                                try:
+                                    convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                                 '-ab', '192k', str(output_path), '-y']
+                                    subprocess.run(convert_cmd, capture_output=True, check=True)
+                                    potential_path.unlink()  # Remove original file
+                                except:
+                                    # If conversion fails, just rename
+                                    potential_path.rename(output_path)
+                            else:
+                                if potential_path != output_path:
+                                    potential_path.rename(output_path)
+                            
+                            logger.info(f"✅ YouTube download successful with cookie file")
+                            return True
+                            
             except Exception as e:
                 logger.warning(f"Cookie file attempt failed: {e}")
         
@@ -778,57 +836,102 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
         
         for browser in browsers:
             try:
-                # Try with browser cookies
-                cmd_with_cookies = cmd[:-1] + ['--cookies-from-browser', browser, cmd[-1]]
+                logger.debug(f"Trying YouTube download with {browser} cookies")
+                ydl_opts_with_cookies = ydl_opts.copy()
+                ydl_opts_with_cookies['cookiesfrombrowser'] = (browser,)
                 
-                process = await asyncio.create_subprocess_exec(
-                    *cmd_with_cookies,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+                # Run in executor to avoid blocking
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, _download_with_ytdlp_sync, url, ydl_opts_with_cookies)
                 
-                stdout, stderr = await process.communicate()
-                
-                if process.returncode == 0 and output_path.exists():
-                    logger.info(f"✅ YouTube download successful with {browser} cookies")
-                    return True
-                    
+                if result:
+                    # Check if file was created and rename if needed
+                    for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                        potential_path = output_path.with_suffix(suffix)
+                        if potential_path.exists():
+                            if suffix != '.mp3':
+                                # Convert to mp3 if needed
+                                try:
+                                    convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                                 '-ab', '192k', str(output_path), '-y']
+                                    subprocess.run(convert_cmd, capture_output=True, check=True)
+                                    potential_path.unlink()  # Remove original file
+                                except:
+                                    # If conversion fails, just rename
+                                    potential_path.rename(output_path)
+                            else:
+                                if potential_path != output_path:
+                                    potential_path.rename(output_path)
+                            
+                            logger.info(f"✅ YouTube download successful with {browser} cookies")
+                            return True
+                            
             except Exception as e:
                 logger.debug(f"Failed with {browser} cookies: {e}")
                 continue
         
         # Try without cookies
         logger.info("Trying yt-dlp without browser cookies...")
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+        try:
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, _download_with_ytdlp_sync, url, ydl_opts)
+            
+            if result:
+                # Check if file was created and rename if needed
+                for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                    potential_path = output_path.with_suffix(suffix)
+                    if potential_path.exists():
+                        if suffix != '.mp3':
+                            # Convert to mp3 if needed
+                            try:
+                                convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                             '-ab', '192k', str(output_path), '-y']
+                                subprocess.run(convert_cmd, capture_output=True, check=True)
+                                potential_path.unlink()  # Remove original file
+                            except:
+                                # If conversion fails, just rename
+                                potential_path.rename(output_path)
+                        else:
+                            if potential_path != output_path:
+                                potential_path.rename(output_path)
+                        
+                        logger.info("✅ YouTube download successful without cookies")
+                        return True
+                        
+        except Exception as e:
+            error_msg = str(e)
+            if "Sign in to confirm" in error_msg or "bot" in error_msg.lower():
+                logger.error("\n" + "="*60)
+                logger.error("❌ YouTube requires authentication")
+                logger.error("="*60)
+                logger.error("\nSOLUTION 1: Use browser directly")
+                logger.error("1. Open Firefox/Chrome and ensure you're logged into YouTube")
+                logger.error("2. The system will use your browser cookies automatically")
+                logger.error("\nSOLUTION 2: Manual download")
+                logger.error("1. Download manually: yt-dlp -x --audio-format mp3 \"<youtube_url>\"")
+                logger.error("2. Click 'Manual URL' in UI and provide the local file path")
+                logger.error("="*60 + "\n")
+            else:
+                logger.error(f"yt-dlp error: {error_msg[:200]}")
         
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode == 0 and output_path.exists():
-            logger.info("✅ YouTube download successful without cookies")
-            return True
-        else:
-            # Log the error for debugging
-            if stderr:
-                error_msg = stderr.decode().strip()
-                if "Sign in to confirm" in error_msg or "bot" in error_msg.lower():
-                    logger.error("\n" + "="*60)
-                    logger.error("❌ YouTube requires authentication")
-                    logger.error("="*60)
-                    logger.error("\nSOLUTION 1: Use browser directly")
-                    logger.error("1. Open Firefox/Chrome and ensure you're logged into YouTube")
-                    logger.error("2. The system will use your browser cookies automatically")
-                    logger.error("\nSOLUTION 2: Manual download")
-                    logger.error("1. Download manually: yt-dlp -x --audio-format mp3 \"<youtube_url>\"")
-                    logger.error("2. Click 'Manual URL' in UI and provide the local file path")
-                    logger.error("="*60 + "\n")
-                else:
-                    logger.error(f"yt-dlp error: {error_msg[:200]}")
-            return False
+        return False
             
     except Exception as e:
         logger.error(f"YouTube download error: {e}")
+        return False
+
+
+def _download_with_ytdlp_sync(url: str, ydl_opts: dict) -> bool:
+    """Synchronous yt-dlp download helper for use in executor"""
+    try:
+        import yt_dlp
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        return True
+        
+    except Exception as e:
+        logger.debug(f"yt-dlp sync download failed: {e}")
         return False

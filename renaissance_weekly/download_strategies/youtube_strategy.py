@@ -1,6 +1,7 @@
 """YouTube download strategy - bypasses most protections"""
 
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import Optional, Tuple, Dict
 from . import DownloadStrategy
@@ -62,78 +63,98 @@ class YouTubeStrategy(DownloadStrategy):
         
         logger.info(f"🎥 Found YouTube URL: {youtube_url}")
         
-        # Try downloading with different approaches
+        # Try downloading with yt-dlp Python module
+        try:
+            import yt_dlp
+        except ImportError:
+            return False, "yt-dlp module not found. Please install with: pip install yt-dlp"
+            
         cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
+        
+        # Configure yt-dlp options
+        base_opts = {
+            'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
+            'outtmpl': str(output_path.with_suffix('.%(ext)s')),
+            'extractaudio': True,
+            'audioformat': 'mp3',
+            'audioquality': '192K',
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': False,
+        }
         
         approaches = [
             # First try with cookie file
-            ['python', '-m', 'yt_dlp', '--cookies', str(cookie_file), '-x', '--audio-format', 'mp3', 
-             '--quiet', '--progress', '-o', str(output_path), youtube_url],
+            {
+                'name': 'cookie_file',
+                'opts': {**base_opts, 'cookiefile': str(cookie_file)} if cookie_file.exists() else None
+            },
             
             # Try with browser cookies
-            ['python', '-m', 'yt_dlp', '--cookies-from-browser', 'firefox', '-x', '--audio-format', 'mp3', 
-             '--quiet', '--progress', '-o', str(output_path), youtube_url],
-            
-            # Try Chrome cookies
-            ['python', '-m', 'yt_dlp', '--cookies-from-browser', 'chrome', '-x', '--audio-format', 'mp3',
-             '--quiet', '--progress', '-o', str(output_path), youtube_url],
+            {'name': 'firefox', 'opts': {**base_opts, 'cookiesfrombrowser': ('firefox',)}},
+            {'name': 'chrome', 'opts': {**base_opts, 'cookiesfrombrowser': ('chrome',)}},
+            {'name': 'chromium', 'opts': {**base_opts, 'cookiesfrombrowser': ('chromium',)}},
+            {'name': 'edge', 'opts': {**base_opts, 'cookiesfrombrowser': ('edge',)}},
+            {'name': 'safari', 'opts': {**base_opts, 'cookiesfrombrowser': ('safari',)}},
             
             # Try without cookies
-            ['python', '-m', 'yt_dlp', '-x', '--audio-format', 'mp3', '--quiet', '--progress',
-             '-o', str(output_path), youtube_url],
+            {'name': 'no_cookies', 'opts': base_opts},
         ]
         
-        last_stderr = None
-        for i, cmd in enumerate(approaches):
-            try:
-                if i == 0 and cookie_file.exists():
-                    logger.info(f"📂 Using cookie file: {cookie_file}")
-                elif i == 0:
-                    logger.warning(f"⚠️ Cookie file not found: {cookie_file}")
-                    
-                logger.info(f"🎬 Attempt {i+1}: {' '.join(cmd[:5])}...")
+        last_error = None
+        for i, approach in enumerate(approaches):
+            if approach['opts'] is None:
+                continue
                 
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+            try:
+                logger.info(f"🎬 Attempt {i+1}: {approach['name']}")
+                
+                # Run yt-dlp in executor to avoid blocking
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None, 
+                    self._download_with_ytdlp_sync, 
+                    youtube_url, 
+                    approach['opts']
                 )
                 
-                # Add timeout to prevent hanging
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(),
-                        timeout=300  # 5 minute timeout
-                    )
-                except asyncio.TimeoutError:
-                    logger.error(f"❌ YouTube download timeout after 5 minutes")
-                    process.terminate()
-                    await process.wait()
-                    continue
-                    
-                last_stderr = stderr  # Store for error reporting
-                
-                if process.returncode == 0 and output_path.exists():
-                    file_size = output_path.stat().st_size
-                    if file_size > 1000:  # At least 1KB
-                        logger.info(f"✅ YouTube download successful ({file_size / 1024 / 1024:.1f} MB)")
-                        return True, None
-                    else:
-                        output_path.unlink()  # Remove empty file
-                        logger.warning(f"❌ Downloaded file too small: {file_size} bytes")
-                else:
-                    if stderr:
-                        logger.warning(f"❌ Attempt {i+1} failed: {stderr.decode()[:200]}")
+                if result:
+                    # Check if file was created and rename if needed
+                    for suffix in ['.mp3', '.m4a', '.opus', '.webm']:
+                        potential_path = output_path.with_suffix(suffix)
+                        if potential_path.exists():
+                            file_size = potential_path.stat().st_size
+                            if file_size > 1000:  # At least 1KB
+                                if suffix != '.mp3':
+                                    # Convert to mp3 if needed
+                                    try:
+                                        convert_cmd = ['ffmpeg', '-i', str(potential_path), '-acodec', 'mp3', 
+                                                     '-ab', '192k', str(output_path), '-y']
+                                        subprocess.run(convert_cmd, capture_output=True, check=True)
+                                        potential_path.unlink()  # Remove original file
+                                    except:
+                                        # If conversion fails, just rename
+                                        potential_path.rename(output_path)
+                                else:
+                                    if potential_path != output_path:
+                                        potential_path.rename(output_path)
+                                
+                                logger.info(f"✅ YouTube download successful with {approach['name']} ({file_size / 1024 / 1024:.1f} MB)")
+                                return True, None
+                            else:
+                                potential_path.unlink()  # Remove empty file
+                                logger.warning(f"❌ Downloaded file too small: {file_size} bytes")
                         
             except Exception as e:
-                logger.warning(f"❌ Approach {i+1} exception: {str(e)}")
+                last_error = str(e)
+                logger.warning(f"❌ Approach {i+1} ({approach['name']}) exception: {last_error}")
                 continue
         
         # All approaches failed
         error_msg = "YouTube download failed - may need authentication"
-        if last_stderr:
-            error_details = last_stderr.decode().strip()
-            if "Sign in" in error_details:
+        if last_error:
+            if "Sign in" in last_error or "bot" in last_error.lower():
                 error_msg = "YouTube requires sign-in - please login to YouTube in Firefox/Chrome"
         
         return False, error_msg
@@ -164,3 +185,17 @@ class YouTubeStrategy(DownloadStrategy):
         # TODO: Implement actual YouTube search
         # For now, return None - in production, this would search YouTube
         return None
+    
+    def _download_with_ytdlp_sync(self, url: str, ydl_opts: dict) -> bool:
+        """Synchronous yt-dlp download helper for use in executor"""
+        try:
+            import yt_dlp
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            return True
+            
+        except Exception as e:
+            logger.debug(f"yt-dlp sync download failed: {e}")
+            return False

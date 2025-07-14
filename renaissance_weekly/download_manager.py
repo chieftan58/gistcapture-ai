@@ -16,7 +16,8 @@ from .fetchers.universal_youtube_handler import UniversalYouTubeHandler
 from .download_strategies.smart_router import SmartDownloadRouter
 from .utils.logging import get_logger
 from .utils.helpers import exponential_backoff_with_jitter
-from .config import TEMP_DIR
+from .utils.filename_utils import generate_audio_filename, generate_temp_filename
+from .config import TEMP_DIR, MAX_TRANSCRIPTION_MINUTES
 
 logger = get_logger(__name__)
 
@@ -65,21 +66,124 @@ class EpisodeDownloadStatus:
         self.attempts: List[DownloadAttempt] = []
         self.audio_path: Optional[Path] = None
         self.last_error: Optional[str] = None
+        self.file_size: Optional[int] = None
+        self.downloaded_duration: Optional[float] = None  # in minutes
+        self.audio_format: Optional[str] = None
+        self.download_source: Optional[str] = None
         
     def add_attempt(self, attempt: DownloadAttempt):
         """Add a download attempt"""
         self.attempts.append(attempt)
         
+    def extract_audio_info(self):
+        """Extract audio file information after successful download"""
+        if not self.audio_path or not self.audio_path.exists():
+            return
+            
+        try:
+            # Get file size
+            self.file_size = self.audio_path.stat().st_size
+            
+            # Get audio format from file extension
+            self.audio_format = self.audio_path.suffix.lower().lstrip('.')
+            
+            # Extract duration using pydub (already imported in the module)
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(str(self.audio_path))
+                self.downloaded_duration = len(audio) / (1000 * 60)  # Convert ms to minutes
+            except Exception as e:
+                logger.debug(f"Could not extract duration from {self.audio_path}: {e}")
+                
+            # Set download source from last successful attempt
+            if self.attempts:
+                for attempt in reversed(self.attempts):
+                    if attempt.success:
+                        self.download_source = attempt.strategy
+                        break
+                        
+        except Exception as e:
+            logger.debug(f"Error extracting audio info from {self.audio_path}: {e}")
+    
+    def _parse_duration_string(self, duration_str: str) -> Optional[float]:
+        """Parse duration string from episode metadata to minutes"""
+        if not duration_str or duration_str.lower().strip() in ['unknown', 'none', '']:
+            return None
+            
+        # Handle various duration formats
+        # Examples: "1:30:45", "90:15", "45", "1h 30m", "90 minutes"
+        duration_str = str(duration_str).strip().lower()
+        
+        # Try HH:MM:SS or MM:SS format
+        if ':' in duration_str:
+            parts = duration_str.split(':')
+            try:
+                if len(parts) == 3:  # HH:MM:SS
+                    hours, minutes, seconds = map(int, parts)
+                    return hours * 60 + minutes + seconds / 60
+                elif len(parts) == 2:  # MM:SS
+                    minutes, seconds = map(int, parts)
+                    return minutes + seconds / 60
+            except ValueError:
+                pass
+                
+        # Try "Xh Ym" format
+        if 'h' in duration_str and 'm' in duration_str:
+            try:
+                import re
+                match = re.search(r'(\d+)h\s*(\d+)m', duration_str)
+                if match:
+                    hours, minutes = map(int, match.groups())
+                    return hours * 60 + minutes
+            except:
+                pass
+                
+        # Try "X minutes" format
+        if 'minute' in duration_str:
+            try:
+                import re
+                match = re.search(r'(\d+)', duration_str)
+                if match:
+                    return int(match.group(1))
+            except:
+                pass
+                
+        # Try just a number (assume minutes)
+        try:
+            return float(duration_str)
+        except ValueError:
+            pass
+            
+        return None
+        
     def to_dict(self) -> dict:
         """Convert to dictionary for UI display"""
+        # Parse expected duration from episode metadata
+        expected_duration = None
+        raw_duration = getattr(self.episode, 'duration', None)
+        if raw_duration:
+            expected_duration = self._parse_duration_string(raw_duration)
+            
         return {
             'episode': f"{self.episode.podcast}: {self.episode.title}",
+            'title': self.episode.title,
             'status': self.status,
             'attemptCount': len(self.attempts),
             'attempts': [att.to_dict() for att in self.attempts],
             'lastError': self.last_error,
             'currentStrategy': self.attempts[-1].strategy if self.attempts else None,
-            'history': [att.to_dict() for att in self.attempts]
+            'history': [att.to_dict() for att in self.attempts],
+            # New file information
+            'fileSize': self.file_size,
+            'downloadedDuration': self.downloaded_duration,
+            'audioFormat': self.audio_format,
+            'downloadSource': self.download_source,
+            'expectedDuration': expected_duration,
+            'metadata': {
+                'duration': raw_duration,  # Use raw_duration instead of getattr
+                'originalDuration': raw_duration,  # Add extra field for debugging
+                'parsedDuration': expected_duration  # Add parsed version for debugging
+            }
         }
 
 
@@ -98,6 +202,9 @@ class DownloadManager:
         self._cancelled = False
         self.transcription_mode = 'test'  # Default, will be set by app.py
         
+        # Set transcriber mode to match
+        self.transcriber._current_mode = self.transcription_mode
+        
         # Initialize smart router for bulletproof downloads
         self.smart_router = SmartDownloadRouter()
         
@@ -109,6 +216,12 @@ class DownloadManager:
             'failed': 0,
             'startTime': None
         }
+    
+    def set_transcription_mode(self, mode: str):
+        """Set transcription mode and sync with transcriber"""
+        self.transcription_mode = mode
+        self.transcriber._current_mode = mode
+        logger.info(f"Set transcription mode to: {mode}")
         
     def add_manual_url(self, episode_id: str, url: str):
         """Add manual URL for an episode and retry download"""
@@ -170,6 +283,9 @@ class DownloadManager:
             ep_id = f"{episode.podcast}|{episode.title}|{episode.published}"
             self.download_status[ep_id] = EpisodeDownloadStatus(episode)
         
+        # Report initial progress to show all episodes in UI
+        self._report_progress()
+        
         # Use audio finder as context manager to ensure proper cleanup
         async with self.audio_finder:
             # Create download tasks
@@ -195,24 +311,27 @@ class DownloadManager:
         ep_id = f"{episode.podcast}|{episode.title}|{episode.published}"
         status = self.download_status[ep_id]
         
+        # Update status to show episode is now downloading
+        status.status = 'downloading'
+        self._report_progress()
+        
         async with self._download_semaphore:
             if self._cancelled:
                 return None
                 
             # First check if file already exists
             from .config import AUDIO_DIR
-            from .utils.helpers import slugify, calculate_file_hash, validate_audio_file_smart
+            from .utils.helpers import calculate_file_hash, validate_audio_file_smart
             
             # Ensure audio directory exists
             AUDIO_DIR.mkdir(exist_ok=True)
             
-            date_str = episode.published.strftime('%Y%m%d')
-            safe_podcast = slugify(episode.podcast)[:30]
-            safe_title = slugify(episode.title)[:50]
             # Get current mode from parent app or use test as default
             current_mode = getattr(self, 'transcription_mode', 'test')
-            mode_suffix = '_test' if current_mode == 'test' else '_full'
-            audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}{mode_suffix}.mp3"
+            
+            # Generate standardized filename
+            filename = generate_audio_filename(episode, current_mode)
+            audio_file = AUDIO_DIR / filename
             
             # Check if already exists and is valid
             if audio_file.exists():
@@ -227,6 +346,9 @@ class DownloadManager:
                     # Mark as successful immediately
                     status.status = 'success'
                     status.audio_path = audio_file
+                    
+                    # Extract audio file information
+                    status.extract_audio_info()
                     
                     # Add a successful attempt record to show it was cached
                     cached_attempt = DownloadAttempt(str(audio_file), 'cached_file')
@@ -260,8 +382,24 @@ class DownloadManager:
                             shutil.copy2(source_path, audio_file)
                             logger.info(f"✅ Copied local file: {source_path}")
                             
+                            # Trim if in test mode
+                            if current_mode == 'test':
+                                logger.info(f"[{ep_id}] 🧪 TEST MODE: Trimming manual file to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                                trimmed_file = await self._trim_downloaded_audio(audio_file, ep_id)
+                                if trimmed_file:
+                                    logger.info(f"[{ep_id}] ✂️ Audio trimmed from {audio_file.stat().st_size / 1024 / 1024:.1f}MB to {trimmed_file.stat().st_size / 1024 / 1024:.1f}MB")
+                                    # Replace the original file with the trimmed version
+                                    audio_file.unlink()  # Remove original
+                                    trimmed_file.rename(audio_file)  # Move trimmed to original location
+                                else:
+                                    logger.warning(f"[{ep_id}] Failed to trim audio, keeping full file")
+                            
                             status.status = 'success'
                             status.audio_path = audio_file
+                            
+                            # Extract audio file information
+                            status.extract_audio_info()
+                            
                             self.stats['downloaded'] += 1
                             self._report_progress()
                             return audio_file
@@ -278,8 +416,25 @@ class DownloadManager:
                 
                 success = await self.smart_router.download_with_fallback(episode_info, audio_file)
                 if success:
+                    # Trim if in test mode
+                    if current_mode == 'test':
+                        logger.info(f"[{ep_id}] 🧪 TEST MODE: Trimming manual download to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                        trimmed_file = await self._trim_downloaded_audio(audio_file, ep_id)
+                        if trimmed_file:
+                            logger.info(f"[{ep_id}] ✂️ Audio trimmed from {audio_file.stat().st_size / 1024 / 1024:.1f}MB to {trimmed_file.stat().st_size / 1024 / 1024:.1f}MB")
+                            # Replace the original file with the trimmed version
+                            audio_file.unlink()  # Remove original
+                            import shutil
+                            shutil.move(str(trimmed_file), str(audio_file))  # Move trimmed to original location
+                        else:
+                            logger.warning(f"[{ep_id}] Failed to trim audio, keeping full file")
+                    
                     status.status = 'success'
                     status.audio_path = audio_file
+                    
+                    # Extract audio file information
+                    status.extract_audio_info()
+                    
                     self.stats['downloaded'] += 1
                     self._report_progress()
                     return audio_file
@@ -304,9 +459,26 @@ class DownloadManager:
                 )
                 
                 if success:
+                    # If we're in test mode, trim the audio file immediately after download
+                    if current_mode == 'test':
+                        logger.info(f"[{ep_id}] 🧪 TEST MODE: Trimming downloaded audio to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                        trimmed_file = await self._trim_downloaded_audio(audio_file, ep_id)
+                        if trimmed_file:
+                            logger.info(f"[{ep_id}] ✂️ Audio trimmed from {audio_file.stat().st_size / 1024 / 1024:.1f}MB to {trimmed_file.stat().st_size / 1024 / 1024:.1f}MB")
+                            # Replace the original file with the trimmed version
+                            audio_file.unlink()  # Remove original
+                            import shutil
+                            shutil.move(str(trimmed_file), str(audio_file))  # Move trimmed to original location
+                        else:
+                            logger.warning(f"[{ep_id}] Failed to trim audio, keeping full file")
+                    
                     attempt.complete(True)
                     status.status = 'success'
                     status.audio_path = audio_file
+                    
+                    # Extract audio file information
+                    status.extract_audio_info()
+                    
                     self.stats['downloaded'] += 1
                     self._report_progress()
                     logger.info(f"✅ Smart router succeeded for {episode.title}")
@@ -356,6 +528,9 @@ class DownloadManager:
                 apple_podcast_id=episode.apple_podcast_id if hasattr(episode, 'apple_podcast_id') else None
             )
             
+            # Set the transcriber's mode before downloading
+            self.transcriber._current_mode = current_mode
+            
             # Use the transcriber's simple download method
             audio_path = await self.transcriber.download_audio_simple(
                 episode_copy, 
@@ -367,6 +542,10 @@ class DownloadManager:
                 attempt.complete(True)
                 status.status = 'success'
                 status.audio_path = audio_path
+                
+                # Extract audio file information
+                status.extract_audio_info()
+                
                 self._report_progress()
                 logger.info(f"Successfully downloaded {episode.title} using {strategy}")
                 return audio_path
@@ -412,7 +591,8 @@ class DownloadManager:
                 return None
             
             # Create temporary file path
-            temp_file = Path(TEMP_DIR) / f"browser_download_{episode.title[:20]}_{int(time.time())}.mp3"
+            temp_filename = generate_temp_filename(f"browser_{episode.podcast}_{int(time.time())}")
+            temp_file = Path(TEMP_DIR) / temp_filename
             
             # Use browser downloader
             async with BrowserDownloader() as downloader:
@@ -426,6 +606,10 @@ class DownloadManager:
                     attempt.complete(True)
                     status.status = 'success'
                     status.audio_path = temp_file
+                    
+                    # Extract audio file information
+                    status.extract_audio_info()
+                    
                     logger.info(f"✅ Browser download successful for {episode.title}")
                     return temp_file
                 else:
@@ -461,7 +645,8 @@ class DownloadManager:
                 return None
             
             # Create temporary file path
-            temp_file = Path(TEMP_DIR) / f"ytdlp_download_{episode.title[:20]}_{int(time.time())}.mp3"
+            temp_filename = generate_temp_filename(f"ytdlp_{episode.podcast}_{int(time.time())}")
+            temp_file = Path(TEMP_DIR) / temp_filename
             
             # Try to find and download from YouTube
             success = await YtDlpDownloader.find_and_download_youtube(
@@ -474,6 +659,10 @@ class DownloadManager:
                 attempt.complete(True)
                 status.status = 'success'
                 status.audio_path = temp_file
+                
+                # Extract audio file information
+                status.extract_audio_info()
+                
                 logger.info(f"✅ yt-dlp YouTube download successful for {episode.title}")
                 return temp_file
             else:
@@ -661,6 +850,10 @@ class DownloadManager:
             logger.info(f"✅ Manual URL download successful for {episode.title}")
             status.status = 'success'
             status.audio_path = audio_path
+            
+            # Extract audio file information
+            status.extract_audio_info()
+            
             self.stats['downloaded'] = self.stats.get('downloaded', 0) + 1
             self.stats['retrying'] = max(0, self.stats.get('retrying', 0) - 1)
         else:
@@ -671,3 +864,95 @@ class DownloadManager:
             self.stats['retrying'] = max(0, self.stats.get('retrying', 0) - 1)
             
         self._report_progress()
+    
+    async def _trim_downloaded_audio(self, audio_file: Path, correlation_id: str) -> Optional[Path]:
+        """Trim downloaded audio file to MAX_TRANSCRIPTION_MINUTES for test mode"""
+        try:
+            import tempfile
+            import subprocess
+            import shutil
+            
+            # Calculate max duration in seconds
+            max_seconds = MAX_TRANSCRIPTION_MINUTES * 60
+            
+            # Create temporary trimmed file
+            temp_dir = Path(tempfile.gettempdir())
+            # Use standardized short filename for temp files
+            temp_filename = generate_temp_filename(f"{correlation_id}_{audio_file.name}")
+            trimmed_file = temp_dir / temp_filename
+            
+            # Check if ffmpeg is available (preferred method)
+            if shutil.which('ffmpeg'):
+                logger.info(f"[{correlation_id}] Using ffmpeg to trim audio to {max_seconds} seconds")
+                
+                cmd = [
+                    'ffmpeg', '-i', str(audio_file),
+                    '-t', str(max_seconds),
+                    '-c', 'copy',  # Copy codec to avoid re-encoding
+                    '-y',  # Overwrite output
+                    str(trimmed_file)
+                ]
+                
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0 and trimmed_file.exists():
+                    logger.info(f"[{correlation_id}] ✂️ Audio trimmed successfully with ffmpeg")
+                    return trimmed_file
+                else:
+                    logger.error(f"[{correlation_id}] ffmpeg trim failed: {stderr.decode()}")
+                    # Fall back to pydub
+            else:
+                logger.warning(f"[{correlation_id}] ffmpeg not found, using pydub fallback")
+            
+            # Fallback: use pydub
+            try:
+                from pydub import AudioSegment
+                
+                # Check file size first to avoid OOM
+                file_size_mb = audio_file.stat().st_size / (1024 * 1024)
+                if file_size_mb > 200:  # 200MB threshold
+                    logger.error(f"[{correlation_id}] File too large for pydub ({file_size_mb:.1f}MB), skipping trim")
+                    return None
+                
+                logger.info(f"[{correlation_id}] Using pydub to trim audio to {max_seconds} seconds")
+                
+                # Load audio file
+                audio = AudioSegment.from_file(str(audio_file))
+                
+                # Calculate trimming duration in milliseconds
+                max_duration_ms = max_seconds * 1000
+                
+                # If audio is already shorter, return None (no trimming needed)
+                if len(audio) <= max_duration_ms:
+                    logger.info(f"[{correlation_id}] Audio already short enough ({len(audio)/1000:.1f}s), no trimming needed")
+                    return None
+                
+                # Trim the audio
+                trimmed_audio = audio[:max_duration_ms]
+                
+                # Export trimmed audio
+                trimmed_audio.export(str(trimmed_file), format="mp3")
+                
+                logger.info(f"[{correlation_id}] ✂️ Audio trimmed from {len(audio)/1000:.1f}s to {len(trimmed_audio)/1000:.1f}s")
+                
+                # Clean up
+                del audio
+                del trimmed_audio
+                import gc
+                gc.collect()
+                
+                return trimmed_file
+                
+            except Exception as e:
+                logger.error(f"[{correlation_id}] pydub trim failed: {e}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Audio trim error: {e}")
+            return None

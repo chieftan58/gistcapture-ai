@@ -251,8 +251,7 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 🚀 Starting Renaissance Weekly System...")
         logger.info(f"[{self.correlation_id}] 📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
         
-        if TESTING_MODE:
-            logger.info(f"[{self.correlation_id}] 🧪 TESTING MODE: Limited to {MAX_TRANSCRIPTION_MINUTES} min transcriptions")
+        # Note: Transcription mode will be set based on user selection in UI
         
         # Pipeline progress tracker
         pipeline_progress = ProgressTracker(3, self.correlation_id)  # 3 stages
@@ -1817,7 +1816,7 @@ class RenaissanceWeekly:
         )
         
         # Pass current transcription mode to download manager
-        download_manager.transcription_mode = getattr(self, 'current_transcription_mode', 'test')
+        download_manager.set_transcription_mode(getattr(self, 'current_transcription_mode', 'test'))
         
         # Store reference for cancellation support
         self._download_manager = download_manager

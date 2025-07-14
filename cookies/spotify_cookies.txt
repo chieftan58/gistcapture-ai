@@ -1,0 +1,28 @@
+# Netscape HTTP Cookie File
+# http://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file!  Do not edit.
+
+.spotify.com	TRUE	/	TRUE	1784047160	sp_t	25e5ada430f63b1785acc82c61aa9dcc
+.spotify.com	TRUE	/	TRUE	1784047162	sp_adid	e55d29ce-46b4-4681-881c-5a6851044bea
+.spotify.com	TRUE	/	FALSE	1758476555	_gcl_au	1.1.778843468.1750700555
+.spotify.com	TRUE	/	FALSE	1784887253	_scid	jgrPXc1s3fqEjfyFsGGdaksfi9xnjJ75
+.spotify.com	TRUE	/	FALSE	1784493262	_tt_enable_cookie	1
+.spotify.com	TRUE	/	FALSE	1784493262	_ttp	01JYEY50ARRRMYCD9E8AZ82EC1_.tt.1
+.spotify.com	TRUE	/	FALSE	1784887255	_sctr	1%7C1750654800000
+.spotify.com	TRUE	/	FALSE	1785357266	LPVID	UzMGE0OTEwYWM2NGJjZjg3
+.spotify.com	TRUE	/	TRUE	1758573262	_rdt_uuid	1750700556127.d6bc20bf-b995-487a-8940-4293ab00ea1a
+.spotify.com	TRUE	/	FALSE	1784983960	_scid_r	l4rPXc1s3fqEjfyFsGGdaksfi9xnjJ75e1mqqQ
+.spotify.com	TRUE	/	TRUE	1782333262	_hjSessionUser_3893126	eyJpZCI6ImFkMzE1MTYxLThjNWYtNWJkZi1hNTRjLWY2OTI4ZTRlN2NmNSIsImNyZWF0ZWQiOjE3NTA3MDA1NTYyOTMsImV4aXN0aW5nIjp0cnVlfQ==
+.spotify.com	TRUE	/	FALSE	1784493262	ttcsid_BRFSQC0UB1J677QTT9E0	1750797262575::WHS9Cgyze27RuuUE96Zi.2.1750797262581
+.spotify.com	TRUE	/	FALSE	1784493262	ttcsid	1750797262576::8Pr6GU_uSnIOdMqRscFT.2.1750797262581
+.spotify.com	TRUE	/	FALSE	1785357586	_ga_B7DHJZL7G0	GS2.1.s1750797262$o2$g1$t1750797586$j60$l0$h0
+.spotify.com	TRUE	/	TRUE	1752597503	sp_landing	https%3A%2F%2Fopen.spotify.com%2F%3Fsp_cid%3D25e5ada430f63b1785acc82c61aa9dcc%26device%3Ddesktop
+.spotify.com	TRUE	/	TRUE	1752512904	_cs_mk_ga	0.8764419009655586_1752511104706
+open.spotify.com	FALSE	/	FALSE	0	sss	1
+.spotify.com	TRUE	/	FALSE	1752597561	_gid	GA1.2.826422920.1752511105
+.spotify.com	TRUE	/	TRUE	1784047160	sp_dc	AQC60bo0P7KHWCxe21rOrNDCUv_mbwrlRSZN7t7yvxs9rUFhYW6j__8AlIYpGpOO51S0Rhk7a7YYR8jewkmhPdN6IGmt10-21ItGDw7wKjAjvHkjXZQjRQMLwwR0oydHtnUcgKTIlmM6Wjk7Ij3mGzPBrb86HsKTh0VzvNBp8Ke84nrVp8bzKBhpMzBhX4kKqcMuEdUjLpwcZh1oIA
+.spotify.com	TRUE	/	TRUE	1784047160	sp_key	ff19e014-bbe0-40d6-947a-816686b301bf
+.spotify.com	TRUE	/	FALSE	1787071162	_ga	GA1.1.1567456706.1750523817
+.spotify.com	TRUE	/	FALSE	1787071162	_ga_ZWG1NSHWD8	GS2.1.s1752511104$o3$g1$t1752511161$j3$l0$h0
+.spotify.com	TRUE	/	FALSE	1784047161	OptanonConsent	isGpcEnabled=0&datestamp=Mon+Jul+14+2025+11%3A39%3A21+GMT-0500+(Central+Daylight+Time)&version=202411.2.0&browserGpcFlag=0&isIABGlobal=false&hosts=&landingPath=NotLandingPage&groups=BG169%3A1%2Ct00%3A1%2Ci00%3A1%2CBG170%3A1%2Cs00%3A1%2Cf00%3A1%2Cm00%3A1%2Cf11%3A1&AwaitingReconsent=false
+.spotify.com	TRUE	/	FALSE	1787071162	_ga_BMC5VGR8YS	GS2.2.s1752511105$o2$g1$t1752511161$j4$l0$h0

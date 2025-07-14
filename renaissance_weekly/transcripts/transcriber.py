@@ -19,6 +19,7 @@ from ..models import Episode
 from ..config import AUDIO_DIR, TEMP_DIR, TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
 from ..utils.logging import get_logger
 from ..fetchers.audio_sources import AudioSourceFinder
+from ..utils.filename_utils import generate_audio_filename, generate_temp_filename
 from ..utils.helpers import (
     slugify, validate_audio_file_comprehensive, validate_audio_file_smart, 
     exponential_backoff_with_jitter, retry_with_backoff, ProgressTracker, 
@@ -250,12 +251,10 @@ class AudioTranscriber:
         logger.info(f"[{correlation_id}] 📥 Downloading audio from: {url[:80]}...")
         
         # Create safe filename
-        date_str = episode.published.strftime('%Y%m%d')
-        safe_podcast = slugify(episode.podcast)[:30]
-        safe_title = slugify(episode.title)[:50]
-        # Include mode in filename to differentiate test vs full
-        mode_suffix = '_test' if self._current_mode == 'test' else '_full'
-        audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}{mode_suffix}.mp3"
+        # Generate standardized filename
+        mode = 'test' if self._current_mode == 'test' else 'full'
+        filename = generate_audio_filename(episode, mode)
+        audio_file = AUDIO_DIR / filename
         
         # Check if already exists and is valid
         if audio_file.exists():
@@ -332,12 +331,10 @@ class AudioTranscriber:
         logger.info(f"[{correlation_id}] 📥 Downloading audio file...")
         
         # Create safe filename
-        date_str = episode.published.strftime('%Y%m%d')
-        safe_podcast = slugify(episode.podcast)[:30]
-        safe_title = slugify(episode.title)[:50]
-        # Include mode in filename to differentiate test vs full
-        mode_suffix = '_test' if self._current_mode == 'test' else '_full'
-        audio_file = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}{mode_suffix}.mp3"
+        # Generate standardized filename
+        mode = 'test' if self._current_mode == 'test' else 'full'
+        filename = generate_audio_filename(episode, mode)
+        audio_file = AUDIO_DIR / filename
         
         # Check if already exists and is valid
         if audio_file.exists():
@@ -1058,13 +1055,38 @@ class AudioTranscriber:
         files_to_clean = []
         
         try:
-            # Handle test mode truncation
+            # Handle test mode truncation (only if audio is not already trimmed)
+            # Only trim if explicitly in test mode, regardless of global TESTING_MODE
             if self._current_mode == 'test':
-                logger.info(f"[{correlation_id}] 🧪 TEST MODE: Limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
-                trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60, correlation_id)
-                if trimmed_file:
-                    audio_file = trimmed_file
-                    files_to_clean.append(trimmed_file)
+                # First check if the audio is already short enough (might be pre-trimmed by download manager)
+                try:
+                    from pydub import AudioSegment
+                    temp_audio = AudioSegment.from_file(str(audio_file))
+                    current_duration_seconds = len(temp_audio) / 1000
+                    max_duration_seconds = MAX_TRANSCRIPTION_MINUTES * 60
+                    
+                    if current_duration_seconds > max_duration_seconds:
+                        logger.info(f"[{correlation_id}] 🧪 TEST MODE: Audio {current_duration_seconds:.1f}s > {max_duration_seconds}s, limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                        trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60, correlation_id)
+                        if trimmed_file:
+                            audio_file = trimmed_file
+                            files_to_clean.append(trimmed_file)
+                    else:
+                        logger.info(f"[{correlation_id}] 🧪 TEST MODE: Audio already short enough ({current_duration_seconds:.1f}s), no trimming needed")
+                    
+                    # Clean up temp audio
+                    del temp_audio
+                    import gc
+                    gc.collect()
+                    
+                except Exception as e:
+                    logger.warning(f"[{correlation_id}] Failed to check audio duration, proceeding with trim: {e}")
+                    # Fall back to the original behavior
+                    logger.info(f"[{correlation_id}] 🧪 TEST MODE: Limiting to {MAX_TRANSCRIPTION_MINUTES} minutes")
+                    trimmed_file = await self._trim_audio(audio_file, MAX_TRANSCRIPTION_MINUTES * 60, correlation_id)
+                    if trimmed_file:
+                        audio_file = trimmed_file
+                        files_to_clean.append(trimmed_file)
             
             # Check if we need to use chunking for large files
             file_size = audio_file.stat().st_size
@@ -1194,8 +1216,9 @@ class AudioTranscriber:
         try:
             logger.info(f"[{correlation_id}] ✂️ Trimming audio to {max_seconds} seconds...")
             
-            # Create output file
-            trimmed_file = TEMP_DIR / f"trimmed_{audio_file.name}"
+            # Create output file with shorter name to avoid "File name too long" errors
+            temp_filename = generate_temp_filename(f"trim_{correlation_id}_{audio_file.name}")
+            trimmed_file = TEMP_DIR / temp_filename
             self.temp_files.add(str(trimmed_file))
             
             # Check if ffmpeg is available
@@ -1255,8 +1278,9 @@ class AudioTranscriber:
             # Trim to max duration
             trimmed = audio[:max_seconds * 1000]  # pydub uses milliseconds
             
-            # Export
-            trimmed_file = TEMP_DIR / f"trimmed_{audio_file.name}"
+            # Export - use shorter filename to avoid "File name too long" errors
+            temp_filename = generate_temp_filename(f"trim_pydub_{correlation_id}")
+            trimmed_file = TEMP_DIR / temp_filename
             self.temp_files.add(str(trimmed_file))
             trimmed.export(str(trimmed_file), format="mp3")
             
@@ -1322,7 +1346,8 @@ class AudioTranscriber:
         try:
             logger.info(f"[{correlation_id}] 🔄 Converting audio format...")
             
-            converted_file = TEMP_DIR / f"converted_{audio_file.stem}.mp3"
+            temp_filename = generate_temp_filename(f"convert_{audio_file.stem}")
+            converted_file = TEMP_DIR / temp_filename
             self.temp_files.add(str(converted_file))
             
             import shutil
@@ -1470,7 +1495,8 @@ class AudioTranscriber:
     async def _extract_audio_chunk(self, audio_file: Path, start_time: float, duration: float, chunk_index: int, correlation_id: str) -> Optional[Path]:
         """Extract a chunk of audio using ffmpeg"""
         try:
-            chunk_file = TEMP_DIR / f"chunk_{chunk_index}_{audio_file.stem}.mp3"
+            temp_filename = generate_temp_filename(f"chunk_{chunk_index}_{audio_file.stem}")
+            chunk_file = TEMP_DIR / temp_filename
             self.temp_files.add(str(chunk_file))
             
             import shutil

@@ -1600,3 +1600,80 @@ safety check
 4. **Production Deployment**: System ready for production use with test coverage
 
 **Achievement**: From experimental system to production-ready platform with comprehensive testing infrastructure and verified core functionality.
+
+### Recent Updates (2025-07-14) - TRANSCRIPTION MODE FIXES AND UI IMPROVEMENTS ✅:
+
+**🎉 CRITICAL TRANSCRIPTION MODE BUG RESOLVED**
+
+**Major Issue Fixed**: Full mode was still trimming audio to 15 minutes despite user selecting "Full Mode"
+
+**Root Causes Identified**:
+1. **Download Manager Mode Sync**: DownloadManager wasn't setting transcriber's `_current_mode` property
+2. **Global TESTING_MODE Dependency**: System still checked global config instead of user selection
+3. **Mode Passing Chain**: Transcription mode wasn't flowing correctly from UI → Download → Transcriber
+
+**Fixes Implemented**:
+
+1. **Fixed Mode Propagation Chain** ✅:
+   - Updated UI to send transcription mode in `/api/start-download` request
+   - Added `set_transcription_mode()` method in DownloadManager for proper sync
+   - Fixed `_processing_mode` initialization from UI selection
+   - Ensured transcriber `_current_mode` gets set correctly
+
+2. **Removed Global TESTING_MODE Dependencies** ✅:
+   - Removed misleading "TESTING MODE" log message on startup
+   - Updated UI initialization to default to 'test' mode (user choice driven)
+   - Eliminated global config override of user selection
+
+3. **Enhanced Mode Synchronization** ✅:
+   ```python
+   # In DownloadManager
+   def set_transcription_mode(self, mode: str):
+       self.transcription_mode = mode
+       self.transcriber._current_mode = mode  # Critical sync
+   
+   # In app.py
+   download_manager.set_transcription_mode(self.current_transcription_mode)
+   ```
+
+4. **Added Persistent Mode Indicator** ✅:
+   - **Visual Design**: Mode badge in top-right corner of every page
+   - **Test Mode**: Blue badge "Test Mode" + "15 minutes"
+   - **Full Mode**: Green badge "Full Mode" + "Complete episodes"
+   - **Pages Updated**: Episodes, Cost Estimate, Download, Processing, Results, Email, Complete
+   - **CSS Implementation**: Positioned absolutely with proper z-index and styling
+
+**Files Modified**:
+- `renaissance_weekly/download_manager.py`: Added transcription mode sync
+- `renaissance_weekly/app.py`: Fixed mode passing to download manager
+- `renaissance_weekly/ui/selection.py`: Enhanced mode indicator on all pages
+- `renaissance_weekly/config.py`: Documentation updates
+
+**UI Mode Indicator Features**:
+- Appears on all pages after podcast selection
+- Consistent minimalist design matching existing aesthetic
+- Clear visual confirmation of selected mode
+- Positioned in top-right corner (non-intrusive)
+- Color-coded: Blue (Test) vs Green (Full)
+
+**Result**: 
+- ✅ Full mode now processes complete episodes without trimming
+- ✅ Test mode correctly trims to 15 minutes  
+- ✅ User selection properly respected throughout pipeline
+- ✅ Visual confirmation available on every page
+- ✅ No more confusion about which mode is active
+
+**Testing Verification**:
+When user selects "Full" mode, system now:
+1. Sets `APP_STATE.configuration.transcription_mode = 'full'`
+2. Sends mode to `/api/start-download` endpoint  
+3. Sets `parent._processing_mode = 'full'`
+4. Calls `download_manager.set_transcription_mode('full')`
+5. Updates `transcriber._current_mode = 'full'`
+6. Downloads and processes complete audio files without trimming
+
+**User Experience Improvements**:
+- Clear mode visibility eliminates guesswork
+- Seamless integration maintains minimalist design
+- Immediate feedback when switching between modes
+- Consistent indicator across entire workflow

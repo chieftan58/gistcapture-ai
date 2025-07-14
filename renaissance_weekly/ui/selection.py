@@ -44,6 +44,7 @@ class EpisodeSelector:
         self._processing_mode = 'test'
         self._last_episode_info = {}
         self._processing_cancelled = False
+        self._fetch_cancelled = False
         self._email_approved = False
         self._process_thread = None
         self.db = db
@@ -66,7 +67,7 @@ class EpisodeSelector:
         self._fetch_callback = fetch_callback
         self.configuration = {
             'lookback_days': days_back,
-            'transcription_mode': 'test' if TESTING_MODE else 'full',
+            'transcription_mode': 'test',  # Always start with test, user can select Full
             'session_id': self.session_id
         }
         
@@ -284,7 +285,8 @@ class EpisodeSelector:
                     
                     self._send_json({'status': 'success'})
                     
-                    # Start fetching episodes in background
+                    # Reset cancellation flag and start fetching episodes in background
+                    parent._fetch_cancelled = False
                     parent._fetch_thread = threading.Thread(
                         target=parent._fetch_episodes_background,
                         daemon=True,
@@ -356,6 +358,21 @@ class EpisodeSelector:
                     parent._selected_podcasts = []
                     parent._selected_episodes = []
                     self._send_json({'status': 'success', 'state': parent.state})
+                    
+                elif self.path == '/api/cancel-fetch':
+                    # Cancel episode fetching
+                    logger.info(f"[{parent._correlation_id}] ⏹️ Cancelling episode fetch")
+                    
+                    # Set cancellation flag to stop fetch thread
+                    parent._fetch_cancelled = True
+                    
+                    # Reset state
+                    parent.state = 'podcast_selection'
+                    parent._episodes = []
+                    parent._selected_podcasts = []
+                    parent._selected_episodes = []
+                    
+                    self._send_json({'status': 'success', 'message': 'Fetch cancelled'})
                     
                 elif self.path == '/api/retry-episodes':
                     # Retry failed episodes with alternative sources
@@ -506,6 +523,10 @@ class EpisodeSelector:
                 elif self.path == '/api/start-download':
                     # Start downloading episodes
                     episode_ids = data.get('episode_ids', [])
+                    transcription_mode = data.get('mode', parent.configuration.get('transcription_mode', 'test'))
+                    
+                    # Set the processing mode for downloads
+                    parent._processing_mode = transcription_mode
                     
                     # Initialize download status
                     parent._download_status = {
@@ -698,6 +719,11 @@ class EpisodeSelector:
             logger.info(f"[{self._correlation_id}] 📡 Background fetch started for {len(self.selected_podcasts)} podcasts")
             
             def progress_callback(podcast_name, index, total):
+                # Check for cancellation
+                if self._fetch_cancelled:
+                    logger.info(f"[{self._correlation_id}] ⏹️ Fetch cancelled during progress callback")
+                    return False  # Signal to stop fetching
+                    
                 self.loading_status = {
                     'status': 'loading',
                     'progress': index,
@@ -705,18 +731,29 @@ class EpisodeSelector:
                     'current_podcast': podcast_name
                 }
                 logger.debug(f"[{self._correlation_id}] Progress: {podcast_name} ({index+1}/{total})")
+                return True  # Continue fetching
             
             # Create a new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             try:
+                # Check for cancellation before starting
+                if self._fetch_cancelled:
+                    logger.info(f"[{self._correlation_id}] ⏹️ Fetch cancelled before starting")
+                    return
+                
                 # Call the fetch callback (it handles its own async execution)
                 episodes = self._fetch_callback(
                     self.selected_podcasts,
                     self.configuration['lookback_days'],
                     progress_callback
                 )
+                
+                # Check for cancellation after fetch
+                if self._fetch_cancelled:
+                    logger.info(f"[{self._correlation_id}] ⏹️ Fetch cancelled after completion")
+                    return
                 
                 # Store episodes
                 self.episode_cache = episodes
@@ -996,6 +1033,12 @@ class EpisodeSelector:
                                 </div>
                             `).join('')}}
                         </div>
+                        
+                        <div style="margin-top: 30px;">
+                            <button class="button secondary" onclick="cancelEpisodeFetch()">
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1079,6 +1122,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Choose episodes to process</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -1236,6 +1280,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Cost & Time Estimate</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -1308,21 +1353,22 @@ class EpisodeSelector:
             const remaining = total - downloaded - failed - retrying;
             const processedCount = downloaded + failed; // Both downloaded and failed count as processed
             
-            // Sort episodes: Failed first, then retrying, then in queue, then downloaded
+            // Sort episodes: Failed first, then retrying, then downloading/pending, then downloaded
             const sortedEpisodes = Object.entries(episodeDetails).sort(([, a], [, b]) => {{
-                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'pending': 2, 'queued': 2, 'downloaded': 3, 'success': 3 }};
+                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'downloading': 2, 'pending': 2, 'queued': 2, 'downloaded': 3, 'success': 3 }};
                 return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
             }});
             
             // Group episodes by status
             const failedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'failed');
-            const inQueueEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'pending' || detail.status === 'queued' || detail.status === 'retrying');
+            const inQueueEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'pending' || detail.status === 'queued' || detail.status === 'retrying' || detail.status === 'downloading');
             const downloadedEpisodes = sortedEpisodes.filter(([_, detail]) => detail.status === 'downloaded' || detail.status === 'success');
             
             return `
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Downloading Audio Files</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -1407,9 +1453,8 @@ class EpisodeSelector:
                                 Cancel Downloads
                             </button>
                             
-                            <button class="button primary" onclick="continueWithDownloads()" 
-                                    ${{processedCount < total ? 'disabled' : ''}}>
-                                ${{remaining > 0 ? `Processing ${{remaining}} remaining episodes...` : failed > 0 ? `Continue with ${{downloaded}} Episodes` : 'Continue to Processing'}}
+                            <button class="button primary" onclick="continueWithDownloads()">
+                                Continue to Processing
                             </button>
                         </div>
                     </div>
@@ -1655,6 +1700,53 @@ class EpisodeSelector:
                         font-size: 12px;
                         padding: 6px 12px;
                     }}
+                    
+                    /* File details styling */
+                    .file-details {{
+                        margin-top: 8px;
+                        padding: 8px 0;
+                        border-top: 1px solid #e0e0e0;
+                    }}
+                    
+                    .duration-info {{
+                        margin-bottom: 4px;
+                        font-size: 13px;
+                        color: #555;
+                    }}
+                    
+                    .duration-info.duration-mismatch {{
+                        font-weight: 600;
+                        color: #d97706;
+                    }}
+                    
+                    .detail-label {{
+                        font-weight: 500;
+                        color: #374151;
+                        margin-right: 4px;
+                    }}
+                    
+                    .detail-value {{
+                        color: #6b7280;
+                    }}
+                    
+                    .mismatch-indicator {{
+                        margin-left: 4px;
+                        color: #d97706;
+                    }}
+                    
+                    .file-info {{
+                        display: flex;
+                        gap: 12px;
+                        font-size: 12px;
+                        color: #6b7280;
+                    }}
+                    
+                    .detail-item {{
+                        padding: 2px 6px;
+                        background: #f3f4f6;
+                        border-radius: 4px;
+                        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    }}
                 </style>
             `;
         }}
@@ -1688,6 +1780,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Transcribing & Summarizing Episodes</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -1982,6 +2075,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Processing Results</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -2189,6 +2283,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Email Approval</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -2242,6 +2337,7 @@ class EpisodeSelector:
                 <div class="header">
                     <div class="logo">RW</div>
                     <div class="header-text">Email Sent</div>
+                    ${{renderModeIndicator()}}
                 </div>
                 
                 <div class="container">
@@ -2264,14 +2360,14 @@ class EpisodeSelector:
         
         function formatEpisodeTitle(title) {{
             // Extract episode number if present
-            const epMatch = title.match(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i);
+            const epMatch = title.match(/^(#?\\\\d+\\\\s*[-–—|:]?\\\\s*|episode\\\\s+\\\\d+\\\\s*[-–—|:]?\\\\s*|ep\\\\.?\\\\s*\\\\d+\\\\s*[-–—|:]?\\\\s*)/i);
             if (epMatch) {{
                 // Episode number found at start
                 return title;
             }}
             
             // Check if there's an episode number elsewhere in the title
-            const numberMatch = title.match(/(#\\d+|episode\\s+\\d+|ep\\.?\\s*\\d+)/i);
+            const numberMatch = title.match(/(#\\\\d+|episode\\\\s+\\\\d+|ep\\\\.?\\\\s*\\\\d+)/i);
             if (numberMatch) {{
                 // Move it to the front
                 const num = numberMatch[0];
@@ -2352,7 +2448,7 @@ class EpisodeSelector:
                 if (guestName) {{
                     cleanTitle = cleanTitle.replace(new RegExp(guestName + '\\\\s*:?', 'i'), '');
                 }}
-                cleanTitle = cleanTitle.replace(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i, '');
+                cleanTitle = cleanTitle.replace(/^(#?\\\\d+\\\\s*[-–—|:]?\\\\s*|episode\\\\s+\\\\d+\\\\s*[-–—|:]?\\\\s*|ep\\\\.?\\\\s*\\\\d+\\\\s*[-–—|:]?\\\\s*)/i, '');
                 cleanTitle = cleanTitle.replace(/^\\s*[-–—|:]\\s*/, '').trim();
                 if (cleanTitle && cleanTitle.length > 10) {{
                     topic = cleanTitle;
@@ -2421,7 +2517,7 @@ class EpisodeSelector:
             // Extract topic from title
             let topic = title;
             // Remove episode numbers
-            topic = topic.replace(/^(#?\\d+\\s*[-–—|:]?\\s*|episode\\s+\\d+\\s*[-–—|:]?\\s*|ep\\.?\\s*\\d+\\s*[-–—|:]?\\s*)/i, '');
+            topic = topic.replace(/^(#?\\\\d+\\\\s*[-–—|:]?\\\\s*|episode\\\\s+\\\\d+\\\\s*[-–—|:]?\\\\s*|ep\\\\.?\\\\s*\\\\d+\\\\s*[-–—|:]?\\\\s*)/i, '');
             // Remove guest name if found
             if (guestMatch && guestMatch[1]) {{
                 topic = topic.replace(new RegExp(guestMatch[1] + '\\\\s*:?', 'i'), '');
@@ -2893,6 +2989,59 @@ class EpisodeSelector:
             const statusText = (detail.status === 'downloaded' || detail.status === 'success') ? 'Downloaded' : (detail.status === 'failed' ? 'Failed' : (detail.status === 'retrying' ? 'Downloading...' : 'In Queue'));
             const statusIcon = (detail.status === 'downloaded' || detail.status === 'success') ? '✓' : (detail.status === 'failed' ? '✗' : (detail.status === 'retrying' ? '↻' : '•'));
             
+            // Format duration info
+            function formatDuration(minutes) {{
+                if (!minutes || minutes === 'Unknown' || isNaN(minutes)) return 'N/A';
+                const hours = Math.floor(minutes / 60);
+                const mins = Math.round(minutes % 60);
+                if (hours > 0) {{
+                    return `${{hours}}h ${{mins}}m`;
+                }} else {{
+                    return `${{mins}}m`;
+                }}
+            }}
+            
+            // Check for duration mismatch (downloaded significantly shorter than expected)
+            function isDurationMismatch(expected, downloaded) {{
+                if (!expected || !downloaded || expected === 'Unknown' || downloaded === 'Unknown') return false;
+                const expectedMins = typeof expected === 'string' ? parseDuration(expected) : expected;
+                const downloadedMins = typeof downloaded === 'string' ? parseDuration(downloaded) : downloaded;
+                if (!expectedMins || !downloadedMins) return false;
+                // Consider it a mismatch if downloaded is less than 50% of expected (indicates test mode or partial download)
+                return downloadedMins < (expectedMins * 0.5);
+            }}
+            
+            function parseDuration(durationStr) {{
+                if (!durationStr) return null;
+                const match = durationStr.match(/(\\d+)h\\s*(\\d+)m|(\\d+)m/);
+                if (match) {{
+                    if (match[1] && match[2]) {{
+                        return parseInt(match[1]) * 60 + parseInt(match[2]);
+                    }} else if (match[3]) {{
+                        return parseInt(match[3]);
+                    }}
+                }}
+                return null;
+            }}
+            
+            // Format file size
+            function formatFileSize(bytes) {{
+                if (!bytes) return 'Unknown';
+                if (bytes < 1024 * 1024) {{
+                    return `${{(bytes / 1024).toFixed(1)}}KB`;
+                }} else {{
+                    return `${{(bytes / (1024 * 1024)).toFixed(1)}}MB`;
+                }}
+            }}
+            
+            const expectedDuration = detail.metadata?.duration || detail.expectedDuration;
+            const downloadedDuration = detail.downloadedDuration;
+            const fileSize = detail.fileSize;
+            const downloadSource = detail.downloadSource || detail.source;
+            const audioFormat = detail.audioFormat || detail.format;
+            
+            const hasMismatch = isDurationMismatch(expectedDuration, downloadedDuration);
+            
             return `
                 <div class="download-item ${{statusClass}} ${{detail.status === 'failed' ? 'expandable' : ''}}" 
                      ${{detail.status === 'failed' ? `data-episode-id="${{episodeId.replace(/"/g, '&quot;')}}" data-clickable="true" onclick="toggleDownloadDetails('${{episodeId.replace(/'/g, "\\\\'")}}', event)"` : ''}}>
@@ -2901,6 +3050,22 @@ class EpisodeSelector:
                             ${{detail.status === 'failed' ? `<span id="toggle-${{episodeId}}" class="expand-icon">${{APP_STATE.expandedEpisodes && APP_STATE.expandedEpisodes.has(episodeId) ? '▼' : '▶'}}</span>` : ''}}
                             ${{detail.episode || detail.title || episodeId}}
                         </div>
+                        
+                        ${{(detail.status === 'downloaded' || detail.status === 'success') ? `
+                            <div class="file-details">
+                                <div class="duration-info ${{hasMismatch ? 'duration-mismatch' : ''}}">
+                                    <span class="detail-label">Duration:</span>
+                                    <span class="detail-value">Expected: ${{formatDuration(expectedDuration)}} | Downloaded: ${{formatDuration(downloadedDuration)}}</span>
+                                    ${{hasMismatch ? ' <span class="mismatch-indicator">⚠️</span>' : ' ✅'}}
+                                </div>
+                                <div class="file-info">
+                                    <span class="detail-item">${{formatFileSize(fileSize)}}</span>
+                                    ${{downloadSource ? `<span class="detail-item">${{downloadSource}}</span>` : ''}}
+                                    ${{audioFormat ? `<span class="detail-item">${{audioFormat.toUpperCase()}}</span>` : ''}}
+                                </div>
+                            </div>
+                        ` : ''}}
+                        
                         ${{detail.status === 'failed' ? `<div class="error-message">${{detail.lastError}}</div>` : ''}}
                         ${{detail.status === 'retrying' ? `<div class="attempt-info">Attempt ${{detail.attemptCount}} - ${{detail.currentStrategy}}</div>` : ''}}
                     </div>
@@ -2990,6 +3155,21 @@ class EpisodeSelector:
         }}
         
         // Helper function for stage indicator
+        function renderModeIndicator() {{
+            const mode = APP_STATE.configuration.transcription_mode;
+            const modeText = mode === 'test' ? 'Test Mode' : 'Full Mode';
+            const modeDesc = mode === 'test' ? '15 minutes' : 'Complete episodes';
+            
+            return `
+                <div class="mode-indicator">
+                    <span class="mode-badge ${{mode}}">
+                        ${{modeText}}
+                    </span>
+                    <span class="mode-description">${{modeDesc}}</span>
+                </div>
+            `;
+        }}
+        
         function renderStageIndicator(currentStage) {{
             const stages = [
                 {{ id: 'podcasts', label: 'Podcasts' }},
@@ -3089,6 +3269,7 @@ class EpisodeSelector:
         
         // Utility functions
         function formatDuration(minutes) {{
+            if (!minutes || isNaN(minutes)) return 'N/A';
             if (minutes < 60) {{
                 return `${{Math.round(minutes)}} min`;
             }}
@@ -3126,6 +3307,44 @@ class EpisodeSelector:
             APP_STATE.state = 'podcast_selection';
             APP_STATE.episodes = [];
             APP_STATE.selectedPodcastNames = [];
+            render();
+        }}
+        
+        async function cancelEpisodeFetch() {{
+            // Stop any polling intervals
+            if (APP_STATE.statusInterval) {{
+                clearInterval(APP_STATE.statusInterval);
+                APP_STATE.statusInterval = null;
+            }}
+            
+            if (APP_STATE.globalPollInterval) {{
+                clearInterval(APP_STATE.globalPollInterval);
+                APP_STATE.globalPollInterval = null;
+            }}
+            
+            // Signal server to cancel the fetch
+            try {{
+                await fetch('/api/cancel-fetch', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{}})
+                }});
+            }} catch (e) {{
+                console.error('Failed to cancel fetch:', e);
+            }}
+            
+            // Reset state and go back to podcast selection
+            APP_STATE.state = 'podcast_selection';
+            APP_STATE.episodes = [];
+            APP_STATE.selectedEpisodes.clear();
+            APP_STATE.selectedPodcastNames = [];
+            APP_STATE.loading_status = {{
+                completed: 0,
+                total: 0,
+                error: null,
+                podcasts: []
+            }};
+            
             render();
         }}
         
@@ -3354,7 +3573,8 @@ class EpisodeSelector:
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{
-                        episode_ids: Array.from(APP_STATE.selectedEpisodes)
+                        episode_ids: Array.from(APP_STATE.selectedEpisodes),
+                        mode: APP_STATE.configuration.transcription_mode
                     }})
                 }});
                 
@@ -3808,7 +4028,7 @@ class EpisodeSelector:
                     // Fallback to onclick parsing
                     const onclickAttr = downloadItem.getAttribute('onclick');
                     if (onclickAttr) {{
-                        const match = onclickAttr.match(/toggleDownloadDetails\('([^']+)'/);
+                        const match = onclickAttr.match(/toggleDownloadDetails\\('([^']+)'/);
                         if (match && match[1]) {{
                             console.log('Event delegation handling click for download item (onclick):', match[1]);
                             toggleDownloadDetails(match[1], e);
@@ -3890,6 +4110,7 @@ class EpisodeSelector:
         }
         
         .header {
+            position: relative;
             padding: 48px 0;
             text-align: center;
             border-bottom: 1px solid var(--gray-200);
@@ -4647,6 +4868,22 @@ class EpisodeSelector:
             color: #15803d;
         }
         
+        .mode-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 10;
+        }
+        
+        .mode-description {
+            font-size: 12px;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+        
         .estimate-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -5193,6 +5430,10 @@ class EpisodeSelector:
                 # Create app instance
                 app = RenaissanceWeekly()
                 
+                # Set transcription mode BEFORE starting downloads
+                app.current_transcription_mode = self._processing_mode
+                logger.info(f"[{self._correlation_id}] Setting download transcription mode to: {self._processing_mode}")
+                
                 # Store the download manager reference and event loop
                 self._download_app = app
                 self._download_app._loop = loop  # Store the event loop reference
@@ -5328,14 +5569,13 @@ class EpisodeSelector:
                             if local_path.exists() and local_path.is_file():
                                 # Copy to our audio directory
                                 from ..config import AUDIO_DIR
-                                from ..utils.helpers import slugify
+                                from ..utils.filename_utils import generate_audio_filename
                                 import shutil
                                 
                                 AUDIO_DIR.mkdir(exist_ok=True)
-                                date_str = episode.published.strftime('%Y%m%d')
-                                safe_podcast = slugify(episode.podcast)[:30]
-                                safe_title = slugify(episode.title)[:50]
-                                audio_path = AUDIO_DIR / f"{date_str}_{safe_podcast}_{safe_title}.mp3"
+                                # Generate standardized filename (assume test mode for UI uploads)
+                                filename = generate_audio_filename(episode, 'test')
+                                audio_path = AUDIO_DIR / filename
                                 
                                 # Copy the file
                                 shutil.copy2(local_path, audio_path)
