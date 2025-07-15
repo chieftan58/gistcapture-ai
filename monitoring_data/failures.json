@@ -1,71 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:41:29.319700",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:31.095536",
-    "component": "summarization",
-    "podcast": "A16Z",
-    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:31.299098",
-    "component": "summarization",
-    "podcast": "All-In",
-    "episode_title": "12 Day War, Socialism Wins in NYC, Stocks All-Time High, AI Copyright, Science Corner",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:32.079309",
-    "component": "transcript_fetch",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:32.116314",
-    "component": "transcript_fetch",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "2-Sigma in 2 Hours: How Alpha Schools are Using AI to Revolutionize Education",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:47.681817",
-    "component": "summarization",
-    "podcast": "Cognitive Revolution",
-    "episode_title": "402 Payment Required: a New Way for AI Agents to Pay, with Nemil Dalal, Dev Platform Lead @ Coinbase",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
     "timestamp": "2025-07-02T01:41:47.930846",
     "component": "transcript_fetch",
     "podcast": "Dwarkesh Podcast",
@@ -10990,6 +10924,72 @@
   },
   {
     "timestamp": "2025-07-15T19:27:01.399923",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T20:46:44.207208",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Grok 4 Wows, The Bitter Lesson, Elon\u2019s Third Party, AI Browsers, SCOTUS backs POTUS on RIFs",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T20:46:45.622619",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The Data Factory: Inside the $100B Race for Post-Training Supremacy, with Labelbox CEO Manu Sharma",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T20:53:41.299642",
+    "component": "transcript_fetch",
+    "podcast": "Macro Voices",
+    "episode_title": "MacroVoices #488 Lyn Alden: Run It Hot!",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T20:54:58.812954",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T20:54:58.828012",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "Navigating bone health: early life influences and advanced strategies for improvement and injury prevention (#214 rebroadcast)",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T21:00:49.181881",
     "component": "transcript_fetch",
     "podcast": "Tim Ferriss",
     "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",

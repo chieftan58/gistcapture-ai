@@ -238,6 +238,38 @@ The UI now displays automatic alerts when YouTube authentication expires:
 
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
+## Known Issues
+
+### Critical: Transcript Cache Not Working in Full Mode
+**Discovered**: 2025-07-15
+**Status**: Under Investigation
+
+**Symptoms**:
+- System re-transcribes episodes with AssemblyAI even when previously run in full mode
+- Audio files ARE cached correctly (system finds and reuses them)
+- Transcripts are NOT found in database despite previous full mode runs
+- This causes unnecessary API costs (~$0.90 per hour of audio)
+
+**Evidence**:
+```
+[31d70d57] ✅ Using cached audio file (hash: 281b0673...)  # Audio IS cached
+❌ No transcript found from any source                      # But transcript is NOT
+🎵 Step 2: No valid transcript found - transcribing from audio...
+```
+
+**Impact**:
+- Significant cost implications (re-transcribing all episodes)
+- Time waste (5-7 minutes per episode for transcription)
+- Suggests fundamental issue with database storage or retrieval
+
+**Investigation Needed**:
+1. Check if transcripts are being saved to database correctly
+2. Verify episode matching logic (GUID, title matching)
+3. Confirm transcription_mode parameter is passed to database lookups
+4. Check database schema for transcript storage columns
+
+**Temporary Workaround**: None identified yet
+
 ### Latest Improvements (2025-07-17)
 - **Implemented Two-Summary Email System**:
   - New architecture generates both 150-word paragraph and full summary per episode
