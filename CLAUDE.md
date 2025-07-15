@@ -14,6 +14,7 @@ Renaissance Weekly is a Python-based podcast intelligence system that automatica
 - **Production Ready**: Comprehensive testing infrastructure and monitoring
 - **Smart Retry System**: Different strategies based on failure type
 - **Test/Full Modes**: Quick testing (15 min) or complete episode processing
+- **Two-Summary System**: 150-word paragraph + expandable full summary per episode
 
 ## Key Commands
 
@@ -128,8 +129,10 @@ python main.py --load-dataset <name>
 2. **UI Selection**: Web interface for episode selection
 3. **Download Stage**: Smart routing with multiple strategies
 4. **Transcript Finding**: 10+ sources checked before audio transcription
-5. **Summarization**: GPT-4 with 20x concurrency
-6. **Email Delivery**: SendGrid with preview
+5. **Summarization**: Two-phase system with GPT-4
+   - **Paragraph Summary**: 150-word overview for email scanning
+   - **Full Summary**: Comprehensive analysis (500-2500 words)
+6. **Email Delivery**: SendGrid with expandable sections
 
 ## Current System Status
 
@@ -140,7 +143,7 @@ python main.py --load-dataset <name>
 - **Concurrency**: Memory-aware with dynamic scaling
   - Episode processing: 2 concurrent (CPU/memory limited)
   - AssemblyAI: 32x concurrent transcriptions
-  - GPT-4 summaries: 20 concurrent
+  - GPT-4 summaries: 3 concurrent (reduced from 4 for two-call system)
   - YouTube downloads: 2 concurrent (separate semaphore)
 
 ### Multi-Strategy Download System
@@ -224,7 +227,24 @@ The UI now displays automatic alerts when YouTube authentication expires:
 
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
-### Latest Improvements (2025-07-15)
+### Latest Improvements (2025-07-16)
+- **Implemented Two-Summary Email System**:
+  - New architecture generates both 150-word paragraph and full summary per episode
+  - Paragraph summaries designed as "movie trailers" for quick scanning
+  - Full summaries provide comprehensive conversation flow (500-2500 words)
+  - Email format uses expandable HTML/CSS sections (no JavaScript)
+  - Alphabetical podcast ordering for consistent navigation
+  - Dynamic subject lines with featured guest names
+  - Prompt system restructured with separate files:
+    - `prompts/paragraph_prompt.txt` - 150-word overview generation
+    - `prompts/full_summary_prompt.txt` - Comprehensive analysis
+    - `prompts/system_prompt.txt` - Updated for investment-focused audience
+  - Database schema updated with `paragraph_summary` columns
+  - Sequential API calls with 0.5s delay to manage rate limits
+  - Reduced concurrent episodes from 4 to 3 for API stability
+  - Backward compatible with fallback to extract paragraph from full summary
+
+### Previous Improvements (2025-07-15)
 - **Fixed stale summary cache issue**:
   - Summary files now include mode in filename (e.g., `*_test_summary.md`, `*_full_summary.md`)
   - Added `--force-fresh` flag to `main.py` for bypassing all caches
