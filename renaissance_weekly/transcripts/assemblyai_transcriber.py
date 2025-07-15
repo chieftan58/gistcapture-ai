@@ -9,11 +9,16 @@ import time
 import tempfile
 from pydub import AudioSegment
 import assemblyai as aai
+import logging
 
 from ..models import Episode
 from ..config import TESTING_MODE, MAX_TRANSCRIPTION_MINUTES
 from ..utils.logging import get_logger
 from ..utils.filename_utils import generate_temp_filename
+
+# Suppress verbose HTTP client logging from AssemblyAI
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = get_logger(__name__)
 

@@ -14,6 +14,12 @@ def setup_logging(log_file: str = "renaissance_weekly.log") -> logging.Logger:
             logging.StreamHandler()
         ]
     )
+    
+    # Suppress verbose HTTP client logging from AssemblyAI
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    
     return logging.getLogger("renaissance_weekly")
 
 
