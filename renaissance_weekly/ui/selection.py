@@ -123,14 +123,16 @@ class EpisodeSelector:
         # Cleanup
         self._shutdown_server()
         
-        logger.info(f"[{self._correlation_id}] ✅ Selection complete: {len(selected_episodes)} episodes")
-        
-        # Check if email was approved
+        # Check if email was approved first - this takes precedence
         if self._email_approved and hasattr(self, '_final_summaries'):
             logger.info(f"[{self._correlation_id}] 📧 Email approved - returning with summaries")
+            logger.info(f"[{self._correlation_id}] ✅ Process complete via email flow")
             self.configuration['email_approved'] = True
             self.configuration['final_summaries'] = self._final_summaries
+            # Return empty list since we already processed via email flow
+            return [], self.configuration
         
+        logger.info(f"[{self._correlation_id}] ✅ Selection complete: {len(selected_episodes)} episodes")
         return selected_episodes, self.configuration
     
     def _create_unified_server(self, port: int) -> HTTPServer:
@@ -243,6 +245,14 @@ class EpisodeSelector:
                             }
                         # Make a copy to avoid modification during serialization
                         status_copy = dict(status)
+                        
+                        # Add cookie status information
+                        from ..utils.cookie_manager import cookie_manager
+                        cookie_statuses = {}
+                        for platform in ['youtube', 'spotify', 'apple']:
+                            cookie_statuses[platform] = cookie_manager.get_cookie_status(platform)
+                        status_copy['cookieStatus'] = cookie_statuses
+                        
                     self._send_json(status_copy)
                 else:
                     self._send_json({'status': 'error', 'message': 'Not found'})
@@ -1384,7 +1394,22 @@ class EpisodeSelector:
                 return detail.status === 'failed' && isYoutubeError;
             }});
             
-            const showCookieAlert = youtubeAuthErrors.length > 0;
+            // Check for cookie expiration warnings
+            const cookieWarnings = [];
+            if (APP_STATE.downloadStatus && APP_STATE.downloadStatus.cookieStatus) {{
+                Object.entries(APP_STATE.downloadStatus.cookieStatus).forEach(([platform, status]) => {{
+                    if (status.warning && (status.is_expired || (status.days_remaining !== null && status.days_remaining < 7))) {{
+                        cookieWarnings.push({{
+                            platform: platform,
+                            warning: status.warning,
+                            isExpired: status.is_expired,
+                            daysRemaining: status.days_remaining
+                        }});
+                    }}
+                }});
+            }}
+            
+            const showCookieAlert = youtubeAuthErrors.length > 0 || cookieWarnings.length > 0;
             
             return `
                 <div class="header">
@@ -1400,9 +1425,13 @@ class EpisodeSelector:
                         <div class="cookie-alert">
                             <div class="cookie-alert-header">
                                 <span class="cookie-alert-icon">🍪</span>
-                                <strong>Cookie Authentication Required</strong>
+                                <strong>${{youtubeAuthErrors.length > 0 ? 'Cookie Authentication Required' : 'Cookie Warning'}}</strong>
                             </div>
-                            <p>YouTube authentication has expired for American Optimist and/or Dwarkesh podcasts.</p>
+                            ${{
+                                youtubeAuthErrors.length > 0 ?
+                                    '<p>YouTube authentication has expired for American Optimist and/or Dwarkesh podcasts.</p>' :
+                                    `<p>${{cookieWarnings.map(w => w.warning).join(' ')}}</p>`
+                            }}
                             
                             <div class="cookie-instructions">
                                 <h4>To fix this issue:</h4>
@@ -2428,11 +2457,12 @@ class EpisodeSelector:
             // Get email from configuration or use default
             const emailTo = '{EMAIL_TO or "your email"}';
             const message = APP_STATE.emailMessage || 'Email sent successfully!';
+            const summaryCount = APP_STATE.processingSummaries ? APP_STATE.processingSummaries.length : 0;
             
             return `
                 <div class="header">
                     <div class="logo">RW</div>
-                    <div class="header-text">Email Sent</div>
+                    <div class="header-text">Process Complete</div>
                     ${{renderModeIndicator()}}
                 </div>
                 
@@ -2441,7 +2471,12 @@ class EpisodeSelector:
                         <div style="font-size: 60px; color: #34C759; margin-bottom: 20px;">✓</div>
                         <h2>${{message}}</h2>
                         <p style="margin-top: 10px; color: #666;">Sent to: ${{emailTo}}</p>
-                        <p style="margin-top: 20px; color: #666;">This window will close automatically.</p>
+                        <p style="margin-top: 10px; color: #666;">Included ${{summaryCount}} episode${{summaryCount !== 1 ? 's' : ''}} in the digest.</p>
+                        <div style="margin-top: 30px;">
+                            <button class="button secondary" onclick="window.close()" style="padding: 8px 24px;">
+                                Close Window
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -4088,8 +4123,17 @@ class EpisodeSelector:
                     if (response.ok && result.status === 'success') {{
                         APP_STATE.state = 'complete';
                         APP_STATE.emailMessage = result.message || 'Email sent successfully!';
+                        
+                        // Stop all polling before we complete
+                        if (APP_STATE.globalPollInterval) {{
+                            clearInterval(APP_STATE.globalPollInterval);
+                            APP_STATE.globalPollInterval = null;
+                        }}
+                        
                         render();
-                        setTimeout(() => window.close(), 5000);
+                        
+                        // Don't auto-close - let user close when ready
+                        // setTimeout(() => window.close(), 5000);
                     }} else {{
                         alert('Failed to send email: ' + (result.message || 'Unknown error'));
                     }}

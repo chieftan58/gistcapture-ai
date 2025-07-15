@@ -42,6 +42,7 @@ def print_help():
     print("Renaissance Weekly - Podcast Intelligence System\n")
     print("Usage:")
     print("  python main.py [days]                    # Normal mode (default: 7 days)")
+    print("  python main.py [days] --force-fresh      # Normal mode with fresh summaries")
     print("  python main.py verify [days]             # Run verification report")
     print("  python main.py check \"Podcast Name\" [days] # Check single podcast")
     print("  python main.py reload-prompts            # Reload prompts from disk")
@@ -239,6 +240,7 @@ def parse_arguments():
     mode = "normal"
     podcast_name = None
     extra_args = {}
+    force_fresh = False
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "verify":
@@ -305,6 +307,9 @@ def parse_arguments():
                 sys.exit(1)
         elif sys.argv[1].isdigit():
             days_back = int(sys.argv[1])
+            # Check for --force-fresh flag
+            if len(sys.argv) > 2 and sys.argv[2] == "--force-fresh":
+                force_fresh = True
         elif sys.argv[1] in ["-h", "--help"]:
             print_help()
             sys.exit(0)
@@ -312,6 +317,10 @@ def parse_arguments():
             print(f"Unknown command: {sys.argv[1]}")
             print_help()
             sys.exit(1)
+    
+    # Add force_fresh to extra_args
+    if force_fresh:
+        extra_args['force_fresh'] = True
     
     return mode, days_back, podcast_name, extra_args
 
@@ -397,7 +406,8 @@ async def main():
         elif mode == "health":
             show_health_report()
         else:
-            await app_instance.run(days_back)
+            force_fresh = extra_args.get('force_fresh', False)
+            await app_instance.run(days_back, force_fresh=force_fresh)
         
         logger.info(f"✅ Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             

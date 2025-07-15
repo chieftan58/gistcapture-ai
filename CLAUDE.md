@@ -225,6 +225,25 @@ The UI now displays automatic alerts when YouTube authentication expires:
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
 ### Latest Improvements (2025-07-15)
+- **Fixed stale summary cache issue**:
+  - Summary files now include mode in filename (e.g., `*_test_summary.md`, `*_full_summary.md`)
+  - Added `--force-fresh` flag to `main.py` for bypassing all caches
+  - Created `clear_summary_cache.py` script to remove old summaries
+  - Completely resolved issue of identical summaries across runs
+- **Enhanced monitoring system for mode separation**:
+  - Statistics now tracked separately for test and full modes
+  - Prevents mixing of test/production metrics
+  - Health scores calculated per mode for accurate diagnostics
+- **Implemented automatic cookie expiration detection**:
+  - Parses cookie files to check expiration dates
+  - Shows proactive warnings when cookies expire in < 7 days
+  - UI displays alerts before downloads fail due to expired cookies
+  - Prevents use of expired authentication
+- **Fixed UI completion flow**:
+  - Email sent screen now shows proper completion state
+  - Displays number of episodes included in digest
+  - Manual close button instead of auto-close
+  - Resolved "0 episodes selected" confusion after email
 - Fixed duration display on Download page:
   - Changed from showing "N/A" to displaying full podcast duration from Episodes page
   - Updated label from "Expected:" to "Full Podcast:" for clarity

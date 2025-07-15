@@ -1,29 +1,29 @@
 {
   "component_stats": {
     "transcript_fetch": {
-      "total_attempts": 1111,
-      "successful": 230,
-      "failed": 881,
-      "last_failure": "2025-07-15T02:18:20.220334",
-      "consecutive_failures": 3
+      "total_attempts": 1114,
+      "successful": 231,
+      "failed": 883,
+      "last_failure": "2025-07-15T03:02:40.750309",
+      "consecutive_failures": 2
     },
     "audio_download": {
-      "total_attempts": 552,
-      "successful": 454,
+      "total_attempts": 553,
+      "successful": 455,
       "failed": 98,
       "last_failure": "2025-07-14T21:16:31.256813",
       "consecutive_failures": 0
     },
     "summarization": {
-      "total_attempts": 827,
-      "successful": 700,
+      "total_attempts": 830,
+      "successful": 703,
       "failed": 127,
       "last_failure": "2025-07-02T19:18:39.778480",
       "consecutive_failures": 0
     },
     "audio_transcription": {
-      "total_attempts": 677,
-      "successful": 599,
+      "total_attempts": 679,
+      "successful": 601,
       "failed": 78,
       "last_failure": "2025-07-14T18:33:08.155544",
       "consecutive_failures": 0
@@ -34,6 +34,40 @@
       "failed": 9,
       "last_failure": "2025-07-11T02:19:01.389890",
       "consecutive_failures": 9
+    }
+  },
+  "mode_component_stats": {
+    "test": {
+      "audio_download": {
+        "total_attempts": 1,
+        "successful": 1,
+        "failed": 0,
+        "last_failure": null,
+        "consecutive_failures": 0
+      }
+    },
+    "full": {
+      "transcript_fetch": {
+        "total_attempts": 3,
+        "successful": 1,
+        "failed": 2,
+        "last_failure": "2025-07-15T03:02:40.750298",
+        "consecutive_failures": 2
+      },
+      "summarization": {
+        "total_attempts": 3,
+        "successful": 3,
+        "failed": 0,
+        "last_failure": null,
+        "consecutive_failures": 0
+      },
+      "audio_transcription": {
+        "total_attempts": 2,
+        "successful": 2,
+        "failed": 0,
+        "last_failure": null,
+        "consecutive_failures": 0
+      }
     }
   }
 }

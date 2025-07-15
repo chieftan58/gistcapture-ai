@@ -245,8 +245,12 @@ class RenaissanceWeekly:
         
         return results
     
-    async def run(self, days_back: int = 7):
+    async def run(self, days_back: int = 7, force_fresh: bool = False):
         """Main execution function with simplified flow and progress tracking"""
+        # Store force_fresh flag for use in processing
+        self.force_fresh_summaries = force_fresh
+        if force_fresh:
+            logger.info(f"[{self.correlation_id}] 🔄 Force fresh summaries enabled - bypassing all caches")
         start_time = time.time()
         logger.info(f"[{self.correlation_id}] 🚀 Starting Renaissance Weekly System...")
         logger.info(f"[{self.correlation_id}] 📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
@@ -1143,11 +1147,11 @@ class RenaissanceWeekly:
                 if self.summarizer._validate_transcript_content(transcript_text, transcript_source):
                     logger.info(f"[{episode_id}] ✅ Found valid transcript (source: {transcript_source.value})")
                     logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
-                    monitor.record_success('transcript_fetch', episode.podcast)
+                    monitor.record_success('transcript_fetch', episode.podcast, mode=current_mode)
                 else:
                     logger.warning(f"[{episode_id}] ⚠️ Found transcript but validation failed - falling back to audio")
                     monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
-                                         'ValidationFailed', 'Transcript found but contains only metadata')
+                                         'ValidationFailed', 'Transcript found but contains only metadata', mode=current_mode)
                     # Reset transcript to trigger audio fallback
                     transcript_text = None
                     transcript_source = None
@@ -1157,7 +1161,7 @@ class RenaissanceWeekly:
                 # Only record as NotFound if we didn't already record as ValidationFailed
                 if transcript_source is None:
                     monitor.record_failure('transcript_fetch', episode.podcast, episode.title, 
-                                         'NotFound', 'No transcript found from any source')
+                                         'NotFound', 'No transcript found from any source', mode=current_mode)
                 logger.info(f"\n[{episode_id}] 🎵 Step 2: No valid transcript found - transcribing from audio...")
                 
                 # Check if we have audio URL
@@ -1172,11 +1176,11 @@ class RenaissanceWeekly:
                     transcript_source = TranscriptSource.GENERATED
                     logger.info(f"[{episode_id}] ✅ Audio transcribed successfully")
                     logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
-                    monitor.record_success('audio_transcription', episode.podcast)
+                    monitor.record_success('audio_transcription', episode.podcast, mode=current_mode)
                 else:
                     logger.error(f"[{episode_id}] ❌ Failed to transcribe audio")
                     monitor.record_failure('audio_transcription', episode.podcast, episode.title,
-                                         'TranscriptionFailed', 'Failed to transcribe audio')
+                                         'TranscriptionFailed', 'Failed to transcribe audio', mode=current_mode)
                     return None
             
             # Save transcript to database with current mode
@@ -1188,12 +1192,14 @@ class RenaissanceWeekly:
             
             # Step 3: Generate summary
             logger.info(f"\n[{episode_id}] 📝 Step 3: Generating executive summary...")
-            summary = await self.summarizer.generate_summary(episode, transcript_text, transcript_source)
+            # Pass force_fresh flag if set
+            force_fresh = getattr(self, 'force_fresh_summaries', False)
+            summary = await self.summarizer.generate_summary(episode, transcript_text, transcript_source, mode=current_mode, force_fresh=force_fresh)
             
             if summary:
                 logger.info(f"[{episode_id}] ✅ Summary generated successfully!")
                 logger.info(f"[{episode_id}] 📏 Summary length: {len(summary)} characters")
-                monitor.record_success('summarization', episode.podcast)
+                monitor.record_success('summarization', episode.podcast, mode=current_mode)
                 # Save summary to database with current mode
                 try:
                     self.db.save_episode(episode, transcript_text, transcript_source, summary, transcription_mode=current_mode)
@@ -1203,14 +1209,14 @@ class RenaissanceWeekly:
             else:
                 logger.error(f"[{episode_id}] ❌ Failed to generate summary")
                 monitor.record_failure('summarization', episode.podcast, episode.title,
-                                     'SummarizationFailed', 'Failed to generate summary')
+                                     'SummarizationFailed', 'Failed to generate summary', mode=current_mode)
             
             return summary
             
         except Exception as e:
             logger.error(f"[{episode_id}] ❌ Error processing episode: {e}", exc_info=True)
             monitor.record_failure('episode_processing', episode.podcast, episode.title,
-                                 type(e).__name__, str(e))
+                                 type(e).__name__, str(e), mode=current_mode)
             raise
         finally:
             logger.info(f"[{episode_id}] {'='*60}\n")
@@ -1494,7 +1500,7 @@ class RenaissanceWeekly:
         )
         
         # Generate summary
-        summary = await self.summarizer.generate_summary(episode, transcript, TranscriptSource.CACHED)
+        summary = await self.summarizer.generate_summary(episode, transcript, TranscriptSource.CACHED, mode='test', force_fresh=False)
         
         if summary:
             logger.info(f"[{self.correlation_id}] ✅ Summary generated ({len(summary)} chars)")
@@ -1747,12 +1753,21 @@ class RenaissanceWeekly:
             date_str = episode.published.strftime('%Y%m%d')
             safe_podcast = slugify(episode.podcast)[:30]
             safe_title = slugify(episode.title)[:50]
-            summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_summary.md"
+            # Delete both old-style and new mode-specific files
+            old_summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_summary.md"
+            mode_summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_{self.current_transcription_mode}_summary.md"
             
-            if summary_file.exists():
-                summary_file.unlink()
+            # Delete old-style file if exists
+            if old_summary_file.exists():
+                old_summary_file.unlink()
                 deleted_count += 1
-                logger.info(f"  Deleted cached summary: {summary_file.name}")
+                logger.info(f"  Deleted old cached summary: {old_summary_file.name}")
+            
+            # Delete mode-specific file if exists
+            if mode_summary_file.exists():
+                mode_summary_file.unlink()
+                deleted_count += 1
+                logger.info(f"  Deleted mode-specific cached summary: {mode_summary_file.name}")
         
         logger.info(f"[{self.correlation_id}] Deleted {deleted_count} cached summaries")
         
@@ -1765,7 +1780,9 @@ class RenaissanceWeekly:
             summary = await self.summarizer.generate_summary(
                 episode,
                 ep_data['transcript'],
-                ep_data['source']
+                ep_data['source'],
+                mode=self.current_transcription_mode,
+                force_fresh=True  # Always fresh for regenerate command
             )
             
             if summary:

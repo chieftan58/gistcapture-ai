@@ -1,8 +1,10 @@
 """Centralized cookie management for all platforms"""
 
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import shutil
+import time
+from datetime import datetime, timedelta
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,17 +39,31 @@ class CookieManager:
         if platform in self.protected_cookies:
             protected_file = self.protected_cookies[platform]
             if protected_file.exists():
-                logger.info(f"🔒 Using protected manual {platform} cookie file")
-                return protected_file
+                # Check if cookies are still valid
+                is_valid, days_remaining = self.check_cookie_validity(protected_file)
+                if is_valid:
+                    if days_remaining is not None and days_remaining < 7:
+                        logger.warning(f"⚠️ {platform} cookies expire in {days_remaining} days!")
+                    logger.info(f"🔒 Using protected manual {platform} cookie file")
+                    return protected_file
+                else:
+                    logger.error(f"❌ Protected {platform} cookies have expired!")
         
         # Fall back to regular cookie file
         if platform in self.regular_cookies:
             regular_file = self.regular_cookies[platform]
             if regular_file.exists():
-                logger.info(f"📄 Using regular {platform} cookie file")
-                return regular_file
+                # Check if cookies are still valid
+                is_valid, days_remaining = self.check_cookie_validity(regular_file)
+                if is_valid:
+                    if days_remaining is not None and days_remaining < 7:
+                        logger.warning(f"⚠️ {platform} cookies expire in {days_remaining} days!")
+                    logger.info(f"📄 Using regular {platform} cookie file")
+                    return regular_file
+                else:
+                    logger.error(f"❌ Regular {platform} cookies have expired!")
         
-        logger.debug(f"No cookie file found for {platform}")
+        logger.debug(f"No valid cookie file found for {platform}")
         return None
     
     def protect_cookie_file(self, platform: str, source_file: Path) -> bool:
@@ -86,6 +102,118 @@ class CookieManager:
                 'regular': self.regular_cookies[platform] if self.regular_cookies[platform].exists() else None
             }
         
+        return status
+    
+    def check_cookie_validity(self, cookie_file: Path) -> Tuple[bool, Optional[int]]:
+        """
+        Check if cookies in file are still valid
+        
+        Returns:
+            Tuple of (is_valid, days_remaining)
+            - is_valid: True if at least some cookies are still valid
+            - days_remaining: Days until earliest expiration (None if no expiration found)
+        """
+        try:
+            with open(cookie_file, 'r') as f:
+                content = f.read()
+            
+            # Parse Netscape HTTP Cookie format
+            # Format: domain flag path secure expiry name value
+            current_time = int(time.time())
+            earliest_expiry = None
+            has_session_cookies = False
+            
+            for line in content.split('\n'):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                parts = line.split('\t')
+                if len(parts) >= 5:
+                    try:
+                        expiry = int(parts[4])
+                        if expiry == 0:
+                            # Session cookie (expires when browser closes)
+                            has_session_cookies = True
+                        elif expiry > current_time:
+                            # Future expiration
+                            if earliest_expiry is None or expiry < earliest_expiry:
+                                earliest_expiry = expiry
+                        # If expiry < current_time, cookie has expired
+                    except (ValueError, IndexError):
+                        # Invalid format, skip this line
+                        continue
+            
+            # Check results
+            if earliest_expiry is None and not has_session_cookies:
+                # No valid cookies found
+                return False, None
+            
+            if earliest_expiry:
+                days_remaining = (earliest_expiry - current_time) // 86400  # Convert to days
+                if days_remaining < 0:
+                    return False, 0
+                return True, days_remaining
+            else:
+                # Only session cookies (considered valid until proven otherwise)
+                return True, None
+                
+        except Exception as e:
+            logger.warning(f"Could not parse cookie file {cookie_file}: {e}")
+            # If we can't parse, assume cookies are valid (backward compatibility)
+            return True, None
+    
+    def get_cookie_status(self, platform: str) -> Dict[str, any]:
+        """Get detailed status of cookies for a platform"""
+        platform = platform.lower()
+        status = {
+            'platform': platform,
+            'has_cookies': False,
+            'is_valid': False,
+            'is_expired': False,
+            'days_remaining': None,
+            'warning': None,
+            'file_type': None  # 'protected' or 'regular'
+        }
+        
+        # Check protected file first
+        if platform in self.protected_cookies:
+            protected_file = self.protected_cookies[platform]
+            if protected_file.exists():
+                is_valid, days_remaining = self.check_cookie_validity(protected_file)
+                status['has_cookies'] = True
+                status['is_valid'] = is_valid
+                status['is_expired'] = not is_valid
+                status['days_remaining'] = days_remaining
+                status['file_type'] = 'protected'
+                
+                if not is_valid:
+                    status['warning'] = f'{platform.capitalize()} cookies have expired! Please update them.'
+                elif days_remaining is not None and days_remaining < 7:
+                    status['warning'] = f'{platform.capitalize()} cookies expire in {days_remaining} days.'
+                
+                return status
+        
+        # Check regular file
+        if platform in self.regular_cookies:
+            regular_file = self.regular_cookies[platform]
+            if regular_file.exists():
+                is_valid, days_remaining = self.check_cookie_validity(regular_file)
+                status['has_cookies'] = True
+                status['is_valid'] = is_valid
+                status['is_expired'] = not is_valid
+                status['days_remaining'] = days_remaining
+                status['file_type'] = 'regular'
+                
+                if not is_valid:
+                    status['warning'] = f'{platform.capitalize()} cookies have expired! Please update them.'
+                elif days_remaining is not None and days_remaining < 7:
+                    status['warning'] = f'{platform.capitalize()} cookies expire in {days_remaining} days.'
+                
+                return status
+        
+        # No cookies found
+        status['warning'] = f'No {platform} cookies found.'
         return status
     
     def setup_all_cookies(self):

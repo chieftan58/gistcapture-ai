@@ -66,23 +66,25 @@ class Summarizer:
             else:
                 return ""
     
-    async def generate_summary(self, episode: Episode, transcript: str, source: TranscriptSource) -> Optional[str]:
+    async def generate_summary(self, episode: Episode, transcript: str, source: TranscriptSource, mode: str = 'test', force_fresh: bool = False) -> Optional[str]:
         """Generate executive summary using ChatGPT"""
         try:
             # Note: Transcript validation is now done earlier in the pipeline
             # to allow fallback to audio transcription when needed
             
-            # Create safe filename for summary cache
+            # Create safe filename for summary cache - NOW INCLUDES MODE
             date_str = episode.published.strftime('%Y%m%d')
             safe_podcast = slugify(episode.podcast)[:30]
             safe_title = slugify(episode.title)[:50]
-            summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_summary.md"
+            summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_{mode}_summary.md"
             
-            # Check cache first
-            if summary_file.exists():
+            # Check cache first (unless force_fresh is True)
+            if not force_fresh and summary_file.exists():
                 logger.info("✅ Found cached summary")
                 with open(summary_file, 'r', encoding='utf-8') as f:
                     return f.read()
+            elif force_fresh and summary_file.exists():
+                logger.info("🔄 Force fresh enabled - bypassing cached summary")
             
             # Prepare the prompt with episode data
             prompt = self._prepare_prompt(episode, transcript, source)
@@ -101,11 +103,11 @@ class Summarizer:
             
             # Don't add metadata footer since the new prompt format is self-contained
             
-            # Cache the summary
+            # Cache the summary with mode-aware filename
             try:
                 with open(summary_file, 'w', encoding='utf-8') as f:
                     f.write(summary)
-                logger.info(f"💾 Summary cached: {summary_file.name}")
+                logger.info(f"💾 Summary cached ({mode} mode): {summary_file.name}")
             except Exception as e:
                 logger.warning(f"Failed to cache summary: {e}")
             
