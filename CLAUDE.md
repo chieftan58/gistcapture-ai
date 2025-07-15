@@ -123,6 +123,7 @@ python main.py --load-dataset <name>
 - `/email/`: Email generation and sending
 - `/ui/`: Web-based episode selection interface
 - `/download_strategies/`: Bulletproof download system
+- `/prompts/`: AI prompt templates (system, paragraph, full summaries)
 
 ### Processing Pipeline
 1. **Fetching**: Episodes from RSS/Apple Podcasts
@@ -166,8 +167,18 @@ python main.py --load-dataset <name>
 - Minimum 1 episode required for email sending (previously 20)
 - Browser cookies automatically used for YouTube authentication
 - YouTube URL mappings in `hardcoded_episode_urls.py` are crucial for Cloudflare-protected podcasts
+- Prompts are loaded from `/prompts/` directory - edit .txt files to modify AI behavior
+- System prompt defines AI identity; summary prompts define task instructions
 
 ## Common Tasks
+
+### Modifying AI Prompts
+1. Edit prompt files in `/prompts/` directory:
+   - `system_prompt.txt` - Change AI identity/persona
+   - `paragraph_prompt.txt` - Adjust 150-word summary style
+   - `full_summary_prompt.txt` - Modify comprehensive summary format
+2. Run `python main.py reload-prompts` to reload without restarting
+3. Changes apply to new summaries immediately
 
 ### Adding a New Podcast
 1. Add entry to `podcasts.yaml` with RSS feed and Apple Podcast ID
@@ -235,14 +246,17 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
   - Email format uses expandable HTML/CSS sections (no JavaScript)
   - Alphabetical podcast ordering for consistent navigation
   - Dynamic subject lines with featured guest names
-  - Prompt system restructured with separate files:
+  - Prompt system restructured with only 3 files:
+    - `prompts/system_prompt.txt` - Defines AI identity (investment analyst persona)
     - `prompts/paragraph_prompt.txt` - 150-word overview generation
     - `prompts/full_summary_prompt.txt` - Comprehensive analysis
-    - `prompts/system_prompt.txt` - Updated for investment-focused audience
-  - Database schema updated with `paragraph_summary` columns
+  - Removed legacy `summary_prompt.txt` - was for generic "busy professionals"
+  - Database schema updated with `paragraph_summary` and `paragraph_summary_test` columns
   - Sequential API calls with 0.5s delay to manage rate limits
   - Reduced concurrent episodes from 4 to 3 for API stability
   - Backward compatible with fallback to extract paragraph from full summary
+  - Clean separation of concerns: system prompt for WHO, summary prompts for WHAT
+  - Investment-focused prompts throughout (hedge fund PMs, macro investors audience)
 
 ### Previous Improvements (2025-07-15)
 - **Fixed stale summary cache issue**:
