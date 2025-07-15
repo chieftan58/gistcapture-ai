@@ -24,9 +24,6 @@ class Summarizer:
         self.paragraph_prompt_template = self._load_prompt("paragraph_prompt.txt")
         self.full_summary_prompt_template = self._load_prompt("full_summary_prompt.txt")
         
-        # Keep legacy prompt for backward compatibility
-        self.summary_prompt_template = self._load_prompt("summary_prompt.txt")
-        
         # Configuration from environment
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
@@ -58,8 +55,6 @@ class Summarizer:
                 # Return default prompts as fallback
                 if filename == "system_prompt.txt":
                     return self._get_default_system_prompt()
-                elif filename == "summary_prompt.txt":
-                    return self._get_default_summary_prompt()
                 elif filename == "paragraph_prompt.txt":
                     return self._get_default_paragraph_prompt()
                 elif filename == "full_summary_prompt.txt":
@@ -71,8 +66,6 @@ class Summarizer:
             # Return defaults on error
             if filename == "system_prompt.txt":
                 return self._get_default_system_prompt()
-            elif filename == "summary_prompt.txt":
-                return self._get_default_summary_prompt()
             elif filename == "paragraph_prompt.txt":
                 return self._get_default_paragraph_prompt()
             elif filename == "full_summary_prompt.txt":
@@ -246,7 +239,8 @@ class Summarizer:
         elif template_type == 'full':
             prompt = self.full_summary_prompt_template
         else:
-            prompt = self.summary_prompt_template  # Legacy
+            # Default to full summary for legacy calls
+            prompt = self.full_summary_prompt_template
         prompt = prompt.replace("{episode_title}", episode.title)
         prompt = prompt.replace("{podcast_name}", episode.podcast)
         prompt = prompt.replace("{source}", source.value)
@@ -546,41 +540,13 @@ Actionable takeaways from the episode.
         """Reload prompts from disk - useful for A/B testing"""
         logger.info("🔄 Reloading prompts...")
         self.system_prompt = self._load_prompt("system_prompt.txt")
-        self.summary_prompt_template = self._load_prompt("summary_prompt.txt")
+        self.paragraph_prompt_template = self._load_prompt("paragraph_prompt.txt")
+        self.full_summary_prompt_template = self._load_prompt("full_summary_prompt.txt")
         logger.info("✅ Prompts reloaded")
     
     def _get_default_system_prompt(self) -> str:
         """Default system prompt as fallback"""
         return """You are the lead analyst‑writer for Renaissance Weekly, a premium investment digest trusted by hedge‑fund PMs, global‑macro investors, and intellectually ambitious allocators. Write with the clarity of Munger, the intuition of Druckenmiller, the pattern‑recognition of Sokoloff, the trader's edge of Paul Tudor Jones, and—on Tech/AI topics—the business‑model fluency of Ben Thompson (Stratechery)."""
-    
-    def _get_default_summary_prompt(self) -> str:
-        """Default summary prompt template as fallback"""
-        return """EPISODE {episode_title}   |   PODCAST {podcast_name}
-GUEST {guest_name}   |   DATE {publish_date}
-
-AUDIENCE
-Busy, curious professionals.
-
-GOAL
-Produce a one-page brief (≤550 words) that a smart reader can scan in 2–3 minutes and walk away with new insight or action.
-
-STYLE
-Conversational, idea-dense, Tim-Ferriss-meets-The-Economist.
-Use bullets or short paragraphs; prefer vivid examples over summary clichés.
-
-OUTPUT
-1. 🔑 **Quick Take** – 3–4 sentences: hook + why it matters.
-2. **Core Sections (2–4)** – Invent headers that fit the content (e.g., "Mind-Body Hacks", "Macro Signals"). Each header followed by 3-7 tight bullets (≤2 sentences each).
-3. 🛠️ **Apply It** – 3–4 actionable bullets OR, if no obvious actions, a short "So What?" paragraph.
-4. Optional: **Quote** (≤20 words) + **Links** (≤4).
-
-RULES
-- No filler like "In this episode…".  
-- Active voice, no buzzwords.  
-- Hard stop: 550 words.  
-- Omit any section that has no substance.
-
-READY? Create the brief."""
     
     def _get_default_paragraph_prompt(self) -> str:
         """Default paragraph prompt template as fallback"""
