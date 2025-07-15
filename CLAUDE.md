@@ -223,7 +223,21 @@ The UI now displays automatic alerts when YouTube authentication expires:
 
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
-### Latest Improvements (2025-07-14)
+### Latest Improvements (2025-07-15)
+- Fixed unclosed aiohttp client sessions that were causing memory leaks:
+  - Added proper cleanup in SubstackEnhancedFetcher context manager
+  - Implemented cleanup method in DownloadManager
+  - Ensured AudioSourceFinder sessions are properly closed
+- Fixed AssemblyAI configuration display bug:
+  - Corrected reference from self.assemblyai_transcriber to self.transcriber.assemblyai_transcriber
+  - Now correctly shows "Yes (32x speed)" when AssemblyAI is available
+- Enhanced Download UI for better user experience:
+  - Reordered episodes to show: Downloaded → In Queue → Failed
+  - Changed button label from "Continue to Processing" to "Continue"
+  - Disabled Continue button until all episodes are processed
+  - Added helpful message explaining when button will be enabled
+
+### Previous Improvements (2025-07-14)
 - Fixed critical transcription mode bug
 - Added comprehensive testing infrastructure
 - Enhanced UI with persistent mode indicators

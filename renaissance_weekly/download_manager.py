@@ -1091,3 +1091,22 @@ class DownloadManager:
         except Exception as e:
             logger.error(f"[{correlation_id}] Audio trim error: {e}")
             return None
+    
+    async def cleanup(self):
+        """Clean up resources"""
+        try:
+            # Close audio finder session
+            if self.audio_finder:
+                await self.audio_finder.__aexit__(None, None, None)
+            
+            # Close transcriber if it has cleanup
+            if hasattr(self.transcriber, 'cleanup'):
+                await self.transcriber.cleanup()
+            
+            # Close smart router if it has cleanup
+            if hasattr(self.smart_router, 'cleanup'):
+                await self.smart_router.cleanup()
+                
+            logger.info("DownloadManager cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during DownloadManager cleanup: {e}")

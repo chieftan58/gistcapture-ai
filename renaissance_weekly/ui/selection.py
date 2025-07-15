@@ -1357,10 +1357,10 @@ class EpisodeSelector:
             const remaining = total - downloaded - failed - retrying;
             const processedCount = downloaded + failed; // Both downloaded and failed count as processed
             
-            // Sort episodes: Failed first, then retrying, then downloading/pending, then downloaded
+            // Sort episodes: Downloaded first, then in queue (retrying/downloading/pending), then failed
             const sortedEpisodes = Object.entries(episodeDetails).sort(([, a], [, b]) => {{
-                const statusOrder = {{ 'failed': 0, 'retrying': 1, 'downloading': 2, 'pending': 2, 'queued': 2, 'downloaded': 3, 'success': 3 }};
-                return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
+                const statusOrder = {{ 'downloaded': 0, 'success': 0, 'retrying': 1, 'downloading': 1, 'pending': 1, 'queued': 1, 'failed': 2 }};
+                return (statusOrder[a.status] || 1) - (statusOrder[b.status] || 1);
             }});
             
             // Group episodes by status
@@ -1492,12 +1492,18 @@ class EpisodeSelector:
                             </div>
                         ` : ''}}
                         
+                        ${{remaining > 0 ? `
+                            <div style="text-align: center; margin: 8px 0; color: #888; font-size: 14px;">
+                                <em>The Continue button will be enabled once all episodes are downloaded or failed.</em>
+                            </div>
+                        ` : ''}}
+                        
                         <div class="download-details">
-                            ${{failedEpisodes.length > 0 ? `
+                            ${{downloadedEpisodes.length > 0 ? `
                                 <div class="episode-section">
-                                    <h3>Failed Episodes</h3>
+                                    <h3>Downloaded</h3>
                                     <div class="episode-group">
-                                        ${{failedEpisodes.map(([episodeId, detail]) => {{
+                                        ${{downloadedEpisodes.map(([episodeId, detail]) => {{
                                             return renderDownloadItem(episodeId, detail);
                                         }}).join('')}}
                                     </div>
@@ -1515,11 +1521,11 @@ class EpisodeSelector:
                                 </div>
                             ` : ''}}
                             
-                            ${{downloadedEpisodes.length > 0 ? `
+                            ${{failedEpisodes.length > 0 ? `
                                 <div class="episode-section">
-                                    <h3>Downloaded</h3>
+                                    <h3>Failed Episodes</h3>
                                     <div class="episode-group">
-                                        ${{downloadedEpisodes.map(([episodeId, detail]) => {{
+                                        ${{failedEpisodes.map(([episodeId, detail]) => {{
                                             return renderDownloadItem(episodeId, detail);
                                         }}).join('')}}
                                     </div>
@@ -1538,8 +1544,9 @@ class EpisodeSelector:
                                 Cancel Downloads
                             </button>
                             
-                            <button class="button primary" onclick="continueWithDownloads()">
-                                Continue to Processing
+                            <button class="button primary" onclick="continueWithDownloads()" 
+                                    ${{remaining > 0 ? 'disabled' : ''}}>
+                                Continue
                             </button>
                         </div>
                     </div>

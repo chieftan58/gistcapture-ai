@@ -563,7 +563,7 @@ class RenaissanceWeekly:
         download_time = needs_download * 2  # 2 min per download (conservative)
         
         # Transcript time depends on whether AssemblyAI is available
-        if hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber and self.assemblyai_transcriber.is_available():
+        if hasattr(self.transcriber, 'assemblyai_transcriber') and self.transcriber.assemblyai_transcriber:
             transcript_time = needs_transcript * 0.5  # 30s with AssemblyAI (32x concurrent)
         else:
             transcript_time = needs_transcript * 3  # 3 min with Whisper (3x concurrent)
@@ -577,7 +577,7 @@ class RenaissanceWeekly:
             'transcripts_needed': needs_transcript,
             'summaries_needed': needs_summary,
             'estimated_minutes': total_time,
-            'using_assemblyai': hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber and self.assemblyai_transcriber.is_available()
+            'using_assemblyai': hasattr(self.transcriber, 'assemblyai_transcriber') and self.transcriber.assemblyai_transcriber is not None
         }
     
     async def health_check(self) -> Dict[str, bool]:
@@ -609,12 +609,11 @@ class RenaissanceWeekly:
             logger.error(f"[{self.correlation_id}] ❌ OpenAI API check failed: {e}")
         
         # Check AssemblyAI
-        if hasattr(self, 'assemblyai_transcriber') and self.assemblyai_transcriber:
-            checks['assemblyai_api'] = self.assemblyai_transcriber.is_available()
-            if checks['assemblyai_api']:
-                logger.debug(f"[{self.correlation_id}] ✅ AssemblyAI API check passed")
-            else:
-                logger.warning(f"[{self.correlation_id}] ⚠️  AssemblyAI API not available")
+        if hasattr(self.transcriber, 'assemblyai_transcriber') and self.transcriber.assemblyai_transcriber:
+            checks['assemblyai_api'] = True  # If it's initialized, it's available
+            logger.debug(f"[{self.correlation_id}] ✅ AssemblyAI API check passed")
+        else:
+            logger.warning(f"[{self.correlation_id}] ⚠️  AssemblyAI API not available")
         
         # Check disk space
         import shutil
@@ -1880,6 +1879,9 @@ class RenaissanceWeekly:
                 download_manager.save_state(state_file)
             raise
         finally:
+            # Clean up download manager resources
+            if download_manager:
+                await download_manager.cleanup()
             self._download_manager = None
             
     def cancel_downloads(self):

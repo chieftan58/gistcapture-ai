@@ -25,11 +25,14 @@ class SubstackEnhancedFetcher:
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
         self.audio_finder = AudioSourceFinder()
+        await self.audio_finder.__aenter__()
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.session:
             await self.session.close()
+        if self.audio_finder:
+            await self.audio_finder.__aexit__(exc_type, exc_val, exc_tb)
     
     async def get_episode_content(self, episode: Episode) -> Tuple[Optional[str], Optional[str]]:
         """
