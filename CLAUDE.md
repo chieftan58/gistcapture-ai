@@ -159,7 +159,7 @@ python main.py --load-dataset <name>
 ## Important Notes
 
 - The project directory (`gistcapture-ai`) differs from package name (`renaissance-weekly`)
-- Summaries are cached by mode - update prompts and regenerate as needed
+- Summaries are cached separately by mode - test mode (15 min) vs full mode (complete episodes)
 - Minimum 1 episode required for email sending (previously 20)
 - Browser cookies automatically used for YouTube authentication
 
@@ -228,6 +228,7 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
   - Added proper cleanup in SubstackEnhancedFetcher context manager
   - Implemented cleanup method in DownloadManager
   - Ensured AudioSourceFinder sessions are properly closed
+  - Fixed remaining unclosed session in youtube_transcript.py
 - Fixed AssemblyAI configuration display bug:
   - Corrected reference from self.assemblyai_transcriber to self.transcriber.assemblyai_transcriber
   - Now correctly shows "Yes (32x speed)" when AssemblyAI is available
@@ -236,6 +237,14 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
   - Changed button label from "Continue to Processing" to "Continue"
   - Disabled Continue button until all episodes are processed
   - Added helpful message explaining when button will be enabled
+- **Implemented mode-specific summary and transcript storage**:
+  - Added separate database columns: `transcript_test`, `summary_test` for test mode
+  - Full mode uses: `transcript`, `summary` columns (production data)
+  - Test mode uses: `transcript_test`, `summary_test` columns (15-minute previews)
+  - Complete separation prevents stale test summaries from appearing in production
+  - All existing summaries/transcripts cleared during migration for clean start
+  - `regenerate-summaries` command now respects current mode
+  - Matches the existing pattern used for audio files (audio_file_path vs audio_file_path_test)
 
 ### Previous Improvements (2025-07-14)
 - Fixed critical transcription mode bug

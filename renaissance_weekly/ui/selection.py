@@ -426,8 +426,12 @@ class EpisodeSelector:
                         
                         # Get recent episodes with summaries
                         lookback_days = parent.configuration.get('lookback_days', 7)
+                        transcription_mode = parent.configuration.get('transcription_mode', 'test')
                         logger.info(f"[{parent._correlation_id}] Looking for episodes from last {lookback_days} days")
-                        episodes_with_summaries = db.get_episodes_with_summaries(days_back=lookback_days)
+                        episodes_with_summaries = db.get_episodes_with_summaries(
+                            days_back=lookback_days,
+                            transcription_mode=transcription_mode
+                        )
                         logger.info(f"[{parent._correlation_id}] Found {len(episodes_with_summaries)} episodes with summaries in database")
                         
                         # Convert database records to summary format expected by email digest
@@ -5920,7 +5924,10 @@ class EpisodeSelector:
             from ..database import PodcastDatabase
             db = PodcastDatabase()
             
-            episodes_with_summaries = db.get_episodes_with_summaries(days_back=self.configuration.get('lookback_days', 7))
+            episodes_with_summaries = db.get_episodes_with_summaries(
+                days_back=self.configuration.get('lookback_days', 7),
+                transcription_mode=self.configuration.get('transcription_mode', 'test')
+            )
             
             # Convert to summary format
             summaries = []

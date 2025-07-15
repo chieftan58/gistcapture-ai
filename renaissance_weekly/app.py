@@ -661,7 +661,8 @@ class RenaissanceWeekly:
             existing_summary = self.db.get_episode_summary(
                 episode.podcast,
                 episode.title, 
-                episode.published
+                episode.published,
+                transcription_mode=self.current_transcription_mode
             )
             
             if existing_summary:
@@ -681,7 +682,8 @@ class RenaissanceWeekly:
             existing_summary = self.db.get_episode_summary(
                 episode.podcast,
                 episode.title,
-                episode.published
+                episode.published,
+                transcription_mode=self.current_transcription_mode
             )
             
             if existing_summary:
@@ -1116,7 +1118,10 @@ class RenaissanceWeekly:
         logger.info(f"[{episode_id}] {'='*60}")
         
         # Check if episode already has a summary in the database
-        existing_summary = self.db.get_episode_summary(episode.podcast, episode.title, episode.published)
+        existing_summary = self.db.get_episode_summary(
+            episode.podcast, episode.title, episode.published,
+            transcription_mode=self.current_transcription_mode
+        )
         if existing_summary:
             logger.info(f"[{episode_id}] ✅ Episode already processed - using cached summary")
             logger.info(f"[{episode_id}] 📏 Summary length: {len(existing_summary)} characters")
@@ -1504,7 +1509,10 @@ class RenaissanceWeekly:
         logger.info(f"[{self.correlation_id}] 🧪 TEST MODE: Generating email from cached data")
         
         # Get recent episodes with summaries from database
-        recent_episodes = self.db.get_episodes_with_summaries(days_back=7)
+        recent_episodes = self.db.get_episodes_with_summaries(
+            days_back=7, 
+            transcription_mode=self.current_transcription_mode
+        )
         
         if not recent_episodes:
             logger.error("No episodes with summaries found in cache")
@@ -1702,14 +1710,18 @@ class RenaissanceWeekly:
     async def regenerate_summaries(self, days_back: int = 7):
         """Force regenerate summaries for recent episodes"""
         logger.info(f"[{self.correlation_id}] 🔄 Regenerating summaries for last {days_back} days")
+        logger.info(f"[{self.correlation_id}] Mode: {self.current_transcription_mode}")
         
         # Get episodes with transcripts
         since_date = datetime.now() - timedelta(days=days_back)
         episodes = self.db.get_recent_episodes(days_back)
         episodes_with_transcripts = []
         
+        # Determine which transcript field to check based on mode
+        transcript_field = 'transcript_test' if self.current_transcription_mode == 'test' else 'transcript'
+        
         for ep_dict in episodes:
-            if ep_dict.get('transcript'):
+            if ep_dict.get(transcript_field):
                 episode = Episode(
                     guid=ep_dict['guid'],
                     title=ep_dict['title'],
@@ -1721,7 +1733,7 @@ class RenaissanceWeekly:
                 )
                 episodes_with_transcripts.append({
                     'episode': episode,
-                    'transcript': ep_dict['transcript'],
+                    'transcript': ep_dict[transcript_field],
                     'source': TranscriptSource(ep_dict.get('transcript_source', 'UNKNOWN'))
                 })
         
@@ -1761,8 +1773,14 @@ class RenaissanceWeekly:
                     'episode': episode,
                     'summary': summary
                 })
-                # Update database
-                self.db.save_summary(episode, summary)
+                # Update database with mode-specific summary
+                self.db.save_episode(
+                    episode, 
+                    transcript=ep_data['transcript'],
+                    transcript_source=ep_data['source'],
+                    summary=summary,
+                    transcription_mode=self.current_transcription_mode
+                )
             else:
                 logger.warning(f"[{self.correlation_id}] Failed to regenerate summary")
         
