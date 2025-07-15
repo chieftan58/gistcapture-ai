@@ -321,18 +321,21 @@ class TranscriptAPIAggregator:
     """
     
     def __init__(self):
-        self.clients = [
-            PodcastIndexClient(),
-            SpotifyClient(),  # Add Spotify before less reliable sources
-            DescriptClient(),
-            OtterAIClient(),
-            SpeechmaticsClient(),
+        # Don't instantiate clients here - create them in find_transcript
+        self.client_classes = [
+            PodcastIndexClient,
+            SpotifyClient,  # Add Spotify before less reliable sources
+            DescriptClient,
+            OtterAIClient,
+            SpeechmaticsClient,
         ]
         
     async def find_transcript(self, episode: Episode) -> Optional[str]:
         """Try all available transcript APIs"""
-        for client in self.clients:
+        for client_class in self.client_classes:
             try:
+                # Create client instance within async context
+                client = client_class()
                 async with client:
                     logger.info(f"🔍 Trying {client.__class__.__name__} for transcript...")
                     transcript = await client.search_transcript(episode)
@@ -342,7 +345,12 @@ class TranscriptAPIAggregator:
                         return transcript
                         
             except Exception as e:
-                logger.error(f"Error with {client.__class__.__name__}: {e}")
+                logger.error(f"Error with {client_class.__name__}: {e}")
                 continue
                 
         return None
+    
+    async def cleanup(self):
+        """Cleanup method for compatibility - no longer needed"""
+        # Clients are now created and cleaned up within find_transcript
+        pass

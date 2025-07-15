@@ -446,6 +446,13 @@ class ReliableEpisodeFetcher:
             'Renaissance Weekly Bot/1.0'
         ]
         
+        # Tim Ferriss specific optimization - only try first 2 user agents
+        # His feed often returns no recent episodes regardless of user agent
+        podcast_lower = podcast_name.lower()
+        if 'tim ferriss' in podcast_lower or 'art19.com/tim-ferriss' in feed_url.lower():
+            user_agents = user_agents[:2]  # Only try first 2 user agents
+            logger.info(f"[{correlation_id}]   Using limited retries for Tim Ferriss feed")
+        
         session = self._get_http_session()
         
         for ua in user_agents:
@@ -512,6 +519,10 @@ class ReliableEpisodeFetcher:
                             if feed_url not in self.discovered_feeds_cache[podcast_name]:
                                 self.discovered_feeds_cache[podcast_name].append(feed_url)
                             return episodes
+                        # Tim Ferriss optimization: if first UA returns no episodes, skip remaining
+                        elif 'tim ferriss' in podcast_lower and ua == user_agents[0]:
+                            logger.info(f"[{correlation_id}]     No recent episodes found for Tim Ferriss, skipping remaining attempts")
+                            return []
                     elif response.status_code == 403:
                         logger.debug(f"[{correlation_id}]     403 with UA: {ua[:30]}...")
                         continue

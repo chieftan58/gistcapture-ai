@@ -89,10 +89,15 @@ class ComprehensiveTranscriptFinder:
         try:
             from .transcript_apis import TranscriptAPIAggregator
             api_aggregator = TranscriptAPIAggregator()
-            transcript = await api_aggregator.find_transcript(episode)
-            if transcript:
-                logger.info("Found transcript from official APIs")
-                return transcript
+            try:
+                transcript = await api_aggregator.find_transcript(episode)
+                if transcript:
+                    logger.info("Found transcript from official APIs")
+                    return transcript
+            finally:
+                # Ensure all client sessions are closed
+                if hasattr(api_aggregator, 'cleanup'):
+                    await api_aggregator.cleanup()
         except Exception as e:
             logger.debug(f"API aggregator error: {e}")
         

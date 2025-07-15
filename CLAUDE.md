@@ -242,7 +242,7 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 
 ### Critical: Transcript Cache Not Working in Full Mode
 **Discovered**: 2025-07-15
-**Status**: Under Investigation
+**Status**: RESOLVED
 
 **Symptoms**:
 - System re-transcribes episodes with AssemblyAI even when previously run in full mode
@@ -250,27 +250,26 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 - Transcripts are NOT found in database despite previous full mode runs
 - This causes unnecessary API costs (~$0.90 per hour of audio)
 
-**Evidence**:
-```
-[31d70d57] ✅ Using cached audio file (hash: 281b0673...)  # Audio IS cached
-❌ No transcript found from any source                      # But transcript is NOT
-🎵 Step 2: No valid transcript found - transcribing from audio...
-```
+**Root Cause**:
+Database was missing required columns for mode-specific transcript storage:
+- `transcript_test` - For test mode transcripts (15-minute previews)
+- `summary_test` - For test mode summaries
+- `transcription_mode` - To track which mode was used
 
-**Impact**:
-- Significant cost implications (re-transcribing all episodes)
-- Time waste (5-7 minutes per episode for transcription)
-- Suggests fundamental issue with database storage or retrieval
+**Resolution**:
+Created and ran `migrate_db.py` script to add missing columns to database schema. This ensures proper separation of test and full mode data, preventing cache misses.
 
-**Investigation Needed**:
-1. Check if transcripts are being saved to database correctly
-2. Verify episode matching logic (GUID, title matching)
-3. Confirm transcription_mode parameter is passed to database lookups
-4. Check database schema for transcript storage columns
+### Latest Improvements (2025-07-18)
+- **Fixed aiohttp memory leak**:
+  - Identified issue in `TranscriptAPIAggregator` where client instances were created at init time
+  - Fixed by instantiating clients within async context manager to ensure proper cleanup
+  - This prevents unclosed session warnings and potential memory leaks during long runs
+- **Resolved transcript cache issue**:
+  - Created `migrate_db.py` to add missing database columns (`transcript_test`, `summary_test`, `transcription_mode`)
+  - This fixed the critical issue where transcripts were being re-generated unnecessarily
+  - Saves ~$0.90 per hour of audio by properly caching transcripts
 
-**Temporary Workaround**: None identified yet
-
-### Latest Improvements (2025-07-17)
+### Previous Improvements (2025-07-17)
 - **Implemented Two-Summary Email System**:
   - New architecture generates both 150-word paragraph and full summary per episode
   - Paragraph summaries designed as "movie trailers" for quick scanning

@@ -159,13 +159,10 @@ class EmailDigest:
             episodes_html += f'''
                 <!-- Episode {i + 1} -->
                 <div style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
-                    <!-- Podcast and Episode Title -->
+                    <!-- Episode Title (Full Name) -->
                     <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
-                        {escape(episode.podcast)}
+                        {escape(episode.title)}
                     </h2>
-                    <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
-                        {guest_name} and {self._extract_host_name(episode.podcast)} discuss {self._extract_topics(episode.title, guest_name)}
-                    </h3>
                     <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
                         {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
                     </p>
@@ -173,8 +170,8 @@ class EmailDigest:
                     <!-- Link to Full Podcast -->
                     <p style="margin: 0 0 20px 0;">
                         <a href="{self._get_apple_podcast_link(episode)}" style="display: inline-flex; align-items: center; padding: 8px 16px; background-color: #f5f5f5; border-radius: 20px; text-decoration: none; color: #333; font-size: 14px; border: 1px solid #ddd;">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Apple_Podcasts_%28macOS%29.svg/30px-Apple_Podcasts_%28macOS%29.svg.png" alt="Apple Podcasts" style="width: 20px; height: 20px; margin-right: 8px;">
-                            <span>Listen to Full Episode</span>
+                            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDAuODMzMzMzQzQuOTM3NSAwLjgzMzMzMyAwLjgzMzMzMyA0LjkzNzUgMC44MzMzMzMgMTBDMC44MzMzMzMgMTUuMDYyNSA0LjkzNzUgMTkuMTY2NyAxMCAxOS4xNjY3QzE1LjA2MjUgMTkuMTY2NyAxOS4xNjY3IDE1LjA2MjUgMTkuMTY2NyAxMEMxOS4xNjY3IDQuOTM3NSAxNS4wNjI1IDAuODMzMzMzIDEwIDAuODMzMzMzWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyKSIvPgo8cGF0aCBkPSJNMTAgNi42NjY2N0M4LjE1OTcyIDYuNjY2NjcgNi42NjY2NyA4LjE1OTcyIDYuNjY2NjcgMTBDNi42NjY2NyAxMS44NDAzIDguMTU5NzIgMTMuMzMzMyAxMCAxMy4zMzMzQzExLjg0MDMgMTMuMzMzMyAxMy4zMzMzIDExLjg0MDMgMTMuMzMzMyAxMEMxMy4zMzMzIDguMTU5NzIgMTEuODQwMyA2LjY2NjY3IDEwIDYuNjY2NjdaIiBmaWxsPSJ3aGl0ZSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDBfbGluZWFyIiB4MT0iMTAiIHkxPSIwLjgzMzMzMyIgeDI9IjEwIiB5Mj0iMTkuMTY2NyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNGNDUyRkYiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjODMyQkMxIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+" alt="Apple Podcasts" style="width: 20px; height: 20px; margin-right: 8px;">
+                            <span>Full Episode</span>
                         </a>
                     </p>
                     
@@ -184,9 +181,9 @@ class EmailDigest:
                     </div>
                     
                     <!-- Expandable Section using details/summary -->
-                    <details style="margin-top: 20px;">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none;">
-                            ▼ Read Full Summary
+                    <details style="margin-top: 20px;" id="episode-{i}">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none; transition: all 0.2s ease;" onclick="this.scrollIntoView({{block: 'start', behavior: 'smooth'}});">
+                            <span style="font-family: Georgia, serif;">Read Full Summary</span>
                         </summary>
                         
                         <!-- Full Summary -->
@@ -274,18 +271,28 @@ class EmailDigest:
         summary {{
             list-style: none;
             -webkit-appearance: none;
+            position: relative;
         }}
         
         summary::-webkit-details-marker {{
             display: none;
         }}
         
-        details[open] summary::before {{
-            content: "▲ ";
+        /* Elegant arrow with transition */
+        summary::before {{
+            content: "▶";
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.2s ease;
+            font-size: 12px;
         }}
         
-        summary::before {{
-            content: "▼ ";
+        details[open] summary::before {{
+            transform: rotate(90deg);
+        }}
+        
+        summary:hover {{
+            background: #e8e8e8 !important;
         }}
     </style>
 </head>
@@ -324,7 +331,7 @@ class EmailDigest:
 </html>"""
     
     def _generate_subject_line(self, episodes: List[Episode]) -> str:
-        """Generate dynamic subject line with featured guests"""
+        """Generate dynamic subject line with featured guests or podcasts"""
         # Find the most prominent guest name
         guest_names = []
         for episode in episodes:
@@ -335,23 +342,45 @@ class EmailDigest:
         if guest_names:
             # Take the first guest and add "and more"
             featured_guest = guest_names[0]
-            return f"The Investment Pods You've Missed: {featured_guest} and more"
+            if len(guest_names) > 1:
+                return f"Investment Pods: {featured_guest}, {guest_names[1]} & more"
+            else:
+                return f"Investment Pods: {featured_guest} and more this week"
         else:
-            # Fallback subject
-            return f"Renaissance Weekly: {len(episodes)} Essential Conversations"
+            # Better fallback - use podcast names
+            unique_podcasts = list(set(ep.podcast for ep in episodes))
+            if len(unique_podcasts) <= 3:
+                podcast_list = ", ".join(unique_podcasts[:-1]) + f" & {unique_podcasts[-1]}" if len(unique_podcasts) > 1 else unique_podcasts[0]
+                return f"This Week: {podcast_list}"
+            else:
+                return f"This Week: {unique_podcasts[0]}, {unique_podcasts[1]} & {len(unique_podcasts)-2} more podcasts"
     
     def _extract_guest_name(self, title: str, description: str = "") -> str:
         """Extract guest name from episode title or description"""
         import re
         
-        # Common patterns in podcast titles
+        # More comprehensive patterns for podcast titles
         patterns = [
-            r'with\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',
-            r'featuring\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',
-            r'ft\.\s+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',
-            r'guest[:\s]+([A-Z][a-zA-Z\s]+?)(?:\s*[\|\-\:]|$)',
-            r'[\|\-]\s*([A-Z][a-zA-Z\s]+?)\s*[\|\-]',
-            r'^([A-Z][a-zA-Z\s]+?):\s',
+            # Episode number followed by name before "on"
+            r'(?:Ep|Episode)\s*\d+:\s*([A-Z][a-zA-Z\s&]+?)\s+on\s+',
+            # Name followed by "on" topic
+            r':\s*([A-Z][a-zA-Z\s&]+?)\s+on\s+[A-Z]',
+            # Episode # followed by name and "and" (like "#763: Howard Marks and...")
+            r'^#\d+:\s*([A-Z][a-zA-Z\s]+?)\s+and\s+',
+            # Name at start before colon (moved up for priority)
+            r'^([A-Z][a-zA-Z\s&]+?):\s',
+            # Name BEFORE "with" (to catch "Stanley Druckenmiller with...")
+            r'^([A-Z][a-zA-Z\s&]+?)\s+with\s+',
+            # With/featuring patterns (after checking name before with)
+            r'with\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[\|\-\:]|$)',
+            r'featuring\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[\|\-\:]|$)',
+            r'ft\.\s+([A-Z][a-zA-Z\s&]+?)(?:\s*[\|\-\:]|$)',
+            # Guest patterns
+            r'guest[:\s]+([A-Z][a-zA-Z\s&]+?)(?:\s*[\|\-\:]|$)',
+            # Names at end after pipe/dash
+            r'[\|\-]\s*([A-Z][a-zA-Z\s&]+?)(?:\s*$)',
+            # Names between delimiters
+            r'[\|\-]\s*([A-Z][a-zA-Z\s&]+?)\s*[\|\-]',
         ]
         
         # Try title first
@@ -359,36 +388,36 @@ class EmailDigest:
             match = re.search(pattern, title, re.IGNORECASE)
             if match:
                 guest = match.group(1).strip()
-                # Basic validation
-                if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
+                # More flexible validation - allow "&" and up to 6 words
+                word_count = len(guest.split())
+                if 1 <= word_count <= 6 and len(guest) < 80:
+                    # Clean up common artifacts
+                    guest = re.sub(r'\s+&\s+', ' & ', guest)  # Normalize ampersands
+                    guest = guest.strip(' &')  # Remove trailing ampersands
+                    # Don't return single common words
+                    if word_count == 1 and guest.lower() in ['the', 'with', 'and', 'on']:
+                        continue
                     return guest
         
-        # Try description as fallback
+        # Special handling for "Name & Name" pattern at end of title
+        name_pair_pattern = r'[\|\-:]\s*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s*&\s*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s*$'
+        match = re.search(name_pair_pattern, title)
+        if match:
+            name1 = match.group(1).strip()
+            name2 = match.group(2).strip()
+            return f"{name1} & {name2}"
+        
+        # Try description as fallback with same patterns
         if description:
-            for pattern in patterns:
+            for pattern in patterns[:6]:  # Use first 6 patterns for description
                 match = re.search(pattern, description, re.IGNORECASE)
                 if match:
                     guest = match.group(1).strip()
-                    # Basic validation
-                    if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
+                    word_count = len(guest.split())
+                    if 1 <= word_count <= 6 and len(guest) < 80:
+                        guest = re.sub(r'\s+&\s+', ' & ', guest)
+                        guest = guest.strip(' &')
                         return guest
-        
-        # If still not found, try to extract from common name patterns
-        # Look for patterns like "Name:" or "Interview with Name"
-        special_patterns = [
-            r'^(?:Interview with |Conversation with |)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:[:\s\-]|$)',
-            r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}):\s',
-            r'^#\d+:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:\s|$)'
-        ]
-        
-        for pattern in special_patterns:
-            match = re.match(pattern, title)
-            if match:
-                potential_name = match.group(1)
-                # Exclude common non-name words
-                exclude_words = ['Episode', 'Part', 'Chapter', 'Special', 'Bonus', 'The', 'Interview', 'Podcast']
-                if not any(word in potential_name for word in exclude_words):
-                    return potential_name
         
         return "the guest"
     
@@ -691,17 +720,19 @@ class EmailDigest:
         if not unique_sponsors:
             return ""
         
-        # Format sponsor section
-        html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">'
-        html += '<p style="margin: 0 0 15px 0; font-size: 14px; color: #666; font-style: italic;">This episode is brought to you by:</p>'
-        html += '<ul style="margin: 0; padding-left: 20px;">'
+        # Format sponsor section as footer
+        html = '<div style="margin-top: 40px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">'
+        html += '<p style="margin: 0 0 15px 0; font-size: 14px; color: #666; font-weight: bold;">Sponsors</p>'
+        html += '<div style="font-size: 14px; line-height: 1.8;">'
         
-        for sponsor in unique_sponsors[:4]:  # Limit to 4 sponsors
+        for i, sponsor in enumerate(unique_sponsors[:4]):  # Limit to 4 sponsors
+            if i > 0:
+                html += '<span style="color: #ccc;"> • </span>'
             if sponsor in sponsor_links:
-                html += f'<li style="margin-bottom: 8px; font-size: 14px;"><a href="{sponsor_links[sponsor]}" style="color: #0066cc; text-decoration: none;">{escape(sponsor)}</a></li>'
+                html += f'<a href="{sponsor_links[sponsor]}" style="color: #0066cc; text-decoration: none;">{escape(sponsor)}</a>'
             else:
-                html += f'<li style="margin-bottom: 8px; font-size: 14px; color: #333;">{escape(sponsor)}</li>'
+                html += f'<span style="color: #333;">{escape(sponsor)}</span>'
         
-        html += '</ul>'
+        html += '</div>'
         html += '</div>'
         return html
