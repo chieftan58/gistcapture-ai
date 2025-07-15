@@ -43,7 +43,7 @@ class ResourceAwareConcurrencyManager:
     def __init__(self, correlation_id: str):
         self.correlation_id = correlation_id
         self.base_concurrency = 2  # Match CPU cores for stability
-        self.max_concurrency = 4   # Reduced from 10 for 2-core system
+        self.max_concurrency = 3   # Reduced from 4 for two-summary system
         self.min_memory_per_task = 600  # MB for test mode (increased from 400MB)
         self.min_memory_per_task_full = 1500  # MB for full mode (increased from 1200MB)
         self.cpu_multiplier = 1.0  # Reduced from 1.5 to match cores exactly
@@ -683,18 +683,28 @@ class RenaissanceWeekly:
         summaries = []
         
         for episode in episodes:
-            existing_summary = self.db.get_episode_summary(
+            # Get the full episode data from database which includes both summaries
+            episode_data = self.db.get_episode(
                 episode.podcast,
                 episode.title,
-                episode.published,
-                transcription_mode=self.current_transcription_mode
+                episode.published
             )
             
-            if existing_summary:
-                summaries.append({
-                    'episode': episode,
-                    'summary': existing_summary
-                })
+            if episode_data:
+                # Extract the appropriate summaries based on transcription mode
+                if self.current_transcription_mode == 'test':
+                    full_summary = episode_data.get('summary_test')
+                    paragraph_summary = episode_data.get('paragraph_summary_test')
+                else:
+                    full_summary = episode_data.get('summary')
+                    paragraph_summary = episode_data.get('paragraph_summary')
+                
+                if full_summary:
+                    summaries.append({
+                        'episode': episode,
+                        'summary': full_summary,
+                        'paragraph_summary': paragraph_summary or ""  # May be None for old entries
+                    })
         
         return summaries
     
@@ -965,12 +975,12 @@ class RenaissanceWeekly:
                         
                         # Add timeout to prevent stuck episodes
                         logger.debug(f"[{self.correlation_id}] Processing episode {index+1}: {episode_id}")
-                        summary = await asyncio.wait_for(
+                        result = await asyncio.wait_for(
                             self.process_episode(episode),
                             timeout=episode_timeout
                         )
                     
-                        if summary:
+                        if result and result.get('full_summary'):
                             await progress.complete_item(True)
                             # Update processing status (thread-safe)
                             if self._processing_status:
@@ -984,7 +994,11 @@ class RenaissanceWeekly:
                             logger.debug(f"[{self.correlation_id}] Episode {index+1} completed successfully")
                             # Force garbage collection after processing large files
                             gc.collect()
-                            return {"episode": episode, "summary": summary}
+                            return {
+                                "episode": episode, 
+                                "summary": result['full_summary'],
+                                "paragraph_summary": result.get('paragraph_summary', '')
+                            }
                         else:
                             await progress.complete_item(False)
                             # Update processing status (thread-safe)
@@ -1190,28 +1204,60 @@ class RenaissanceWeekly:
             except Exception as e:
                 logger.warning(f"[{episode_id}] Failed to save transcript to database: {e}")
             
-            # Step 3: Generate summary
-            logger.info(f"\n[{episode_id}] 📝 Step 3: Generating executive summary...")
+            # Step 3: Generate summaries (paragraph and full)
+            logger.info(f"\n[{episode_id}] 📝 Step 3: Generating summaries...")
             # Pass force_fresh flag if set
             force_fresh = getattr(self, 'force_fresh_summaries', False)
-            summary = await self.summarizer.generate_summary(episode, transcript_text, transcript_source, mode=current_mode, force_fresh=force_fresh)
             
-            if summary:
-                logger.info(f"[{episode_id}] ✅ Summary generated successfully!")
-                logger.info(f"[{episode_id}] 📏 Summary length: {len(summary)} characters")
+            # Generate paragraph summary first
+            logger.info(f"[{episode_id}] 📄 Generating paragraph summary...")
+            paragraph_summary = await self.summarizer.generate_paragraph_summary(
+                episode, transcript_text, transcript_source, mode=current_mode, force_fresh=force_fresh
+            )
+            
+            # Add 0.5s delay between API calls to manage rate limits
+            await asyncio.sleep(0.5)
+            
+            # Generate full summary
+            logger.info(f"[{episode_id}] 📚 Generating full summary...")
+            full_summary = await self.summarizer.generate_full_summary(
+                episode, transcript_text, transcript_source, mode=current_mode, force_fresh=force_fresh
+            )
+            
+            # Fallback: extract paragraph from full summary if paragraph generation failed
+            if not paragraph_summary and full_summary:
+                logger.warning(f"[{episode_id}] ⚠️ Paragraph generation failed, extracting from full summary")
+                # Extract first 150 words from full summary
+                words = full_summary.split()[:150]
+                paragraph_summary = ' '.join(words)
+                if len(words) == 150:
+                    paragraph_summary += '...'
+            
+            if paragraph_summary and full_summary:
+                logger.info(f"[{episode_id}] ✅ Both summaries generated successfully!")
+                logger.info(f"[{episode_id}] 📏 Paragraph: {len(paragraph_summary)} chars | Full: {len(full_summary)} chars")
                 monitor.record_success('summarization', episode.podcast, mode=current_mode)
-                # Save summary to database with current mode
+                
+                # Save both summaries to database
                 try:
-                    self.db.save_episode(episode, transcript_text, transcript_source, summary, transcription_mode=current_mode)
-                    logger.info(f"[{episode_id}] 💾 Summary saved to database ({current_mode} mode)")
+                    self.db.save_episode(
+                        episode, transcript_text, transcript_source, 
+                        full_summary, paragraph_summary, 
+                        transcription_mode=current_mode
+                    )
+                    logger.info(f"[{episode_id}] 💾 Summaries saved to database ({current_mode} mode)")
                 except Exception as e:
-                    logger.warning(f"[{episode_id}] Failed to save summary to database: {e}")
+                    logger.warning(f"[{episode_id}] Failed to save summaries to database: {e}")
             else:
-                logger.error(f"[{episode_id}] ❌ Failed to generate summary")
+                logger.error(f"[{episode_id}] ❌ Failed to generate summaries")
                 monitor.record_failure('summarization', episode.podcast, episode.title,
-                                     'SummarizationFailed', 'Failed to generate summary', mode=current_mode)
+                                     'SummarizationFailed', 'Failed to generate summaries', mode=current_mode)
             
-            return summary
+            # Return dict with both summaries
+            return {
+                'full_summary': full_summary,
+                'paragraph_summary': paragraph_summary
+            }
             
         except Exception as e:
             logger.error(f"[{episode_id}] ❌ Error processing episode: {e}", exc_info=True)
@@ -1499,16 +1545,27 @@ class RenaissanceWeekly:
             duration="1:00:00"
         )
         
-        # Generate summary
-        summary = await self.summarizer.generate_summary(episode, transcript, TranscriptSource.CACHED, mode='test', force_fresh=False)
+        # Generate both summaries
+        paragraph_summary = await self.summarizer.generate_paragraph_summary(episode, transcript, TranscriptSource.CACHED, mode='test', force_fresh=False)
+        await asyncio.sleep(0.5)  # Rate limit delay
+        full_summary = await self.summarizer.generate_full_summary(episode, transcript, TranscriptSource.CACHED, mode='test', force_fresh=False)
         
-        if summary:
-            logger.info(f"[{self.correlation_id}] ✅ Summary generated ({len(summary)} chars)")
+        if paragraph_summary:
+            logger.info(f"[{self.correlation_id}] ✅ Paragraph summary generated ({len(paragraph_summary)} chars)")
             print("\n" + "="*80)
-            print(summary)
+            print("PARAGRAPH SUMMARY:")
+            print(paragraph_summary)
             print("="*80 + "\n")
-        else:
-            logger.error(f"[{self.correlation_id}] ❌ Failed to generate summary")
+        
+        if full_summary:
+            logger.info(f"[{self.correlation_id}] ✅ Full summary generated ({len(full_summary)} chars)")
+            print("\n" + "="*80)
+            print("FULL SUMMARY:")
+            print(full_summary)
+            print("="*80 + "\n")
+        
+        if not paragraph_summary and not full_summary:
+            logger.error(f"[{self.correlation_id}] ❌ Failed to generate summaries")
     
     async def test_email_only(self):
         """Test email generation with cached data"""
@@ -1658,9 +1715,13 @@ class RenaissanceWeekly:
                     episode._force_audio_transcription = True
                 
                 # Process the episode with modifications
-                summary = await self.process_episode(episode)
-                if summary:
-                    summaries.append({"episode": episode, "summary": summary})
+                result = await self.process_episode(episode)
+                if result and result.get('full_summary'):
+                    summaries.append({
+                        "episode": episode, 
+                        "summary": result['full_summary'],
+                        "paragraph_summary": result.get('paragraph_summary', '')
+                    })
                     
             except Exception as e:
                 logger.error(f"[{self.correlation_id}] ❌ Retry failed for {episode.podcast}: {e}")
@@ -1777,7 +1838,8 @@ class RenaissanceWeekly:
             episode = ep_data['episode']
             logger.info(f"[{self.correlation_id}] [{i}/{len(episodes_with_transcripts)}] Regenerating: {episode.podcast} - {episode.title}")
             
-            summary = await self.summarizer.generate_summary(
+            # Generate both paragraph and full summaries
+            paragraph_summary = await self.summarizer.generate_paragraph_summary(
                 episode,
                 ep_data['transcript'],
                 ep_data['source'],
@@ -1785,17 +1847,30 @@ class RenaissanceWeekly:
                 force_fresh=True  # Always fresh for regenerate command
             )
             
-            if summary:
+            # Add delay between API calls
+            await asyncio.sleep(0.5)
+            
+            full_summary = await self.summarizer.generate_full_summary(
+                episode,
+                ep_data['transcript'],
+                ep_data['source'],
+                mode=self.current_transcription_mode,
+                force_fresh=True  # Always fresh for regenerate command
+            )
+            
+            if paragraph_summary and full_summary:
                 summaries.append({
                     'episode': episode,
-                    'summary': summary
+                    'summary': full_summary,
+                    'paragraph_summary': paragraph_summary
                 })
-                # Update database with mode-specific summary
+                # Update database with both summaries
                 self.db.save_episode(
                     episode, 
                     transcript=ep_data['transcript'],
                     transcript_source=ep_data['source'],
-                    summary=summary,
+                    summary=full_summary,
+                    paragraph_summary=paragraph_summary,
                     transcription_mode=self.current_transcription_mode
                 )
             else:

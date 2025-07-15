@@ -1,0 +1,28 @@
+EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
+
+Write a compelling 150-word overview that captures what {guest_name} and the host discuss in this episode. 
+
+GOAL
+Create a "movie trailer" paragraph that helps readers decide if they want to read the full summary. Cover the breadth of topics without revealing all details.
+
+STYLE
+- Factual, information-dense prose
+- No promotional language or adjectives like "fascinating" 
+- Let content create interest naturally
+- Weave in guest credibility markers where relevant
+
+STRUCTURE
+Open with the most significant topic or insight, then flow naturally through other key discussion points. End with an implicit sense there's more depth available.
+
+EXAMPLE TONE
+"Jensen maps three scenarios for 2025: continued goldilocks (20% probability), stagflationary pivot (50%), or deflationary shock (30%). His highest conviction trade..."
+
+CONSTRAINTS
+- Exactly 150 words (±10 words)
+- Single paragraph
+- No bullet points
+- Present tense
+
+TRANSCRIPT
+{transcript}

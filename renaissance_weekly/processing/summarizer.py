@@ -19,6 +19,12 @@ class Summarizer:
     def __init__(self):
         self.prompts_dir = BASE_DIR / "prompts"
         self.system_prompt = self._load_prompt("system_prompt.txt")
+        
+        # Load both prompt templates
+        self.paragraph_prompt_template = self._load_prompt("paragraph_prompt.txt")
+        self.full_summary_prompt_template = self._load_prompt("full_summary_prompt.txt")
+        
+        # Keep legacy prompt for backward compatibility
         self.summary_prompt_template = self._load_prompt("summary_prompt.txt")
         
         # Configuration from environment
@@ -54,6 +60,10 @@ class Summarizer:
                     return self._get_default_system_prompt()
                 elif filename == "summary_prompt.txt":
                     return self._get_default_summary_prompt()
+                elif filename == "paragraph_prompt.txt":
+                    return self._get_default_paragraph_prompt()
+                elif filename == "full_summary_prompt.txt":
+                    return self._get_default_full_summary_prompt()
                 else:
                     return ""
         except Exception as e:
@@ -63,6 +73,10 @@ class Summarizer:
                 return self._get_default_system_prompt()
             elif filename == "summary_prompt.txt":
                 return self._get_default_summary_prompt()
+            elif filename == "paragraph_prompt.txt":
+                return self._get_default_paragraph_prompt()
+            elif filename == "full_summary_prompt.txt":
+                return self._get_default_full_summary_prompt()
             else:
                 return ""
     
@@ -119,7 +133,106 @@ class Summarizer:
             logger.error(traceback.format_exc())
             return None
     
-    def _prepare_prompt(self, episode: Episode, transcript: str, source: TranscriptSource) -> str:
+    async def generate_paragraph_summary(self, episode: Episode, transcript: str, source: TranscriptSource, mode: str = 'test', force_fresh: bool = False) -> Optional[str]:
+        """Generate 150-word paragraph summary for email scanning"""
+        try:
+            # Create safe filename for paragraph cache
+            date_str = episode.published.strftime('%Y%m%d')
+            safe_podcast = slugify(episode.podcast)[:30]
+            safe_title = slugify(episode.title)[:50]
+            paragraph_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_{mode}_paragraph.md"
+            
+            # Check cache first (unless force_fresh is True)
+            if not force_fresh and paragraph_file.exists():
+                logger.info("✅ Found cached paragraph summary")
+                with open(paragraph_file, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif force_fresh and paragraph_file.exists():
+                logger.info("🔄 Force fresh enabled - bypassing cached paragraph")
+            
+            # Prepare the prompt with episode data
+            prompt = self._prepare_prompt(episode, transcript, source, template_type='paragraph')
+            
+            mode_info = " (TESTING MODE: 15-min clips)" if TESTING_MODE else ""
+            logger.info(f"🤖 Generating paragraph summary with {self.model}{mode_info}...")
+            
+            # Call OpenAI API with reduced token limit for paragraph
+            old_max_tokens = self.max_tokens
+            self.max_tokens = 300  # Enough for 150-word paragraph
+            response = await self._call_openai_api(prompt)
+            self.max_tokens = old_max_tokens  # Restore
+            
+            if not response:
+                logger.error("❌ Failed to generate paragraph summary")
+                return None
+            
+            paragraph = response.strip()
+            
+            # Cache the paragraph
+            try:
+                with open(paragraph_file, 'w', encoding='utf-8') as f:
+                    f.write(paragraph)
+                logger.info(f"💾 Paragraph cached ({mode} mode): {paragraph_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to cache paragraph: {e}")
+            
+            return paragraph
+            
+        except Exception as e:
+            logger.error(f"❌ Paragraph generation error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
+    async def generate_full_summary(self, episode: Episode, transcript: str, source: TranscriptSource, mode: str = 'test', force_fresh: bool = False) -> Optional[str]:
+        """Generate comprehensive full summary with natural flow"""
+        try:
+            # Create safe filename for full summary cache
+            date_str = episode.published.strftime('%Y%m%d')
+            safe_podcast = slugify(episode.podcast)[:30]
+            safe_title = slugify(episode.title)[:50]
+            full_summary_file = SUMMARY_DIR / f"{date_str}_{safe_podcast}_{safe_title}_{mode}_full_summary.md"
+            
+            # Check cache first (unless force_fresh is True)
+            if not force_fresh and full_summary_file.exists():
+                logger.info("✅ Found cached full summary")
+                with open(full_summary_file, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif force_fresh and full_summary_file.exists():
+                logger.info("🔄 Force fresh enabled - bypassing cached full summary")
+            
+            # Prepare the prompt with episode data
+            prompt = self._prepare_prompt(episode, transcript, source, template_type='full')
+            
+            mode_info = " (TESTING MODE: 15-min clips)" if TESTING_MODE else ""
+            logger.info(f"🤖 Generating full summary with {self.model}{mode_info}...")
+            
+            # Call OpenAI API with standard token limit
+            response = await self._call_openai_api(prompt)
+            
+            if not response:
+                logger.error("❌ Failed to generate full summary")
+                return None
+            
+            full_summary = response
+            
+            # Cache the full summary
+            try:
+                with open(full_summary_file, 'w', encoding='utf-8') as f:
+                    f.write(full_summary)
+                logger.info(f"💾 Full summary cached ({mode} mode): {full_summary_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to cache full summary: {e}")
+            
+            return full_summary
+            
+        except Exception as e:
+            logger.error(f"❌ Full summary generation error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
+    def _prepare_prompt(self, episode: Episode, transcript: str, source: TranscriptSource, template_type: str = 'legacy') -> str:
         """Prepare the prompt with episode data"""
         # Truncate transcript if too long (leave room for response)
         max_transcript_chars = 100000  # Adjust based on model limits
@@ -127,8 +240,13 @@ class Summarizer:
         if len(transcript) > max_transcript_chars:
             truncated_transcript += "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH]"
         
-        # Replace all placeholders in template
-        prompt = self.summary_prompt_template
+        # Select appropriate template based on type
+        if template_type == 'paragraph':
+            prompt = self.paragraph_prompt_template
+        elif template_type == 'full':
+            prompt = self.full_summary_prompt_template
+        else:
+            prompt = self.summary_prompt_template  # Legacy
         prompt = prompt.replace("{episode_title}", episode.title)
         prompt = prompt.replace("{podcast_name}", episode.podcast)
         prompt = prompt.replace("{source}", source.value)
@@ -463,3 +581,68 @@ RULES
 - Omit any section that has no substance.
 
 READY? Create the brief."""
+    
+    def _get_default_paragraph_prompt(self) -> str:
+        """Default paragraph prompt template as fallback"""
+        return """EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
+
+Write a compelling 150-word overview that captures what {guest_name} and the host discuss in this episode. 
+
+GOAL
+Create a "movie trailer" paragraph that helps readers decide if they want to read the full summary. Cover the breadth of topics without revealing all details.
+
+STYLE
+- Factual, information-dense prose
+- No promotional language or adjectives like "fascinating" 
+- Let content create interest naturally
+- Weave in guest credibility markers where relevant
+
+STRUCTURE
+Open with the most significant topic or insight, then flow naturally through other key discussion points. End with an implicit sense there's more depth available.
+
+CONSTRAINTS
+- Exactly 150 words (±10 words)
+- Single paragraph
+- No bullet points
+- Present tense
+
+TRANSCRIPT
+{transcript}"""
+
+    def _get_default_full_summary_prompt(self) -> str:
+        """Default full summary prompt template as fallback"""
+        return """EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
+
+AUDIENCE
+Hedge fund PMs, macro investors, and sophisticated allocators seeking actionable intelligence.
+
+GOAL
+Provide comprehensive analysis of the conversation, scaling depth to match insight density. A content-rich 30-minute episode may warrant 2000+ words, while a rambling 3-hour conversation might yield only 800 words.
+
+STRUCTURE
+Follow the natural flow of conversation while organizing insights thematically. Open with context and guest credibility, then trace the arc of ideas as they develop, noting tensions and resolutions.
+
+FOCUS AREAS
+• Investment ideas & positioning (past/present)
+• Market outlook & regime views
+• Frameworks & mental models
+• Relevant track record & experience
+• For non-investment content: Extract what's relevant to capital allocators
+
+STYLE
+- Institutional clarity with analytical precision
+- No filler phrases or summary clichés
+- Active voice, specific examples
+- Natural narrative flow (not chronological recap)
+
+LENGTH GUIDANCE
+- Minimum: 500 words (light content)
+- Target: 800-1500 words (typical)
+- Maximum: 2500 words (exceptional density)
+
+Let insight density, not episode duration, drive your summary length.
+
+TRANSCRIPT
+{transcript}"""

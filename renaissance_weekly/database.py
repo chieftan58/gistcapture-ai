@@ -42,7 +42,8 @@ class PodcastDatabase:
                         'podcast', 'title', 'published', 'audio_url', 
                         'transcript_url', 'description', 'link', 'duration', 
                         'guid', 'transcript', 'transcript_source', 'summary',
-                        'transcription_mode', 'transcript_test', 'summary_test'
+                        'transcription_mode', 'transcript_test', 'summary_test',
+                        'paragraph_summary', 'paragraph_summary_test'
                     }
                     
                     if not required_columns.issubset(columns):
@@ -82,6 +83,8 @@ class PodcastDatabase:
                 summary TEXT,
                 transcript_test TEXT,
                 summary_test TEXT,
+                paragraph_summary TEXT,
+                paragraph_summary_test TEXT,
                 transcription_mode TEXT DEFAULT 'test',
                 processing_status TEXT DEFAULT 'pending',
                 failure_reason TEXT,
@@ -147,6 +150,8 @@ class PodcastDatabase:
                     summary TEXT,
                     transcript_test TEXT,
                     summary_test TEXT,
+                    paragraph_summary TEXT,
+                    paragraph_summary_test TEXT,
                     transcription_mode TEXT DEFAULT 'test',
                     processing_status TEXT DEFAULT 'pending',
                     failure_reason TEXT,
@@ -226,7 +231,8 @@ class PodcastDatabase:
     
     def save_episode(self, episode: Episode, transcript: Optional[str] = None, 
                      transcript_source: Optional[TranscriptSource] = None,
-                     summary: Optional[str] = None, transcription_mode: str = 'test') -> int:
+                     summary: Optional[str] = None, paragraph_summary: Optional[str] = None,
+                     transcription_mode: str = 'test') -> int:
         """Save or update an episode in the database"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -252,13 +258,17 @@ class PodcastDatabase:
                 if transcription_mode == 'test':
                     episode_data['transcript_test'] = transcript
                     episode_data['summary_test'] = summary
+                    episode_data['paragraph_summary_test'] = paragraph_summary
                     episode_data['transcript'] = None  # Clear full mode data
                     episode_data['summary'] = None
+                    episode_data['paragraph_summary'] = None
                 else:  # full mode
                     episode_data['transcript'] = transcript
                     episode_data['summary'] = summary
+                    episode_data['paragraph_summary'] = paragraph_summary
                     episode_data['transcript_test'] = None  # Clear test mode data
                     episode_data['summary_test'] = None
+                    episode_data['paragraph_summary_test'] = None
                 
                 # Use INSERT OR REPLACE for atomic operation
                 # First check if record exists to preserve the ID
@@ -423,7 +433,7 @@ class PodcastDatabase:
             return []
     
     def get_episodes_with_summaries(self, days_back: int = 7, transcription_mode: str = None) -> List[Dict]:
-        """Get episodes that have summaries"""
+        """Get episodes that have summaries (both paragraph and full)"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()

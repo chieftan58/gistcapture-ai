@@ -1,0 +1,34 @@
+EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
+
+AUDIENCE
+Hedge fund PMs, macro investors, and sophisticated allocators seeking actionable intelligence.
+
+GOAL
+Provide comprehensive analysis of the conversation, scaling depth to match insight density. A content-rich 30-minute episode may warrant 2000+ words, while a rambling 3-hour conversation might yield only 800 words.
+
+STRUCTURE
+Follow the natural flow of conversation while organizing insights thematically. Open with context and guest credibility, then trace the arc of ideas as they develop, noting tensions and resolutions.
+
+FOCUS AREAS
+• Investment ideas & positioning (past/present)
+• Market outlook & regime views
+• Frameworks & mental models
+• Relevant track record & experience
+• For non-investment content: Extract what's relevant to capital allocators
+
+STYLE
+- Institutional clarity with analytical precision
+- No filler phrases or summary clichés
+- Active voice, specific examples
+- Natural narrative flow (not chronological recap)
+
+LENGTH GUIDANCE
+- Minimum: 500 words (light content)
+- Target: 800-1500 words (typical)
+- Maximum: 2500 words (exceptional density)
+
+Let insight density, not episode duration, drive your summary length.
+
+TRANSCRIPT
+{transcript}
