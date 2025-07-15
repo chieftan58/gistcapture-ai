@@ -96,7 +96,11 @@ class Summarizer:
             # Prepare the prompt with episode data
             prompt = self._prepare_prompt(episode, transcript, source)
             
-            mode_info = " (TESTING MODE: 5-min clips)" if TESTING_MODE else ""
+            # Show actual processing mode, not just TESTING_MODE flag
+            if mode == 'test':
+                mode_info = " (TEST MODE: 15-min clips)"
+            else:
+                mode_info = " (FULL EPISODE)"
             logger.info(f"🤖 Generating summary with {self.model}{mode_info}...")
             
             # Call OpenAI API with rate limiting and circuit breaker
@@ -146,7 +150,11 @@ class Summarizer:
             # Prepare the prompt with episode data
             prompt = self._prepare_prompt(episode, transcript, source, template_type='paragraph')
             
-            mode_info = " (TESTING MODE: 15-min clips)" if TESTING_MODE else ""
+            # Show actual processing mode, not just TESTING_MODE flag
+            if mode == 'test':
+                mode_info = " (TEST MODE: 15-min clips)"
+            else:
+                mode_info = " (FULL EPISODE)"
             logger.info(f"🤖 Generating paragraph summary with {self.model}{mode_info}...")
             
             # Call OpenAI API with reduced token limit for paragraph
@@ -197,7 +205,11 @@ class Summarizer:
             # Prepare the prompt with episode data
             prompt = self._prepare_prompt(episode, transcript, source, template_type='full')
             
-            mode_info = " (TESTING MODE: 15-min clips)" if TESTING_MODE else ""
+            # Show actual processing mode, not just TESTING_MODE flag
+            if mode == 'test':
+                mode_info = " (TEST MODE: 15-min clips)"
+            else:
+                mode_info = " (FULL EPISODE)"
             logger.info(f"🤖 Generating full summary with {self.model}{mode_info}...")
             
             # Call OpenAI API with standard token limit

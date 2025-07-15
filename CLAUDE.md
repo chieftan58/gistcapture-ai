@@ -238,7 +238,46 @@ The UI now displays automatic alerts when YouTube authentication expires:
 
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
-### Latest Improvements (2025-07-16)
+### Latest Improvements (2025-07-17)
+- **Implemented Two-Summary Email System**:
+  - New architecture generates both 150-word paragraph and full summary per episode
+  - Paragraph summaries designed as "movie trailers" for quick scanning
+  - Full summaries provide comprehensive conversation flow (500-2500 words)
+  - Email format uses expandable HTML/CSS sections (no JavaScript)
+  - Alphabetical podcast ordering for consistent navigation
+  - Dynamic subject lines with featured guest names
+  - Prompt system restructured with only 3 files:
+    - `prompts/system_prompt.txt` - Defines AI identity (investment analyst persona)
+    - `prompts/paragraph_prompt.txt` - 150-word overview generation
+    - `prompts/full_summary_prompt.txt` - Comprehensive analysis
+  - Removed legacy `summary_prompt.txt` - was for generic "busy professionals"
+  - Database schema updated with `paragraph_summary` and `paragraph_summary_test` columns
+  - Sequential API calls with 0.5s delay to manage rate limits
+  - Reduced concurrent episodes from 4 to 3 for API stability
+  - Backward compatible with fallback to extract paragraph from full summary
+  - Clean separation of concerns: system prompt for WHO, summary prompts for WHAT
+  - Investment-focused prompts throughout (hedge fund PMs, macro investors audience)
+- **Enhanced Email Digest with Rich Content**:
+  - Added "Link to Full Podcast" button with Apple Podcasts logo in episode headers
+  - Implemented automatic resource extraction for books, papers, and websites
+  - Added sponsor detection and formatting with clickable links
+  - Resources appear before sponsors in expandable summaries
+  - Clean formatting with proper sections and visual hierarchy
+  - Mobile-responsive design with inline styles throughout
+- **Content-Adaptive Summarization**:
+  - Updated prompts to identify content type before applying focus areas
+  - Avoids forcing investment framing on non-investment content (e.g., CFPB regulatory discussions)
+  - Four content lenses: Investment/Markets, Business/Technology, Policy/Regulation, Other Topics
+  - Universal extraction ensures value for investor audience regardless of topic
+  - Maintains sophisticated analysis while respecting actual conversation content
+- **Email Template Fixes**:
+  - Converted to Gmail-compatible HTML5 `<details>`/`<summary>` elements for expandable sections
+  - Fixed mobile text overflow with table-based layout and media queries
+  - Improved guest name extraction from titles and descriptions
+  - Enhanced markdown-to-HTML conversion with proper spacing and inline styles
+  - Fixed "Read Full Analysis" → "Read Full Summary" text change
+
+### Previous Improvements (2025-07-16)
 - **Implemented Two-Summary Email System**:
   - New architecture generates both 150-word paragraph and full summary per episode
   - Paragraph summaries designed as "movie trailers" for quick scanning

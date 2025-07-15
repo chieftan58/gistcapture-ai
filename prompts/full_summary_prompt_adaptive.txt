@@ -10,38 +10,44 @@ Provide comprehensive analysis of the conversation, scaling depth to match insig
 STRUCTURE
 Follow the natural flow of conversation while organizing insights thematically. Open with context and guest credibility, then trace the arc of ideas as they develop, noting tensions and resolutions.
 
-CONTENT ANALYSIS
-First, identify what type of discussion this is. Then apply the appropriate lens:
+ADAPTIVE FOCUS
+Analyze the transcript to determine which of these frameworks best fits the content:
 
-IF DISCUSSING INVESTMENTS/MARKETS:
+FOR INVESTMENT/MARKET DISCUSSIONS:
 • Investment ideas & positioning (past/present)
 • Market outlook & regime views
-• Risk/reward frameworks
-• Track record & experience
+• Portfolio construction insights
+• Risk management approaches
 
-IF DISCUSSING BUSINESS/TECHNOLOGY:
-• Business models & competitive dynamics
-• Innovation & disruption potential
-• Scalability & market opportunity
-• Strategic implications for investors
+FOR TECHNOLOGY/BUSINESS DISCUSSIONS:
+• Business model dynamics
+• Competitive advantages & moats
+• Disruption potential & timing
+• Scalability & network effects
 
-IF DISCUSSING POLICY/REGULATION:
-• Regulatory changes & implications
+FOR POLICY/REGULATORY DISCUSSIONS:
+• Regulatory landscape & changes
 • Systemic risks & protections
-• Industry impact analysis
+• Industry implications
 • Compliance considerations
 
-FOR ALL OTHER TOPICS:
-• Core insights & frameworks
-• Relevance to capital allocation
-• Risk factors & opportunities
-• Time horizons & probabilities
+FOR LEADERSHIP/ORGANIZATIONAL DISCUSSIONS:
+• Decision-making frameworks
+• Organizational design principles
+• Performance optimization
+• Cultural dynamics
 
-UNIVERSAL EXTRACTION:
-• Mental models & decision frameworks
+FOR ACADEMIC/RESEARCH DISCUSSIONS:
+• Key findings & methodologies
+• Practical applications
+• Paradigm shifts
+• Future research directions
+
+UNIVERSAL EXTRACTION (Always Include):
+• Mental models & frameworks
 • Counterintuitive insights
-• Second-order effects
-• What sophisticated investors should understand
+• What sophisticated allocators should understand
+• Actionable intelligence (even if indirect)
 
 STYLE
 - Institutional clarity with analytical precision

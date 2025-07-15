@@ -1394,19 +1394,20 @@ class EpisodeSelector:
                 return detail.status === 'failed' && isYoutubeError;
             }});
             
-            // Check for cookie expiration warnings
+            // Check for YouTube cookie expiration warnings only
             const cookieWarnings = [];
             if (APP_STATE.downloadStatus && APP_STATE.downloadStatus.cookieStatus) {{
-                Object.entries(APP_STATE.downloadStatus.cookieStatus).forEach(([platform, status]) => {{
-                    if (status.warning && (status.is_expired || (status.days_remaining !== null && status.days_remaining < 7))) {{
-                        cookieWarnings.push({{
-                            platform: platform,
-                            warning: status.warning,
-                            isExpired: status.is_expired,
-                            daysRemaining: status.days_remaining
-                        }});
-                    }}
-                }});
+                // Only check YouTube cookies, ignore Spotify/Apple
+                const youtubeStatus = APP_STATE.downloadStatus.cookieStatus.youtube;
+                if (youtubeStatus && youtubeStatus.warning && 
+                    (youtubeStatus.is_expired || (youtubeStatus.days_remaining !== null && youtubeStatus.days_remaining < 7))) {{
+                    cookieWarnings.push({{
+                        platform: 'youtube',
+                        warning: youtubeStatus.warning,
+                        isExpired: youtubeStatus.is_expired,
+                        daysRemaining: youtubeStatus.days_remaining
+                    }});
+                }}
             }}
             
             const showCookieAlert = youtubeAuthErrors.length > 0 || cookieWarnings.length > 0;
@@ -1424,58 +1425,36 @@ class EpisodeSelector:
                     ${{showCookieAlert ? `
                         <div class="cookie-alert">
                             <div class="cookie-alert-header">
-                                <span class="cookie-alert-icon">🍪</span>
-                                <strong>${{youtubeAuthErrors.length > 0 ? 'Cookie Authentication Required' : 'Cookie Warning'}}</strong>
+                                <strong>${{youtubeAuthErrors.length > 0 ? 'YouTube Authentication Required' : 'YouTube Cookie Expiring Soon'}}</strong>
                             </div>
                             ${{
                                 youtubeAuthErrors.length > 0 ?
-                                    '<p>YouTube authentication has expired for American Optimist and/or Dwarkesh podcasts.</p>' :
-                                    `<p>${{cookieWarnings.map(w => w.warning).join(' ')}}</p>`
+                                    '<p>YouTube authentication has expired. Please update your cookies to download American Optimist and Dwarkesh podcasts.</p>' :
+                                    `<p>${{cookieWarnings[0].warning}}</p>`
                             }}
                             
                             <div class="cookie-instructions">
-                                <h4>To fix this issue:</h4>
+                                <h4>Quick Fix:</h4>
                                 
                                 <ol>
-                                    <li><strong>Open YouTube in your browser</strong>
-                                        <ul>
-                                            <li>Visit <a href="https://youtube.com" target="_blank">youtube.com</a></li>
-                                            <li>Make sure you're signed in (check top right corner)</li>
-                                            <li>Try playing any video to verify access</li>
-                                        </ul>
+                                    <li><strong>Sign in to YouTube</strong>
+                                        <br>Visit <a href="https://youtube.com" target="_blank">youtube.com</a> and ensure you're logged in
                                     </li>
                                     
-                                    <li><strong>Export your cookies</strong>
-                                        <ul>
-                                            <li>Install browser extension:
-                                                <ul>
-                                                    <li>Firefox: <em>"cookies.txt"</em> by Lennon Hill</li>
-                                                    <li>Chrome: <em>"Get cookies.txt LOCALLY"</em></li>
-                                                </ul>
-                                            </li>
-                                            <li>Click the extension icon while on youtube.com</li>
-                                            <li>Choose "Export" or "Download"</li>
-                                        </ul>
+                                    <li><strong>Export cookies using Chrome extension</strong>
+                                        <br>Click the "Get cookies.txt LOCALLY" extension icon while on YouTube
+                                        <br>Choose "Export as cookies.txt"
                                     </li>
                                     
-                                    <li><strong>Save the cookie file</strong>
-                                        <ul>
-                                            <li>Save as: <code>youtube_cookies.txt</code></li>
-                                            <li>Location: <code>~/.config/renaissance-weekly/cookies/</code></li>
-                                        </ul>
+                                    <li><strong>Save the file</strong>
+                                        <br>Save as: <code>youtube_cookies.txt</code>
+                                        <br>Location: <code>~/.config/renaissance-weekly/cookies/</code>
                                     </li>
                                     
-                                    <li><strong>Protect the cookies</strong>
-                                        <ul>
-                                            <li>Run: <code>python protect_cookies_now.py</code></li>
-                                            <li>This prevents the cookies from being overwritten</li>
-                                        </ul>
+                                    <li><strong>Run cookie protection</strong>
+                                        <br><code>python protect_cookies_now.py</code>
                                     </li>
                                 </ol>
-                                
-                                <div class="cookie-note">
-                                    <strong>Note:</strong> YouTube cookies typically expire after 2 years. The protected cookies won't be overwritten by the system.
-                                </div>
                                 
                                 <details class="cookie-details">
                                     <summary>Alternative: Manual URL method</summary>
@@ -5439,43 +5418,56 @@ class EpisodeSelector:
         
         /* Cookie Alert Styles */
         .cookie-alert {
-            background: #FFF8DC;
-            border: 1px solid #FFD700;
-            border-radius: 12px;
-            padding: 24px;
+            background: #FEF3C7;
+            border: 1px solid #F59E0B;
+            border-radius: 8px;
+            padding: 20px;
             margin-bottom: 24px;
-            box-shadow: var(--shadow-soft);
         }
         
         .cookie-alert-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-            font-size: 18px;
-            color: var(--gray-700);
-        }
-        
-        .cookie-alert-icon {
-            font-size: 24px;
+            font-size: 16px;
+            color: #92400E;
+            margin-bottom: 8px;
         }
         
         .cookie-alert p {
-            color: var(--gray-600);
+            color: #78350F;
             margin-bottom: 16px;
+            font-size: 14px;
         }
         
         .cookie-instructions {
-            background: var(--white);
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 16px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 12px;
         }
         
         .cookie-instructions h4 {
-            color: var(--gray-700);
-            margin-bottom: 16px;
-            font-size: 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400E;
+            margin-bottom: 12px;
+        }
+        
+        .cookie-instructions ol {
+            margin-left: 20px;
+            font-size: 13px;
+            color: #78350F;
+        }
+        
+        .cookie-instructions li {
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        
+        .cookie-instructions code {
+            background: rgba(245, 158, 11, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: var(--font-mono);
         }
         
         .cookie-instructions ol {
@@ -5496,16 +5488,16 @@ class EpisodeSelector:
             position: absolute;
             left: 0;
             top: 0;
-            width: 28px;
-            height: 28px;
-            background: var(--black);
+            width: 24px;
+            height: 24px;
+            background: #F59E0B;
             color: var(--white);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 12px;
         }
         
         .cookie-instructions strong {
@@ -5569,14 +5561,14 @@ class EpisodeSelector:
         
         .cookie-details summary {
             cursor: pointer;
-            color: var(--gray-600);
-            font-size: 14px;
+            color: #92400E;
+            font-size: 13px;
             font-weight: 500;
             padding: 8px 0;
         }
         
         .cookie-details summary:hover {
-            color: var(--gray-700);
+            color: #78350F;
         }
         
         .cookie-alternative {

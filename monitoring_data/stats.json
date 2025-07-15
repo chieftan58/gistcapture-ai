@@ -1,29 +1,29 @@
 {
   "component_stats": {
     "transcript_fetch": {
-      "total_attempts": 1114,
-      "successful": 231,
-      "failed": 883,
-      "last_failure": "2025-07-15T03:02:40.750309",
-      "consecutive_failures": 2
+      "total_attempts": 1118,
+      "successful": 232,
+      "failed": 886,
+      "last_failure": "2025-07-15T19:27:01.399945",
+      "consecutive_failures": 1
     },
     "audio_download": {
-      "total_attempts": 553,
-      "successful": 455,
+      "total_attempts": 556,
+      "successful": 458,
       "failed": 98,
       "last_failure": "2025-07-14T21:16:31.256813",
       "consecutive_failures": 0
     },
     "summarization": {
-      "total_attempts": 830,
-      "successful": 703,
+      "total_attempts": 834,
+      "successful": 707,
       "failed": 127,
       "last_failure": "2025-07-02T19:18:39.778480",
       "consecutive_failures": 0
     },
     "audio_transcription": {
-      "total_attempts": 679,
-      "successful": 601,
+      "total_attempts": 682,
+      "successful": 604,
       "failed": 78,
       "last_failure": "2025-07-14T18:33:08.155544",
       "consecutive_failures": 0
@@ -39,8 +39,8 @@
   "mode_component_stats": {
     "test": {
       "audio_download": {
-        "total_attempts": 1,
-        "successful": 1,
+        "total_attempts": 4,
+        "successful": 4,
         "failed": 0,
         "last_failure": null,
         "consecutive_failures": 0
@@ -48,22 +48,22 @@
     },
     "full": {
       "transcript_fetch": {
-        "total_attempts": 3,
-        "successful": 1,
-        "failed": 2,
-        "last_failure": "2025-07-15T03:02:40.750298",
-        "consecutive_failures": 2
+        "total_attempts": 7,
+        "successful": 2,
+        "failed": 5,
+        "last_failure": "2025-07-15T19:27:01.399936",
+        "consecutive_failures": 1
       },
       "summarization": {
-        "total_attempts": 3,
-        "successful": 3,
+        "total_attempts": 7,
+        "successful": 7,
         "failed": 0,
         "last_failure": null,
         "consecutive_failures": 0
       },
       "audio_transcription": {
-        "total_attempts": 2,
-        "successful": 2,
+        "total_attempts": 5,
+        "successful": 5,
         "failed": 0,
         "last_failure": null,
         "consecutive_failures": 0

@@ -147,17 +147,14 @@ class EmailDigest:
         return full_html  # Fallback to full HTML if extraction fails
     
     def create_expandable_email(self, full_summaries: List[str], episodes: List[Episode], paragraph_summaries: List[str]) -> str:
-        """Create HTML email with expandable sections"""
+        """Create HTML email with expandable sections using HTML5 details/summary"""
         
         # Create episodes HTML with expandable sections
         episodes_html = ""
         
         for i, (episode, paragraph, full_summary) in enumerate(zip(episodes, paragraph_summaries, full_summaries)):
             # Extract guest name for better formatting
-            guest_name = self._extract_guest_name(episode.title)
-            
-            # Create unique IDs for expandable elements
-            checkbox_id = f"expand-{i}"
+            guest_name = self._extract_guest_name(episode.title, episode.description)
             
             episodes_html += f'''
                 <!-- Episode {i + 1} -->
@@ -167,10 +164,18 @@ class EmailDigest:
                         {escape(episode.podcast)}
                     </h2>
                     <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #34495e; font-family: Georgia, serif; font-weight: normal;">
-                        {guest_name} and {self._extract_host_name(episode.podcast)} discuss {self._extract_topics(episode.title)}
+                        {guest_name} and {self._extract_host_name(episode.podcast)} discuss {self._extract_topics(episode.title, guest_name)}
                     </h3>
-                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
                         {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
+                    </p>
+                    
+                    <!-- Link to Full Podcast -->
+                    <p style="margin: 0 0 20px 0;">
+                        <a href="{self._get_apple_podcast_link(episode)}" style="display: inline-flex; align-items: center; padding: 8px 16px; background-color: #f5f5f5; border-radius: 20px; text-decoration: none; color: #333; font-size: 14px; border: 1px solid #ddd;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Apple_Podcasts_%28macOS%29.svg/30px-Apple_Podcasts_%28macOS%29.svg.png" alt="Apple Podcasts" style="width: 20px; height: 20px; margin-right: 8px;">
+                            <span>Listen to Full Episode</span>
+                        </a>
                     </p>
                     
                     <!-- Paragraph Summary -->
@@ -178,16 +183,21 @@ class EmailDigest:
                         {escape(paragraph)}
                     </div>
                     
-                    <!-- Expandable Section -->
-                    <input type="checkbox" id="{checkbox_id}" style="display: none;">
-                    <label for="{checkbox_id}" style="display: inline-block; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; cursor: pointer; font-size: 14px; color: #666; margin-bottom: 20px;">
-                        ▼ Read Full Analysis ({len(full_summary.split())} words)
-                    </label>
-                    
-                    <!-- Full Summary (hidden by default) -->
-                    <div class="full-summary" id="full-{checkbox_id}" style="display: none; margin-top: 20px;">
-                        {self._convert_markdown_to_html(full_summary)}
-                    </div>
+                    <!-- Expandable Section using details/summary -->
+                    <details style="margin-top: 20px;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none;">
+                            ▼ Read Full Summary
+                        </summary>
+                        
+                        <!-- Full Summary -->
+                        <div style="margin-top: 20px; padding: 0 20px;">
+                            {self._convert_markdown_to_html_enhanced(full_summary)}
+                            
+                            {self._extract_and_format_resources(full_summary)}
+                            
+                            {self._format_sponsors(episode)}
+                        </div>
+                    </details>
                 </div>
             '''
         
@@ -202,20 +212,7 @@ class EmailDigest:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Renaissance Weekly</title>
     <style>
-        /* CSS for expandable sections */
-        input[type="checkbox"]:checked + label + .full-summary {{
-            display: block !important;
-        }}
-        
-        input[type="checkbox"]:checked + label::before {{
-            content: "▲ " !important;
-        }}
-        
-        label[for^="expand-"]::before {{
-            content: "▼ ";
-        }}
-        
-        /* Basic styles */
+        /* Basic reset and mobile-friendly styles */
         body {{
             margin: 0;
             padding: 0;
@@ -223,6 +220,8 @@ class EmailDigest:
             font-size: 16px;
             line-height: 1.6;
             color: #333;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
             background-color: #ffffff;
         }}
         
@@ -239,32 +238,88 @@ class EmailDigest:
             text-decoration: underline;
         }}
         
-        /* Gmail-specific fixes */
+        /* Mobile-specific fixes */
+        table {{
+            border-collapse: collapse;
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }}
+        
         @media only screen and (max-width: 600px) {{
             .container {{
                 width: 100% !important;
-                padding: 20px !important;
             }}
+            .content-table {{
+                width: 100% !important;
+            }}
+            h1 {{
+                font-size: 28px !important;
+            }}
+            h2 {{
+                font-size: 20px !important;
+            }}
+            h3 {{
+                font-size: 16px !important;
+            }}
+            .episode-content {{
+                padding: 15px !important;
+            }}
+        }}
+        
+        /* Details/Summary styling for Gmail */
+        details {{
+            margin-top: 20px;
+        }}
+        
+        summary {{
+            list-style: none;
+            -webkit-appearance: none;
+        }}
+        
+        summary::-webkit-details-marker {{
+            display: none;
+        }}
+        
+        details[open] summary::before {{
+            content: "▲ ";
+        }}
+        
+        summary::before {{
+            content: "▼ ";
         }}
     </style>
 </head>
-<body>
-    <div class="container" style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-        <!-- Header -->
-        <div style="text-align: center; margin-bottom: 40px;">
-            <h1 style="margin: 0 0 10px 0; font-size: 36px; color: #000;">Renaissance Weekly</h1>
-            <p style="margin: 0 0 20px 0; font-size: 16px; color: #666; font-style: italic;">Investment Intelligence from the Podcast Universe</p>
-            <p style="margin: 0; font-size: 14px; color: #999;">{datetime.now().strftime('%B %d, %Y')}</p>
-        </div>
-        
-        <!-- Episodes -->
-        {episodes_html}
-        
-        <!-- Footer -->
-        <div style="margin-top: 60px; padding-top: 40px; border-top: 1px solid #E0E0E0; text-align: center; font-size: 14px; color: #666;">
-            <p>Renaissance Weekly - For the intellectually ambitious</p>
-        </div>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #ffffff;">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+            <td align="center" style="padding: 0;">
+                <table class="container" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px;">
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="padding: 40px 20px;">
+                            <h1 style="margin: 0 0 10px 0; font-size: 36px; color: #000; font-family: Georgia, serif;">Renaissance Weekly</h1>
+                            <p style="margin: 0 0 20px 0; font-size: 16px; color: #666; font-style: italic; font-family: Georgia, serif;">Investment Intelligence from the Podcast Universe</p>
+                            <p style="margin: 0; font-size: 14px; color: #999; font-family: Georgia, serif;">{datetime.now().strftime('%B %d, %Y')}</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Episodes -->
+                    <tr>
+                        <td class="episode-content" style="padding: 0 20px;">
+                            {episodes_html}
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td align="center" style="padding: 40px 20px; border-top: 1px solid #E0E0E0;">
+                            <p style="margin: 0; font-size: 14px; color: #666; font-family: Georgia, serif;">Renaissance Weekly - For the intellectually ambitious</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>"""
     
@@ -273,8 +328,8 @@ class EmailDigest:
         # Find the most prominent guest name
         guest_names = []
         for episode in episodes:
-            guest = self._extract_guest_name(episode.title)
-            if guest and guest != "[Guest Name]":
+            guest = self._extract_guest_name(episode.title, episode.description or "")
+            if guest and guest != "the guest":
                 guest_names.append(guest)
         
         if guest_names:
@@ -285,8 +340,8 @@ class EmailDigest:
             # Fallback subject
             return f"Renaissance Weekly: {len(episodes)} Essential Conversations"
     
-    def _extract_guest_name(self, title: str) -> str:
-        """Extract guest name from episode title"""
+    def _extract_guest_name(self, title: str, description: str = "") -> str:
+        """Extract guest name from episode title or description"""
         import re
         
         # Common patterns in podcast titles
@@ -299,6 +354,7 @@ class EmailDigest:
             r'^([A-Z][a-zA-Z\s]+?):\s',
         ]
         
+        # Try title first
         for pattern in patterns:
             match = re.search(pattern, title, re.IGNORECASE)
             if match:
@@ -307,7 +363,34 @@ class EmailDigest:
                 if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
                     return guest
         
-        return "[Guest Name]"
+        # Try description as fallback
+        if description:
+            for pattern in patterns:
+                match = re.search(pattern, description, re.IGNORECASE)
+                if match:
+                    guest = match.group(1).strip()
+                    # Basic validation
+                    if 2 <= len(guest.split()) <= 4 and len(guest) < 50:
+                        return guest
+        
+        # If still not found, try to extract from common name patterns
+        # Look for patterns like "Name:" or "Interview with Name"
+        special_patterns = [
+            r'^(?:Interview with |Conversation with |)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:[:\s\-]|$)',
+            r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}):\s',
+            r'^#\d+:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:\s|$)'
+        ]
+        
+        for pattern in special_patterns:
+            match = re.match(pattern, title)
+            if match:
+                potential_name = match.group(1)
+                # Exclude common non-name words
+                exclude_words = ['Episode', 'Part', 'Chapter', 'Special', 'Bonus', 'The', 'Interview', 'Podcast']
+                if not any(word in potential_name for word in exclude_words):
+                    return potential_name
+        
+        return "the guest"
     
     def _extract_host_name(self, podcast_name: str) -> str:
         """Extract or infer host name from podcast name"""
@@ -324,7 +407,7 @@ class EmailDigest:
         
         return host_mapping.get(podcast_name, "the host")
     
-    def _extract_topics(self, title: str) -> str:
+    def _extract_topics(self, title: str, guest_name: str) -> str:
         """Extract main topics from title for natural language flow"""
         # Remove common prefixes and guest names
         import re
@@ -332,9 +415,14 @@ class EmailDigest:
         # Remove patterns like "Ep 123:", "#123:", etc.
         title = re.sub(r'^(Ep\s*\d+|#\d+|Episode\s*\d+)[:\s\-]*', '', title, flags=re.IGNORECASE)
         
+        # Remove the specific guest name if found
+        if guest_name and guest_name != "the guest":
+            title = title.replace(guest_name, '').strip()
+        
         # Remove guest name patterns
         title = re.sub(r'with\s+[A-Z][a-zA-Z\s]+?[\|\-\:]', '', title, flags=re.IGNORECASE)
         title = re.sub(r'featuring\s+[A-Z][a-zA-Z\s]+?[\|\-\:]', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'ft\.\s+[A-Z][a-zA-Z\s]+?[\|\-\:]', '', title, flags=re.IGNORECASE)
         
         # Clean up and lowercase first letter
         title = title.strip(' |-:')
@@ -376,6 +464,69 @@ class EmailDigest:
         
         return '\n'.join(html_paragraphs)
     
+    def _convert_markdown_to_html_enhanced(self, markdown: str) -> str:
+        """Convert markdown to HTML with enhanced formatting for email clients"""
+        # First escape HTML
+        html = escape(markdown)
+        
+        # Convert headers with inline styles
+        html = re.sub(r'^### (.+)$', r'<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">\1</h4>', html, flags=re.MULTILINE)
+        html = re.sub(r'^## (.+)$', r'<h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">\1</h3>', html, flags=re.MULTILINE)
+        html = re.sub(r'^# (.+)$', r'<h2 style="margin: 20px 0 10px 0; font-size: 20px; color: #2c3e50; font-family: Georgia, serif;">\1</h2>', html, flags=re.MULTILINE)
+        
+        # Convert bold and italic
+        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+        html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+        
+        # Convert bullet points with proper spacing
+        html = re.sub(r'^[•\-\*]\s+(.+)$', r'<li style="margin-bottom: 8px; line-height: 1.6;">\1</li>', html, flags=re.MULTILINE)
+        
+        # Wrap consecutive <li> in <ul> with margin
+        lines = html.split('\n')
+        result_lines = []
+        in_list = False
+        list_items = []
+        
+        for line in lines:
+            if '<li' in line:
+                if not in_list:
+                    in_list = True
+                list_items.append(line)
+            else:
+                if in_list and list_items:
+                    # Close the list
+                    result_lines.append('<ul style="margin: 15px 0; padding-left: 20px;">')
+                    result_lines.extend(list_items)
+                    result_lines.append('</ul>')
+                    list_items = []
+                    in_list = False
+                result_lines.append(line)
+        
+        # Handle any remaining list items
+        if list_items:
+            result_lines.append('<ul style="margin: 15px 0; padding-left: 20px;">')
+            result_lines.extend(list_items)
+            result_lines.append('</ul>')
+        
+        html = '\n'.join(result_lines)
+        
+        # Split into paragraphs and add proper spacing
+        paragraphs = html.split('\n\n')
+        html_paragraphs = []
+        
+        for p in paragraphs:
+            p = p.strip()
+            if p:
+                # Check if it's already an HTML tag
+                if p.startswith('<h') or p.startswith('<ul'):
+                    html_paragraphs.append(p)
+                else:
+                    # Regular paragraph with spacing
+                    html_paragraphs.append(f'<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">{p}</p>')
+        
+        # Join with explicit spacing
+        return '\n'.join(html_paragraphs)
+    
     def _create_plain_text_version(self, summaries: List[str]) -> str:
         """Create plain text version of email"""
         plain_text = "RENAISSANCE WEEKLY\n"
@@ -391,3 +542,166 @@ class EmailDigest:
         plain_text += "Renaissance Weekly - For the intellectually ambitious\n"
         
         return plain_text
+    
+    def _get_apple_podcast_link(self, episode: Episode) -> str:
+        """Get Apple Podcasts link for episode"""
+        # If we have a direct episode link, use that
+        if episode.link and 'apple.com' in episode.link:
+            return episode.link
+        
+        # Otherwise construct from apple_podcast_id if available
+        if episode.apple_podcast_id:
+            return f"https://podcasts.apple.com/us/podcast/id{episode.apple_podcast_id}"
+        
+        # Fallback to generic link or episode link
+        return episode.link or "#"
+    
+    def _extract_and_format_resources(self, summary: str) -> str:
+        """Extract and format books/resources mentioned in the summary"""
+        import re
+        
+        # Look for book titles (in quotes or italics)
+        book_patterns = [
+            r'"([^"]+)"\s*by\s*([A-Z][a-zA-Z\s\.]+?)(?:[,\.]|$)',  # "Title" by Author
+            r'book\s+"([^"]+)"',  # book "Title"
+            r'\*([^\*]+)\*\s*by\s*([A-Z][a-zA-Z\s\.]+?)(?:[,\.]|$)',  # *Title* by Author
+        ]
+        
+        books = []
+        book_titles_seen = set()
+        for pattern in book_patterns:
+            matches = re.findall(pattern, summary, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    title = match[0].strip()
+                    author = match[1].strip() if len(match) > 1 else ""
+                    # Clean up the extraction
+                    if title and not any(skip in title.lower() for skip in ['the book', 'his book', 'her book']):
+                        # Check for duplicates by title
+                        title_key = title.lower()
+                        if title_key not in book_titles_seen:
+                            book_titles_seen.add(title_key)
+                            books.append(f"{title} by {author}" if author else title)
+                else:
+                    if match and not any(skip in match.lower() for skip in ['the book', 'his book', 'her book']):
+                        title_key = match.strip().lower()
+                        if title_key not in book_titles_seen:
+                            book_titles_seen.add(title_key)
+                            books.append(match.strip())
+        
+        # Look for other resources (websites, papers, etc.)
+        resource_patterns = [
+            r'(?:paper|article)\s*"([^"]+)"',  # paper "Title"
+            r'(?:website|site)\s+([a-zA-Z0-9\-]+\.(?:com|org|net|io|ai)(?:/[^\s]*)?)',  # website domain.com/path
+            r'(?:available at|found at|see)\s+([a-zA-Z0-9\-]+\.(?:com|org|net|io|ai)(?:/[^\s]*)?)',
+        ]
+        
+        resources = []
+        for pattern in resource_patterns:
+            matches = re.findall(pattern, summary, re.IGNORECASE)
+            for match in matches:
+                resource = match.strip().rstrip('.')
+                if len(resource) > 10:
+                    resources.append(resource)
+        
+        # Books are already de-duplicated above
+        unique_books = books
+        
+        # Remove duplicate resources
+        seen = set()
+        unique_resources = []
+        for resource in resources:
+            if resource.lower() not in seen:
+                seen.add(resource.lower())
+                unique_resources.append(resource)
+        
+        # Format the output
+        if not unique_books and not unique_resources:
+            return ""
+        
+        html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">'
+        html += '<h4 style="margin: 0 0 15px 0; font-size: 16px; color: #2c3e50; font-family: Georgia, serif;">Resources Mentioned</h4>'
+        
+        if unique_books:
+            html += '<p style="margin: 0 0 10px 0; font-size: 14px; color: #666; font-weight: bold;">Books:</p>'
+            html += '<ul style="margin: 0 0 20px 0; padding-left: 20px;">'
+            for book in unique_books[:5]:  # Limit to 5 books
+                html += f'<li style="margin-bottom: 5px; font-size: 14px; color: #333;">{escape(book)}</li>'
+            html += '</ul>'
+        
+        if unique_resources:
+            html += '<p style="margin: 0 0 10px 0; font-size: 14px; color: #666; font-weight: bold;">Other Resources:</p>'
+            html += '<ul style="margin: 0 0 20px 0; padding-left: 20px;">'
+            for resource in unique_resources[:5]:  # Limit to 5 resources
+                html += f'<li style="margin-bottom: 5px; font-size: 14px; color: #333;">{escape(resource)}</li>'
+            html += '</ul>'
+        
+        html += '</div>'
+        return html
+    
+    def _format_sponsors(self, episode: Episode) -> str:
+        """Format sponsor information for the episode"""
+        # Common sponsor patterns in descriptions
+        sponsor_patterns = [
+            r'(?:sponsored by|brought to you by|thanks to)\s+([^\.,\n]+)',
+            r'(?:today\'s sponsor|our sponsor)\s*[:\-]?\s*([^\.,\n]+)',
+            r'(?:visit|go to)\s+([a-zA-Z0-9]+\.(?:com|org|net|io|ai)/[a-zA-Z0-9]+)',
+        ]
+        
+        sponsors = []
+        sponsor_links = {}
+        
+        if episode.description:
+            import re
+            
+            # Extract sponsors from description
+            for pattern in sponsor_patterns:
+                matches = re.findall(pattern, episode.description, re.IGNORECASE)
+                for match in matches:
+                    sponsor = match.strip()
+                    # Clean up sponsor name - remove common suffixes
+                    sponsor = re.sub(r'\s*[-\.]\s*(?:visit|go to).*$', '', sponsor, flags=re.IGNORECASE)
+                    sponsor = re.sub(r'\s+at\s+[a-zA-Z0-9]+\..*$', '', sponsor, flags=re.IGNORECASE)
+                    if len(sponsor) > 3 and len(sponsor) < 50:
+                        sponsors.append(sponsor)
+            
+            # Extract sponsor URLs
+            url_pattern = r'([a-zA-Z0-9]+\.(?:com|org|net|io|ai)/[a-zA-Z0-9\-_]+)'
+            urls = re.findall(url_pattern, episode.description, re.IGNORECASE)
+        
+        # Remove duplicates and clean up
+        unique_sponsors = []
+        seen = set()
+        for sponsor in sponsors:
+            sponsor_clean = sponsor.strip()
+            sponsor_lower = sponsor_clean.lower()
+            if sponsor_lower not in seen and sponsor_clean:
+                seen.add(sponsor_lower)
+                unique_sponsors.append(sponsor_clean)
+        
+        # Try to match sponsors with their URLs
+        if episode.description:
+            for sponsor in unique_sponsors:
+                sponsor_key = sponsor.lower().split()[0]
+                for url in urls:
+                    if sponsor_key in url.lower():
+                        sponsor_links[sponsor] = f"https://{url}" if not url.startswith('http') else url
+                        break
+        
+        if not unique_sponsors:
+            return ""
+        
+        # Format sponsor section
+        html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">'
+        html += '<p style="margin: 0 0 15px 0; font-size: 14px; color: #666; font-style: italic;">This episode is brought to you by:</p>'
+        html += '<ul style="margin: 0; padding-left: 20px;">'
+        
+        for sponsor in unique_sponsors[:4]:  # Limit to 4 sponsors
+            if sponsor in sponsor_links:
+                html += f'<li style="margin-bottom: 8px; font-size: 14px;"><a href="{sponsor_links[sponsor]}" style="color: #0066cc; text-decoration: none;">{escape(sponsor)}</a></li>'
+            else:
+                html += f'<li style="margin-bottom: 8px; font-size: 14px; color: #333;">{escape(sponsor)}</li>'
+        
+        html += '</ul>'
+        html += '</div>'
+        return html

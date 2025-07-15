@@ -242,6 +242,10 @@ class SystemMonitor:
     
     def _check_alerts(self, component: str, podcast: str, mode: str = 'test'):
         """Check if we should send alerts based on thresholds"""
+        # Skip alerts for transcript_fetch - it's expected to fail often since many sources don't have transcripts
+        if component == 'transcript_fetch':
+            return
+            
         stats = self.mode_component_stats[mode][component]
         
         alerts = []

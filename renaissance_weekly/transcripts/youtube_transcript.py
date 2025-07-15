@@ -157,24 +157,21 @@ class YouTubeTranscriptFinder:
             
             url = f"https://www.youtube.com/results?search_query={search_query}"
             
-            session = aiohttp.ClientSession()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    html = await response.text()
-                    
-                    # Extract video IDs from search results
-                    pattern = r'"videoId":"([a-zA-Z0-9_-]+)"'
-                    matches = re.findall(pattern, html)
-                    
-                    if matches:
-                        # Return first match (most relevant)
-                        return matches[0]
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        html = await response.text()
+                        
+                        # Extract video IDs from search results
+                        pattern = r'"videoId":"([a-zA-Z0-9_-]+)"'
+                        matches = re.findall(pattern, html)
+                        
+                        if matches:
+                            # Return first match (most relevant)
+                            return matches[0]
                             
         except Exception as e:
             logger.debug(f"YouTube web search failed: {e}")
-        finally:
-            if session:
-                await session.close()
         
         return None
     

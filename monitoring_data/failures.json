@@ -1,38 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:41:27.963372",
-    "component": "summarization",
-    "podcast": "A16Z",
-    "episode_title": "Where We Are in the AI Cycle",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:28.291692",
-    "component": "transcript_fetch",
-    "podcast": "American Optimist",
-    "episode_title": "Ep 117: Dave Rubin on the Woke Right, Free Speech vs Conspiracy Theories & His New Tequila Company",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:41:29.152345",
-    "component": "audio_download",
-    "podcast": "American Optimist",
-    "episode_title": "https://api.substack.com/feed/podcast/166905920/311d17a63b51b4e8b7eeea789e00f633",
-    "error_type": "ValidationFailed",
-    "error_message": "Downloaded file failed validation",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
     "timestamp": "2025-07-02T01:41:29.319700",
     "component": "audio_download",
     "podcast": "American Optimist",
@@ -10990,6 +10957,39 @@
   },
   {
     "timestamp": "2025-07-15T03:02:40.750286",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T19:21:36.033957",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The Data Factory: Inside the $100B Race for Post-Training Supremacy, with Labelbox CEO Manu Sharma",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T19:21:40.192772",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-15T19:27:01.399923",
     "component": "transcript_fetch",
     "podcast": "Tim Ferriss",
     "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",

@@ -288,6 +288,13 @@ class RenaissanceWeekly:
                 fetch_episodes_callback
             )
             
+            # Check if email was already sent through UI
+            if configuration.get('email_approved'):
+                # Email was already sent in UI, this is a successful completion
+                logger.info(f"[{self.correlation_id}] ✅ Email already sent through UI - process complete")
+                await pipeline_progress.complete_item(True)
+                return
+            
             if not selected_episodes:
                 logger.warning(f"[{self.correlation_id}] ❌ No episodes selected - exiting")
                 await pipeline_progress.complete_item(False)
