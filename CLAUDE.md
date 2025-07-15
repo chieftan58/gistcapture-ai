@@ -138,6 +138,10 @@ python main.py --load-dataset <name>
 - **Transcription Speed**: 15-30 minutes (vs 2 hours with Whisper)
 - **Download Strategies**: 4 independent pathways
 - **Concurrency**: Memory-aware with dynamic scaling
+  - Episode processing: 2 concurrent (CPU/memory limited)
+  - AssemblyAI: 32x concurrent transcriptions
+  - GPT-4 summaries: 20 concurrent
+  - YouTube downloads: 2 concurrent (separate semaphore)
 
 ### Multi-Strategy Download System
 1. **Direct Download**: Platform-specific headers and validation
@@ -171,6 +175,16 @@ python main.py --load-dataset <name>
 2. Run `python main.py verify` for processing status
 3. Use `python main.py check "Podcast Name"` for specific issues
 4. Check monitoring data in `monitoring_data/`
+
+### Viewing Transcripts
+Transcripts are stored in SQLite database:
+```bash
+# View all transcripts
+sqlite3 renaissance_weekly.db "SELECT podcast, title, LENGTH(transcript) FROM episodes WHERE transcript IS NOT NULL;"
+
+# Export specific transcript
+sqlite3 renaissance_weekly.db "SELECT transcript FROM episodes WHERE title LIKE '%keyword%';"
+```
 
 ### YouTube Authentication & Cookie Management
 For YouTube-protected content:
@@ -216,3 +230,11 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 - Achieved production readiness with 95%+ success rate
 - Added cookie expiration alerts with detailed fix instructions
 - Implemented cookie protection system to prevent overwriting
+- Fixed memory management issues:
+  - Resolved OOM kills caused by pydub loading entire audio files
+  - Replaced with metadata-only extraction using mutagen
+  - Added continuous memory monitoring during downloads
+  - Reduced UI polling frequency (1s → 3-5s)
+  - Fixed YouTube URL mapping for correct episode matching
+- Suppressed verbose HTTP logging from AssemblyAI client
+- Enhanced concurrency controls with YouTube-specific limits

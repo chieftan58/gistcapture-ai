@@ -1,35 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:10:45.669169",
-    "component": "transcript_fetch",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T01:11:00.656533",
-    "component": "summarization",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T01:11:00.869403",
-    "component": "transcript_fetch",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T01:11:22.476134",
     "component": "summarization",
     "podcast": "We Study Billionaires",
@@ -9994,6 +9964,36 @@
     "component": "transcript_fetch",
     "podcast": "Dwarkesh Podcast",
     "episode_title": "Stephen Kotkin \u2014 How Stalin Became the Most Powerful Dictator in History",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T00:06:56.839929",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "#356 -\u00a0AMA\u00a0#73: Preserving brain health, optimizing exercise programming, improving body composition, and more",
+    "error_type": "ValidationFailed",
+    "error_message": "Transcript found but contains only metadata",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T00:06:56.877298",
+    "component": "transcript_fetch",
+    "podcast": "The Drive",
+    "episode_title": "#356 -\u00a0AMA\u00a0#73: Preserving brain health, optimizing exercise programming, improving body composition, and more",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T00:08:44.681694",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,
