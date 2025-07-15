@@ -3086,15 +3086,22 @@ class EpisodeSelector:
             const statusIcon = (detail.status === 'downloaded' || detail.status === 'success') ? '✓' : (detail.status === 'failed' ? '✗' : (detail.status === 'retrying' ? '↻' : '•'));
             
             // Format duration info
-            function formatDuration(minutes) {{
-                if (!minutes || minutes === 'Unknown' || isNaN(minutes)) return 'N/A';
-                const hours = Math.floor(minutes / 60);
-                const mins = Math.round(minutes % 60);
-                if (hours > 0) {{
-                    return `${{hours}}h ${{mins}}m`;
-                }} else {{
-                    return `${{mins}}m`;
+            function formatDuration(durationValue) {{
+                // Handle string duration from episodes page (e.g., "1h 23m")
+                if (typeof durationValue === 'string' && durationValue && durationValue !== 'Unknown') {{
+                    return durationValue;
                 }}
+                // Handle numeric minutes
+                if (typeof durationValue === 'number' && !isNaN(durationValue)) {{
+                    const hours = Math.floor(durationValue / 60);
+                    const mins = Math.round(durationValue % 60);
+                    if (hours > 0) {{
+                        return `${{hours}}h ${{mins}}m`;
+                    }} else {{
+                        return `${{mins}}m`;
+                    }}
+                }}
+                return 'N/A';
             }}
             
             // Check for duration mismatch (downloaded significantly shorter than expected)
@@ -3151,7 +3158,7 @@ class EpisodeSelector:
                             <div class="file-details">
                                 <div class="duration-info ${{hasMismatch ? 'duration-mismatch' : ''}}">
                                     <span class="detail-label">Duration:</span>
-                                    <span class="detail-value">Expected: ${{formatDuration(expectedDuration)}} | Downloaded: ${{formatDuration(downloadedDuration)}}</span>
+                                    <span class="detail-value">Full Podcast: ${{formatDuration(expectedDuration)}} | Downloaded: ${{formatDuration(downloadedDuration)}}</span>
                                     ${{hasMismatch ? ' <span class="mismatch-indicator">⚠️</span>' : ' ✅'}}
                                 </div>
                                 <div class="file-info">

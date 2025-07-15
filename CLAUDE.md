@@ -162,6 +162,7 @@ python main.py --load-dataset <name>
 - Summaries are cached separately by mode - test mode (15 min) vs full mode (complete episodes)
 - Minimum 1 episode required for email sending (previously 20)
 - Browser cookies automatically used for YouTube authentication
+- YouTube URL mappings in `hardcoded_episode_urls.py` are crucial for Cloudflare-protected podcasts
 
 ## Common Tasks
 
@@ -224,6 +225,10 @@ The UI now displays automatic alerts when YouTube authentication expires:
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
 ### Latest Improvements (2025-07-15)
+- Fixed duration display on Download page:
+  - Changed from showing "N/A" to displaying full podcast duration from Episodes page
+  - Updated label from "Expected:" to "Full Podcast:" for clarity
+  - Fixed formatDuration function to properly handle string durations (e.g., "1h 23m")
 - Fixed unclosed aiohttp client sessions that were causing memory leaks:
   - Added proper cleanup in SubstackEnhancedFetcher context manager
   - Implemented cleanup method in DownloadManager

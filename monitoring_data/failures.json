@@ -1,35 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:20:27.290260",
-    "component": "summarization",
-    "podcast": "No Priors",
-    "episode_title": "Meet AlphaEvolve: The Autonomous Agent That Discovers Algorithms Better Than Humans With Google DeepMind\u2019s Pushmeet Kohli and Matej Balog",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T01:41:09.792418",
-    "component": "summarization",
-    "podcast": "A16Z",
-    "episode_title": "Katherine Boyle: How Tech Can Rebuild America",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
-    "timestamp": "2025-07-02T01:41:10.248400",
-    "component": "transcript_fetch",
-    "podcast": "A16Z",
-    "episode_title": "Where We Are in the AI Cycle",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false
-  },
-  {
     "timestamp": "2025-07-02T01:41:10.288639",
     "component": "transcript_fetch",
     "podcast": "A16Z",
@@ -9994,6 +9964,36 @@
     "component": "transcript_fetch",
     "podcast": "Dwarkesh Podcast",
     "episode_title": "Stephen Kotkin \u2014 How Stalin Became the Most Powerful Dictator in History",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T02:11:35.167194",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T02:11:38.666671",
+    "component": "transcript_fetch",
+    "podcast": "Dwarkesh Podcast",
+    "episode_title": "Stephen Kotkin \u2014 How Stalin Became the Most Powerful Dictator in History",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false
+  },
+  {
+    "timestamp": "2025-07-15T02:18:20.220323",
+    "component": "transcript_fetch",
+    "podcast": "Tim Ferriss",
+    "episode_title": "#818: John Arnold with Dr. Peter Attia \u2014 The Greatest Energy Trader of All Time on Lessons Learned, Walking Away from Wall Street, and Reinventing Philanthropy",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,
