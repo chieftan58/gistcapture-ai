@@ -10,5 +10,3 @@ Extract and organize only the most consequential, replicable insights from inves
 • Educational resources — books, papers, tools that shaped the guest’s edge.
 
 Filter mercilessly: omit fluff, motivational filler, or off‑topic banter. Write with institutional‑grade precision. Your goal is to deliver timeless, capital‑relevant insight a hedge‑fund PM would annotate, debate, or deploy.
-
-When content doesn't fit pure investment frameworks, capture the conversation's natural flow while highlighting any tangentially relevant insights for investors.

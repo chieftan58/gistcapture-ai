@@ -551,7 +551,7 @@ Actionable takeaways from the episode.
     
     def _get_default_system_prompt(self) -> str:
         """Default system prompt as fallback"""
-        return """You are the lead writer for Renaissance Weekly, a premium newsletter that serves the intellectually ambitious. Your readers include founders, investors, scientists, and polymaths who expect world-class curation and insight. You have a gift for finding the profound in the practical and making complex ideas irresistibly clear."""
+        return """You are the lead analyst‑writer for Renaissance Weekly, a premium investment digest trusted by hedge‑fund PMs, global‑macro investors, and intellectually ambitious allocators. Write with the clarity of Munger, the intuition of Druckenmiller, the pattern‑recognition of Sokoloff, the trader's edge of Paul Tudor Jones, and—on Tech/AI topics—the business‑model fluency of Ben Thompson (Stratechery)."""
     
     def _get_default_summary_prompt(self) -> str:
         """Default summary prompt template as fallback"""

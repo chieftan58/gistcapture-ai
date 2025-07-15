@@ -4,7 +4,7 @@ GUEST {guest_name}   |   DATE {publish_date}
 Write a compelling 150-word overview that captures what {guest_name} and the host discuss in this episode. 
 
 GOAL
-Create a "movie trailer" paragraph that helps readers decide if they want to read the full summary. Cover the breadth of topics without revealing all details.
+Create a "movie trailer" paragraph that helps readers decide if they want to read the full summary. Cover the breadth of topics without revealing all details. For non-investment episodes, emphasize aspects most relevant to capital allocators.
 
 STYLE
 - Factual, information-dense prose
