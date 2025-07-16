@@ -242,7 +242,7 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 
 ### Critical: Transcript Cache Not Working in Full Mode
 **Discovered**: 2025-07-15
-**Status**: RESOLVED
+**Status**: RESOLVED (2025-07-16)
 
 **Symptoms**:
 - System re-transcribes episodes with AssemblyAI even when previously run in full mode
@@ -251,15 +251,34 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 - This causes unnecessary API costs (~$0.90 per hour of audio)
 
 **Root Cause**:
-Database was missing required columns for mode-specific transcript storage:
-- `transcript_test` - For test mode transcripts (15-minute previews)
-- `summary_test` - For test mode summaries
-- `transcription_mode` - To track which mode was used
+SQL queries in `database.py` included restrictive `AND transcription_mode = ?` conditions that prevented finding transcripts when episodes were saved with different modes than the current run.
 
-**Resolution**:
-Created and ran `migrate_db.py` script to add missing columns to database schema. This ensures proper separation of test and full mode data, preventing cache misses.
+**Resolution** (2025-07-16):
+1. Removed all `transcription_mode` restrictions from SQL WHERE clauses in:
+   - `get_transcript()` - Primary transcript lookup
+   - `get_episode_summary()` - Summary lookups
+   - `get_episodes_with_summaries()` - Bulk summary queries
+2. Added flexible fallback matching in `get_transcript()`:
+   - First tries GUID match (most reliable)
+   - Falls back to podcast + title + date
+   - Final fallback to podcast + title only (handles date inconsistencies)
+3. Enhanced logging throughout database operations for better debugging
 
-### Latest Improvements (2025-07-18)
+The fix ensures transcripts are found based on the appropriate column (`transcript` vs `transcript_test`) regardless of the stored `transcription_mode` value.
+
+### Latest Improvements (2025-07-16)
+- **Fixed transcript cache failures**:
+  - Removed restrictive `transcription_mode` conditions from all SQL queries
+  - Added flexible matching with title-only fallback for date inconsistencies
+  - Enhanced database operation logging for debugging
+  - Cache now works properly across test and full modes
+- **Enhanced email digest formatting**:
+  - Removed sponsor sections from email footers (kept resources)
+  - Added clickable table of contents to mobile version
+  - Fixed desktop TOC numbering and clickable links
+  - Improved "Back to Episodes" link functionality
+
+### Previous Improvements (2025-07-18)
 - **Fixed aiohttp memory leak**:
   - Identified issue in `TranscriptAPIAggregator` where client instances were created at init time
   - Fixed by instantiating clients within async context manager to ensure proper cleanup

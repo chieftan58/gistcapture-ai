@@ -234,6 +234,11 @@ class PodcastDatabase:
                      summary: Optional[str] = None, paragraph_summary: Optional[str] = None,
                      transcription_mode: str = 'test') -> int:
         """Save or update an episode in the database"""
+        logger.info(f"💾 Saving episode: {episode.podcast} - {episode.title[:50]}...")
+        logger.info(f"   GUID: {episode.guid}")
+        logger.info(f"   Mode: {transcription_mode}")
+        logger.info(f"   Transcript: {len(transcript) if transcript else 0} chars")
+        
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -330,6 +335,13 @@ class PodcastDatabase:
     def get_transcript(self, episode: Episode, transcription_mode: str = None) -> Tuple[Optional[str], Optional[TranscriptSource]]:
         """Get cached transcript for an episode matching the transcription mode"""
         try:
+            # Debug logging
+            logger.info(f"🔍 Database lookup - Mode: {transcription_mode}")
+            logger.info(f"   Podcast: {episode.podcast}")
+            logger.info(f"   Title: {episode.title}")
+            logger.info(f"   GUID: {episode.guid}")
+            logger.info(f"   Published: {episode.published} (type: {type(episode.published)})")
+            
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
@@ -345,12 +357,13 @@ class PodcastDatabase:
                 # Try to find by guid first (most reliable)
                 if episode.guid:
                     if transcript_column:
-                        cursor.execute(f"""
+                        query = f"""
                             SELECT {transcript_column}, transcript_source 
-                            FROM episodes 
+                            FROM episodes
                             WHERE guid = ? AND {transcript_column} IS NOT NULL
-                            AND transcription_mode = ?
-                        """, (episode.guid, transcription_mode))
+                        """
+                        logger.info(f"🔍 Executing GUID query for column: {transcript_column}")
+                        cursor.execute(query, (episode.guid,))
                     else:
                         # Backwards compatibility - check both columns
                         cursor.execute("""
@@ -359,19 +372,22 @@ class PodcastDatabase:
                             WHERE guid = ? AND (transcript IS NOT NULL OR transcript_test IS NOT NULL)
                         """, (episode.guid,))
                     result = cursor.fetchone()
+                    logger.info(f"🔍 GUID query result: {result is not None}")
                     if result:
                         transcript, source_str = result
                         source = TranscriptSource(source_str) if source_str else None
+                        logger.info(f"✅ Found transcript by GUID: {len(transcript) if transcript else 0} chars")
                         return transcript, source
                 
                 # Fall back to matching by podcast, title, and date
+                logger.info("🔍 GUID lookup failed, trying title/date match...")
                 if transcript_column:
                     cursor.execute(f"""
                         SELECT {transcript_column}, transcript_source 
                         FROM episodes 
                         WHERE podcast = ? AND title = ? AND date(published) = date(?)
-                        AND {transcript_column} IS NOT NULL AND transcription_mode = ?
-                    """, (episode.podcast, episode.title, episode.published.isoformat(), transcription_mode))
+                        AND {transcript_column} IS NOT NULL
+                    """, (episode.podcast, episode.title, episode.published.isoformat()))
                 else:
                     # Backwards compatibility
                     cursor.execute("""
@@ -382,11 +398,43 @@ class PodcastDatabase:
                     """, (episode.podcast, episode.title, episode.published.isoformat()))
                 
                 result = cursor.fetchone()
+                logger.info(f"🔍 Title/date query result: {result is not None}")
                 if result:
                     transcript, source_str = result
                     source = TranscriptSource(source_str) if source_str else None
+                    logger.info(f"✅ Found transcript by title/date: {len(transcript) if transcript else 0} chars")
                     return transcript, source
                 
+                # Final fallback: Try matching by just podcast and title (most flexible)
+                logger.info("🔍 Title/date lookup failed, trying title-only match...")
+                if transcript_column:
+                    cursor.execute(f"""
+                        SELECT {transcript_column}, transcript_source, published
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ?
+                        AND {transcript_column} IS NOT NULL
+                        ORDER BY published DESC
+                        LIMIT 1
+                    """, (episode.podcast, episode.title))
+                else:
+                    cursor.execute("""
+                        SELECT COALESCE(transcript, transcript_test), transcript_source, published
+                        FROM episodes 
+                        WHERE podcast = ? AND title = ?
+                        AND (transcript IS NOT NULL OR transcript_test IS NOT NULL)
+                        ORDER BY published DESC
+                        LIMIT 1
+                    """, (episode.podcast, episode.title))
+                
+                result = cursor.fetchone()
+                if result:
+                    transcript, source_str, db_published = result
+                    source = TranscriptSource(source_str) if source_str else None
+                    logger.info(f"✅ Found transcript by title-only: {len(transcript) if transcript else 0} chars")
+                    logger.info(f"   DB published: {db_published}, Episode published: {episode.published}")
+                    return transcript, source
+                
+                logger.info("❌ No transcript found in database")
                 return None, None
                 
         except sqlite3.Error as e:
@@ -445,17 +493,15 @@ class PodcastDatabase:
                         SELECT * FROM episodes 
                         WHERE published >= datetime('now', '-' || ? || ' days')
                         AND summary_test IS NOT NULL AND summary_test != ''
-                        AND transcription_mode = ?
                         ORDER BY published DESC
-                    """, (days_back, transcription_mode))
+                    """, (days_back,))
                 elif transcription_mode == 'full':
                     cursor.execute("""
                         SELECT * FROM episodes 
                         WHERE published >= datetime('now', '-' || ? || ' days')
                         AND summary IS NOT NULL AND summary != ''
-                        AND transcription_mode = ?
                         ORDER BY published DESC
-                    """, (days_back, transcription_mode))
+                    """, (days_back,))
                 else:
                     # Backwards compatibility - get episodes with any summaries
                     cursor.execute("""
@@ -501,8 +547,8 @@ class PodcastDatabase:
                         SELECT {summary_column}
                         FROM episodes 
                         WHERE podcast = ? AND title = ? AND published = ?
-                        AND {summary_column} IS NOT NULL AND transcription_mode = ?
-                    """, (podcast, title, published_str, transcription_mode))
+                        AND {summary_column} IS NOT NULL
+                    """, (podcast, title, published_str))
                 else:
                     # Backwards compatibility - check both columns
                     cursor.execute("""

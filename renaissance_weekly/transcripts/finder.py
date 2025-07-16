@@ -23,6 +23,7 @@ class TranscriptFinder:
     
     def __init__(self, db: PodcastDatabase):
         self.db = db
+        logger.info(f"🗄️ TranscriptFinder initialized with database at: {db.db_path}")
         self.session = None
         self._session_created = False
         self.youtube_finder = YouTubeTranscriptFinder()
@@ -51,9 +52,12 @@ class TranscriptFinder:
     async def find_transcript(self, episode: Episode, transcription_mode: str = None) -> Tuple[Optional[str], Optional[TranscriptSource]]:
         """Find transcript from various sources"""
         logger.info("🔍 Searching for existing transcript...")
+        logger.info(f"📊 Transcript mode: {transcription_mode}")
         
         # Check database cache first with mode filter
+        logger.info("🗄️ Checking database cache...")
         cached_transcript, cached_source = self.db.get_transcript(episode, transcription_mode)
+        logger.info(f"🗄️ Database result: {'Found' if cached_transcript else 'Not found'}")
         if cached_transcript:
             mode_str = f" ({transcription_mode} mode)" if transcription_mode else ""
             logger.info(f"💾 CACHED TRANSCRIPT{mode_str}: {episode.podcast} - {episode.title[:50]}...")

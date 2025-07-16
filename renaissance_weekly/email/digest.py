@@ -149,17 +149,41 @@ class EmailDigest:
     def create_expandable_email(self, full_summaries: List[str], episodes: List[Episode], paragraph_summaries: List[str]) -> str:
         """Create HTML email with expandable sections using HTML5 details/summary"""
         
-        # Create episodes HTML with expandable sections
-        episodes_html = ""
-        gmail_full_summaries_html = ""
+        # Create separate mobile and desktop versions
+        mobile_episodes_html = ""
+        mobile_toc_html = ""
+        desktop_toc_html = ""
+        desktop_summaries_html = ""
+        
+        # Build mobile TOC
+        mobile_toc_html = '''
+            <div style="margin: 20px 0 30px 0; padding: 20px; background: #f8f8f8; border-radius: 8px;">
+                <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Episode Index</h3>
+                <div style="font-size: 15px; line-height: 1.8;">
+        '''
+        
+        for i, episode in enumerate(episodes):
+            mobile_toc_html += f'''
+                    <div style="margin: 8px 0;">
+                        <a href="#mobile-episode-{i}" style="color: #0066cc; text-decoration: none;">
+                            {escape(episode.podcast)}
+                        </a>
+                    </div>
+            '''
+        
+        mobile_toc_html += '''
+                </div>
+            </div>
+        '''
         
         for i, (episode, paragraph, full_summary) in enumerate(zip(episodes, paragraph_summaries, full_summaries)):
             # Extract guest name for better formatting
             guest_name = self._extract_guest_name(episode.title, episode.description)
             
-            episodes_html += f'''
+            # Build mobile version (current layout preserved exactly)
+            mobile_episodes_html += f'''
                 <!-- Episode {i + 1} -->
-                <div style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
+                <div id="mobile-episode-{i}" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
                     <!-- Episode Title (Full Name) -->
                     <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
@@ -184,35 +208,44 @@ class EmailDigest:
                             {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                             
                             {self._extract_and_format_resources(full_summary)}
-                            
-                            {self._format_sponsors(episode, full_summary)}
                         </div>
                     </details>
                     
-                    <!-- Gmail fallback link (hidden by default, shown via CSS in Gmail) -->
-                    <div class="gmail-only" style="display: none; margin-top: 20px;">
-                        <a href="#episode-{i}-full" style="display: inline-block; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; text-decoration: none;">
-                            <span style="font-family: Georgia, serif;">Read Full Summary ↓</span>
-                        </a>
-                    </div>
                 </div>
             '''
             
-            # Build Gmail full summaries section
-            gmail_full_summaries_html += f'''
-                <div id="episode-{i}-full" style="margin-bottom: 40px; padding: 30px 0; border-bottom: 1px solid #E0E0E0;">
-                    <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #2c3e50; font-family: Georgia, serif;">
+            # Build desktop TOC entry
+            desktop_toc_html += f'''
+                <tr>
+                    <td style="padding: 12px 20px; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#desktop-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 16px;">
+                            <strong>{self._format_episode_title(episode)}</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 14px; color: #666;">
+                            {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
+                        </div>
+                    </td>
+                </tr>
+            '''
+            
+            # Build desktop full summaries
+            desktop_summaries_html += f'''
+                <div id="desktop-episode-{i}" style="margin-bottom: 60px; padding-bottom: 40px; border-bottom: 2px solid #E0E0E0;">
+                    <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
-                    </h3>
-                    <div style="padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                        {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)} • <a href="{self._get_apple_podcast_link(episode)}" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <div style="padding: 30px; background-color: #f8f8f8; border-radius: 8px; margin-top: 20px;">
                         {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         
                         {self._extract_and_format_resources(full_summary)}
-                        
-                        {self._format_sponsors(episode, full_summary)}
                     </div>
-                    <p style="margin: 20px 0; text-align: center;">
-                        <a href="#top" style="color: #666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
+                    
+                    <p style="margin: 30px 0 0 0; text-align: center;">
+                        <a href="#toc" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episodes</a>
                     </p>
                 </div>
             '''
@@ -254,26 +287,24 @@ class EmailDigest:
             text-decoration: underline;
         }}
         
-        /* Gmail detection and fixes */
-        u + .body .gmail-only {{
-            display: block !important;
+        /* Mobile/Desktop visibility controls */
+        .mobile-only {{
+            display: block;
         }}
         
-        u + .body details {{
-            display: none !important;
-        }}
-        
-        u + .body .gmail-full-summaries {{
-            display: block !important;
-        }}
-        
-        /* Hide Gmail sections by default */
-        .gmail-only {{
+        .desktop-only {{
             display: none;
         }}
         
-        .gmail-full-summaries {{
-            display: none;
+        /* Desktop styles (min-width: 601px) */
+        @media only screen and (min-width: 601px) {{
+            .mobile-only {{
+                display: none !important;
+            }}
+            
+            .desktop-only {{
+                display: block !important;
+            }}
         }}
         
         /* Mobile-specific fixes */
@@ -323,20 +354,30 @@ class EmailDigest:
                         </td>
                     </tr>
                     
-                    <!-- Episodes -->
-                    <tr>
+                    <!-- Mobile Version: TOC and Episodes -->
+                    <tr class="mobile-only">
                         <td class="episode-content" style="padding: 0 20px;">
-                            {episodes_html}
+                            {mobile_toc_html}
+                            {mobile_episodes_html}
                         </td>
                     </tr>
                     
-                    <!-- Gmail Full Summaries Section (hidden by default) -->
-                    <tr class="gmail-full-summaries">
-                        <td style="padding: 40px 20px 0 20px;">
-                            <h2 style="margin: 0 0 30px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
-                                Full Episode Summaries
+                    <!-- Desktop Version: Table of Contents -->
+                    <tr class="desktop-only">
+                        <td style="padding: 0 20px;">
+                            <h2 id="toc" style="margin: 40px 0 30px 0; font-size: 32px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
+                                Episode Directory
                             </h2>
-                            {gmail_full_summaries_html}
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 60px;">
+                                {desktop_toc_html}
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Desktop Version: Full Summaries -->
+                    <tr class="desktop-only">
+                        <td style="padding: 0 20px;">
+                            {desktop_summaries_html}
                         </td>
                     </tr>
                     
