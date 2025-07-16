@@ -274,10 +274,12 @@ Created and ran `migrate_db.py` script to add missing columns to database schema
   - Added podcast name prefix to episode titles for clarity (e.g., "American Optimist: Ep 118...")
   - Simplified "Full Episode" link by removing Apple Podcasts logo and integrating into metadata line
   - Fixed duplicate podcast names in titles (e.g., "Macro Voices: MacroVoices #488" → "MacroVoices #488")
-  - Replaced HTML5 `<details>`/`<summary>` tags with Gmail-compatible always-visible format
+  - Implemented dual email approach: expandable `<details>` for mobile, anchor links for Gmail
   - Removed duplicate titles from full summaries for cleaner presentation
   - Fixed episode count display on email sent confirmation page
   - Enhanced sponsor extraction and display with clickable links in summary footers
+  - Gmail users see "Read Full Summary ↓" links that jump to summaries at bottom of email
+  - Mobile users get proper expandable sections with smooth interaction
 
 ### Previous Improvements (2025-07-17)
 - **Implemented Two-Summary Email System**:

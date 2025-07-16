@@ -151,6 +151,7 @@ class EmailDigest:
         
         # Create episodes HTML with expandable sections
         episodes_html = ""
+        gmail_full_summaries_html = ""
         
         for i, (episode, paragraph, full_summary) in enumerate(zip(episodes, paragraph_summaries, full_summaries)):
             # Extract guest name for better formatting
@@ -172,15 +173,47 @@ class EmailDigest:
                         {escape(paragraph)}
                     </div>
                     
-                    <!-- Full Summary Section -->
-                    <div style="margin-top: 20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
-                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #2c3e50; font-family: Georgia, serif;">Full Summary</h3>
+                    <!-- Expandable Section for mobile/modern clients -->
+                    <details style="margin-top: 20px;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none;">
+                            <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
+                        </summary>
+                        
+                        <!-- Full Summary Content -->
+                        <div style="margin-top: 20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
+                            {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
+                            
+                            {self._extract_and_format_resources(full_summary)}
+                            
+                            {self._format_sponsors(episode, full_summary)}
+                        </div>
+                    </details>
+                    
+                    <!-- Gmail fallback link (hidden by default, shown via CSS in Gmail) -->
+                    <div class="gmail-only" style="display: none; margin-top: 20px;">
+                        <a href="#episode-{i}-full" style="display: inline-block; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; text-decoration: none;">
+                            <span style="font-family: Georgia, serif;">Read Full Summary ↓</span>
+                        </a>
+                    </div>
+                </div>
+            '''
+            
+            # Build Gmail full summaries section
+            gmail_full_summaries_html += f'''
+                <div id="episode-{i}-full" style="margin-bottom: 40px; padding: 30px 0; border-bottom: 1px solid #E0E0E0;">
+                    <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #2c3e50; font-family: Georgia, serif;">
+                        {self._format_episode_title(episode)}
+                    </h3>
+                    <div style="padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
                         {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         
                         {self._extract_and_format_resources(full_summary)}
                         
                         {self._format_sponsors(episode, full_summary)}
                     </div>
+                    <p style="margin: 20px 0; text-align: center;">
+                        <a href="#top" style="color: #666; text-decoration: none; font-size: 14px;">↑ Back to top</a>
+                    </p>
                 </div>
             '''
         
@@ -221,6 +254,28 @@ class EmailDigest:
             text-decoration: underline;
         }}
         
+        /* Gmail detection and fixes */
+        u + .body .gmail-only {{
+            display: block !important;
+        }}
+        
+        u + .body details {{
+            display: none !important;
+        }}
+        
+        u + .body .gmail-full-summaries {{
+            display: block !important;
+        }}
+        
+        /* Hide Gmail sections by default */
+        .gmail-only {{
+            display: none;
+        }}
+        
+        .gmail-full-summaries {{
+            display: none;
+        }}
+        
         /* Mobile-specific fixes */
         table {{
             border-collapse: collapse;
@@ -252,7 +307,9 @@ class EmailDigest:
         /* Gmail doesn't support advanced CSS selectors, so we'll use a simpler approach */
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #ffffff;">
+<body class="body" style="margin: 0; padding: 0; background-color: #ffffff;">
+    <u></u><!-- Gmail detection hack -->
+    <div id="top"></div>
     <table border="0" cellpadding="0" cellspacing="0" width="100%">
         <tr>
             <td align="center" style="padding: 0;">
@@ -270,6 +327,16 @@ class EmailDigest:
                     <tr>
                         <td class="episode-content" style="padding: 0 20px;">
                             {episodes_html}
+                        </td>
+                    </tr>
+                    
+                    <!-- Gmail Full Summaries Section (hidden by default) -->
+                    <tr class="gmail-full-summaries">
+                        <td style="padding: 40px 20px 0 20px;">
+                            <h2 style="margin: 0 0 30px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
+                                Full Episode Summaries
+                            </h2>
+                            {gmail_full_summaries_html}
                         </td>
                     </tr>
                     
