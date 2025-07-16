@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sqlite3
 import threading
 import uuid
 import traceback
@@ -1182,6 +1183,84 @@ class RenaissanceWeekly:
             logger.info(f"[{episode_id}] {'='*60}\n")
             return existing_summary
         
+        # ADDITIONAL CACHE CHECK - Direct database lookup for transcript and summaries
+        # This catches cases where the Episode object matching might fail
+        logger.info(f"[{episode_id}] 🔍 DIRECT CACHE CHECK: Looking for existing data...")
+        logger.info(f"[{episode_id}]    Podcast: {episode.podcast}")
+        logger.info(f"[{episode_id}]    Title: {episode.title[:80]}...")
+        
+        # Skip cache if force-fresh is enabled
+        force_fresh = getattr(self, 'force_fresh_summaries', False)
+        if force_fresh:
+            logger.info(f"[{episode_id}] ⚠️  Force-fresh enabled - skipping cache")
+        else:
+            try:
+                # Use simplified lookup that's resilient to date/GUID variations
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Determine which columns to check based on mode
+                    if self.current_transcription_mode == 'test':
+                        transcript_col = 'transcript_test'
+                        summary_col = 'summary_test'
+                        paragraph_col = 'paragraph_summary_test'
+                    else:
+                        transcript_col = 'transcript'
+                        summary_col = 'summary'
+                        paragraph_col = 'paragraph_summary'
+                    
+                    # Look for episodes with matching podcast and similar title
+                    cursor.execute(f"""
+                        SELECT {transcript_col}, {summary_col}, {paragraph_col}, guid, id
+                        FROM episodes 
+                        WHERE podcast = ? 
+                        AND (
+                            title = ? OR 
+                            title LIKE ? OR
+                            title LIKE ?
+                        )
+                        ORDER BY published DESC
+                        LIMIT 1
+                    """, (
+                        episode.podcast, 
+                        episode.title,
+                        f"{episode.title[:50]}%",  # Match by first 50 chars
+                        f"%{episode.title[-50:]}"   # Match by last 50 chars
+                    ))
+                    
+                    result = cursor.fetchone()
+                    if result:
+                        cached_transcript, cached_summary, cached_paragraph, db_guid, db_id = result
+                        
+                        logger.info(f"[{episode_id}] 📊 CACHE RESULT:")
+                        logger.info(f"[{episode_id}]    DB ID: {db_id}")
+                        logger.info(f"[{episode_id}]    DB GUID: {db_guid}")
+                        logger.info(f"[{episode_id}]    Transcript: {len(cached_transcript) if cached_transcript else 0} chars")
+                        logger.info(f"[{episode_id}]    Full Summary: {len(cached_summary) if cached_summary else 0} chars")
+                        logger.info(f"[{episode_id}]    Paragraph: {len(cached_paragraph) if cached_paragraph else 0} chars")
+                        
+                        # If we have both summaries, we're done!
+                        if cached_summary and cached_paragraph:
+                            logger.info(f"[{episode_id}] 🎉 CACHE HIT! Episode fully processed - skipping all processing")
+                            logger.info(f"[{episode_id}] {'='*60}\n")
+                            return {
+                                'full_summary': cached_summary,
+                                'paragraph_summary': cached_paragraph
+                            }
+                        
+                        # If we have transcript but missing summaries, we can regenerate just the summaries
+                        elif cached_transcript and (not cached_summary or not cached_paragraph):
+                            logger.info(f"[{episode_id}] 📝 PARTIAL CACHE HIT! Have transcript, need to generate summaries")
+                            # Store the cached transcript for later use
+                            self._cached_transcript = cached_transcript
+                            self._cached_transcript_source = TranscriptSource.CACHED
+                    else:
+                        logger.info(f"[{episode_id}] ❌ CACHE MISS - No matching episode found in database")
+                        
+            except Exception as e:
+                logger.error(f"[{episode_id}] ⚠️  Cache check failed: {e}")
+                # Continue with normal processing if cache check fails
+        
         try:
             # Get current transcription mode
             current_mode = getattr(self, 'current_transcription_mode', 'test')
@@ -1189,7 +1268,18 @@ class RenaissanceWeekly:
             # Step 1: Try to find existing transcript
             logger.info(f"\n[{episode_id}] 📄 Step 1: Checking for existing transcript...")
             logger.info(f"[{episode_id}]    GUID: {episode.guid or 'None'}")
-            transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode, current_mode)
+            
+            # Check if we already found a cached transcript in the direct cache check above
+            if hasattr(self, '_cached_transcript') and self._cached_transcript:
+                transcript_text = self._cached_transcript
+                transcript_source = self._cached_transcript_source
+                logger.info(f"[{episode_id}] ✅ Using cached transcript from direct lookup")
+                logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                # Clear the cached values
+                self._cached_transcript = None
+                self._cached_transcript_source = None
+            else:
+                transcript_text, transcript_source = await self.transcript_finder.find_transcript(episode, current_mode)
             
             # If transcript found, validate it immediately
             if transcript_text:

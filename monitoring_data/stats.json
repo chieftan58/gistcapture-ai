@@ -1,18 +1,18 @@
 {
   "component_stats": {
     "transcript_fetch": {
-      "total_attempts": 1158,
+      "total_attempts": 1160,
       "successful": 235,
-      "failed": 923,
-      "last_failure": "2025-07-16T18:15:33.030244",
-      "consecutive_failures": 0
+      "failed": 925,
+      "last_failure": "2025-07-16T19:35:04.318907",
+      "consecutive_failures": 2
     },
     "audio_download": {
-      "total_attempts": 582,
+      "total_attempts": 583,
       "successful": 484,
-      "failed": 98,
-      "last_failure": "2025-07-14T21:16:31.256813",
-      "consecutive_failures": 0
+      "failed": 99,
+      "last_failure": "2025-07-16T19:35:10.920781",
+      "consecutive_failures": 1
     },
     "summarization": {
       "total_attempts": 870,
@@ -39,20 +39,20 @@
   "mode_component_stats": {
     "test": {
       "audio_download": {
-        "total_attempts": 30,
+        "total_attempts": 31,
         "successful": 30,
-        "failed": 0,
-        "last_failure": null,
-        "consecutive_failures": 0
+        "failed": 1,
+        "last_failure": "2025-07-16T19:35:10.920772",
+        "consecutive_failures": 1
       }
     },
     "full": {
       "transcript_fetch": {
-        "total_attempts": 47,
+        "total_attempts": 49,
         "successful": 5,
-        "failed": 42,
-        "last_failure": "2025-07-16T18:15:33.030234",
-        "consecutive_failures": 0
+        "failed": 44,
+        "last_failure": "2025-07-16T19:35:04.318903",
+        "consecutive_failures": 2
       },
       "summarization": {
         "total_attempts": 43,
