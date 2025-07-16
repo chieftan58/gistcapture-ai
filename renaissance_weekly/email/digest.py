@@ -161,7 +161,7 @@ class EmailDigest:
                 <div style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
                     <!-- Episode Title (Full Name) -->
                     <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
-                        {escape(episode.podcast)}: {escape(episode.title)}
+                        {self._format_episode_title(episode)}
                     </h2>
                     <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
                         {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)} • <a href="{self._get_apple_podcast_link(episode)}" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
@@ -172,21 +172,15 @@ class EmailDigest:
                         {escape(paragraph)}
                     </div>
                     
-                    <!-- Expandable Section using details/summary -->
-                    <details style="margin-top: 20px;" id="episode-{i}">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none; transition: all 0.2s ease;" onclick="this.scrollIntoView({{block: 'start', behavior: 'smooth'}});">
-                            <span style="font-family: Georgia, serif;">Read Full Summary</span>
-                        </summary>
+                    <!-- Full Summary Section -->
+                    <div style="margin-top: 20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #2c3e50; font-family: Georgia, serif;">Full Summary</h3>
+                        {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         
-                        <!-- Full Summary -->
-                        <div style="margin-top: 20px; padding: 0 20px;">
-                            {self._convert_markdown_to_html_enhanced(full_summary)}
-                            
-                            {self._extract_and_format_resources(full_summary)}
-                            
-                            {self._format_sponsors(episode)}
-                        </div>
-                    </details>
+                        {self._extract_and_format_resources(full_summary)}
+                        
+                        {self._format_sponsors(episode, full_summary)}
+                    </div>
                 </div>
             '''
         
@@ -255,37 +249,7 @@ class EmailDigest:
             }}
         }}
         
-        /* Details/Summary styling for Gmail */
-        details {{
-            margin-top: 20px;
-        }}
-        
-        summary {{
-            list-style: none;
-            -webkit-appearance: none;
-            position: relative;
-        }}
-        
-        summary::-webkit-details-marker {{
-            display: none;
-        }}
-        
-        /* Elegant arrow with transition */
-        summary::before {{
-            content: "▶";
-            display: inline-block;
-            margin-right: 8px;
-            transition: transform 0.2s ease;
-            font-size: 12px;
-        }}
-        
-        details[open] summary::before {{
-            transform: rotate(90deg);
-        }}
-        
-        summary:hover {{
-            background: #e8e8e8 !important;
-        }}
+        /* Gmail doesn't support advanced CSS selectors, so we'll use a simpler approach */
     </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #ffffff;">
@@ -564,6 +528,60 @@ class EmailDigest:
         
         return plain_text
     
+    def _format_episode_title(self, episode: Episode) -> str:
+        """Format episode title, avoiding duplicate podcast names"""
+        import re
+        
+        title = escape(episode.title)
+        podcast_name = escape(episode.podcast)
+        
+        # Check if the title already contains the podcast name (case insensitive)
+        # Handle variations like "MacroVoices" vs "Macro Voices"
+        podcast_name_normalized = podcast_name.lower().replace(' ', '')
+        title_normalized = title.lower().replace(' ', '')
+        
+        # Check if podcast name is already in the title
+        if podcast_name_normalized in title_normalized:
+            # Just return the title as-is
+            return title
+        
+        # Also check for common patterns like "#488" which indicate the podcast name is implicit
+        if re.match(r'^#\d+[:\s]', title):
+            # Episode number format, prepend podcast name
+            return f"{podcast_name}: {title}"
+        
+        # Otherwise prepend the podcast name
+        return f"{podcast_name}: {title}"
+    
+    def _strip_duplicate_title(self, summary: str, episode: Episode) -> str:
+        """Strip duplicate title from the beginning of the summary"""
+        import re
+        
+        # Check if summary starts with the episode title (as a header or plain text)
+        lines = summary.strip().split('\n')
+        if not lines:
+            return summary
+        
+        first_line = lines[0].strip()
+        
+        # Remove markdown headers
+        first_line_clean = re.sub(r'^#+\s*', '', first_line)
+        
+        # Check if first line matches the episode title
+        title_normalized = episode.title.lower().strip()
+        first_line_normalized = first_line_clean.lower().strip()
+        
+        # Also check with podcast name prepended
+        full_title = f"{episode.podcast}: {episode.title}".lower().strip()
+        
+        if (first_line_normalized == title_normalized or 
+            first_line_normalized == full_title or
+            title_normalized in first_line_normalized):
+            # Remove the first line
+            return '\n'.join(lines[1:]).strip()
+        
+        return summary
+    
     def _get_apple_podcast_link(self, episode: Episode) -> str:
         """Get Apple Podcasts link for episode"""
         # If we have a direct episode link, use that
@@ -660,35 +678,64 @@ class EmailDigest:
         html += '</div>'
         return html
     
-    def _format_sponsors(self, episode: Episode) -> str:
+    def _format_sponsors(self, episode: Episode, full_summary: str = "") -> str:
         """Format sponsor information for the episode"""
-        # Common sponsor patterns in descriptions
+        import re
+        
+        # Common sponsor patterns
         sponsor_patterns = [
-            r'(?:sponsored by|brought to you by|thanks to)\s+([^\.,\n]+)',
-            r'(?:today\'s sponsor|our sponsor)\s*[:\-]?\s*([^\.,\n]+)',
-            r'(?:visit|go to)\s+([a-zA-Z0-9]+\.(?:com|org|net|io|ai)/[a-zA-Z0-9]+)',
+            # Standard sponsorship mentions
+            r'(?:sponsored by|brought to you by|thanks to|sponsor[s]? (?:are|is|include[s]?))\s+([A-Z][^\.,\n]{2,40})',
+            r'(?:today\'s sponsor|our sponsor|this episode\'s sponsor)[s]?\s*[:\-]?\s*([A-Z][^\.,\n]{2,40})',
+            # Company names with URLs
+            r'(?:visit|go to|check out)\s+([A-Z][a-zA-Z0-9]+)(?:\s+at)?\s+[a-zA-Z0-9]+\.(?:com|org|net|io|ai)',
+            # Direct company mentions with promo codes
+            r'([A-Z][a-zA-Z0-9]+)\s+(?:promo code|discount code|code)',
+            # Common sponsor formats
+            r'thanks to\s+([A-Z][a-zA-Z0-9\s&]+?)(?:\s+for\s+sponsoring)',
         ]
         
         sponsors = []
         sponsor_links = {}
         
+        # Search in both description and summary
+        search_texts = []
         if episode.description:
-            import re
-            
-            # Extract sponsors from description
+            search_texts.append(episode.description)
+        if full_summary:
+            search_texts.append(full_summary)
+        
+        for text in search_texts:
+            # Extract sponsors
             for pattern in sponsor_patterns:
-                matches = re.findall(pattern, episode.description, re.IGNORECASE)
+                matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
                 for match in matches:
                     sponsor = match.strip()
-                    # Clean up sponsor name - remove common suffixes
-                    sponsor = re.sub(r'\s*[-\.]\s*(?:visit|go to).*$', '', sponsor, flags=re.IGNORECASE)
+                    # Clean up sponsor name
+                    sponsor = re.sub(r'\s*[-\.]\s*(?:visit|go to|check out).*$', '', sponsor, flags=re.IGNORECASE)
                     sponsor = re.sub(r'\s+at\s+[a-zA-Z0-9]+\..*$', '', sponsor, flags=re.IGNORECASE)
-                    if len(sponsor) > 3 and len(sponsor) < 50:
+                    sponsor = re.sub(r'\s*\(.*?\)\s*$', '', sponsor)  # Remove parenthetical info
+                    sponsor = sponsor.strip(' .,;:')
+                    
+                    # Validate sponsor name
+                    if (len(sponsor) > 2 and len(sponsor) < 40 and 
+                        not sponsor.lower() in ['the', 'and', 'our', 'their', 'this', 'that']):
                         sponsors.append(sponsor)
             
             # Extract sponsor URLs
-            url_pattern = r'([a-zA-Z0-9]+\.(?:com|org|net|io|ai)/[a-zA-Z0-9\-_]+)'
-            urls = re.findall(url_pattern, episode.description, re.IGNORECASE)
+            url_patterns = [
+                r'([a-zA-Z0-9]+\.(?:com|org|net|io|ai)/[a-zA-Z0-9\-_/]+)',
+                r'(?:www\.)([a-zA-Z0-9]+\.(?:com|org|net|io|ai))',
+                r'([a-zA-Z0-9]+)\.(?:com|org|net|io|ai)/([a-zA-Z0-9]+)',  # domain.com/promo
+            ]
+            
+            for pattern in url_patterns:
+                urls = re.findall(pattern, text, re.IGNORECASE)
+                for url in urls:
+                    if isinstance(url, tuple):
+                        url = '/'.join(url)
+                    if not url.startswith('http'):
+                        sponsor_links[url] = f"https://{url}"
         
         # Remove duplicates and clean up
         unique_sponsors = []
@@ -701,29 +748,28 @@ class EmailDigest:
                 unique_sponsors.append(sponsor_clean)
         
         # Try to match sponsors with their URLs
-        if episode.description:
-            for sponsor in unique_sponsors:
-                sponsor_key = sponsor.lower().split()[0]
-                for url in urls:
-                    if sponsor_key in url.lower():
-                        sponsor_links[sponsor] = f"https://{url}" if not url.startswith('http') else url
-                        break
+        for sponsor in unique_sponsors:
+            sponsor_key = sponsor.lower().replace(' ', '').replace('-', '')
+            for url, full_url in sponsor_links.items():
+                if sponsor_key in url.lower() or url.lower() in sponsor_key:
+                    sponsor_links[sponsor] = full_url
+                    break
         
         if not unique_sponsors:
             return ""
         
-        # Format sponsor section as footer
-        html = '<div style="margin-top: 40px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">'
-        html += '<p style="margin: 0 0 15px 0; font-size: 14px; color: #666; font-weight: bold;">Sponsors</p>'
-        html += '<div style="font-size: 14px; line-height: 1.8;">'
+        # Format sponsor section
+        html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">'
+        html += '<h4 style="margin: 0 0 15px 0; font-size: 16px; color: #2c3e50; font-family: Georgia, serif;">Sponsors</h4>'
+        html += '<div style="font-size: 14px; line-height: 1.8; color: #333;">'
         
-        for i, sponsor in enumerate(unique_sponsors[:4]):  # Limit to 4 sponsors
+        for i, sponsor in enumerate(unique_sponsors[:5]):  # Limit to 5 sponsors
             if i > 0:
-                html += '<span style="color: #ccc;"> • </span>'
+                html += '<span style="color: #ccc; margin: 0 8px;">•</span>'
             if sponsor in sponsor_links:
                 html += f'<a href="{sponsor_links[sponsor]}" style="color: #0066cc; text-decoration: none;">{escape(sponsor)}</a>'
             else:
-                html += f'<span style="color: #333;">{escape(sponsor)}</span>'
+                html += f'<span>{escape(sponsor)}</span>'
         
         html += '</div>'
         html += '</div>'

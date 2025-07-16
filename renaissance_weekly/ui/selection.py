@@ -521,9 +521,13 @@ class EpisodeSelector:
                             logger.error(f"[{parent._correlation_id}] ❌ Error sending email: {e}", exc_info=True)
                             error_message = str(e)
                     
-                    # Send response
+                    # Send response with summary count
                     if result.get('success'):
-                        self._send_json({'status': 'success', 'message': 'Email sent successfully!'})
+                        self._send_json({
+                            'status': 'success', 
+                            'message': 'Email sent successfully!',
+                            'summaryCount': len(summaries_to_send)
+                        })
                     else:
                         self._send_json({'status': 'error', 'message': error_message or 'Failed to send email'})
                     
@@ -4102,6 +4106,7 @@ class EpisodeSelector:
                     if (response.ok && result.status === 'success') {{
                         APP_STATE.state = 'complete';
                         APP_STATE.emailMessage = result.message || 'Email sent successfully!';
+                        APP_STATE.processingSummaries = new Array(result.summaryCount || 0);
                         
                         // Stop all polling before we complete
                         if (APP_STATE.globalPollInterval) {{
