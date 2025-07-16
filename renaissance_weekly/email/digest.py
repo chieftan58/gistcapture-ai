@@ -155,24 +155,32 @@ class EmailDigest:
         desktop_toc_html = ""
         desktop_summaries_html = ""
         
-        # Build mobile TOC
-        mobile_toc_html = '''
-            <div style="margin: 20px 0 30px 0; padding: 20px; background: #f8f8f8; border-radius: 8px;">
-                <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Episode Index</h3>
-                <div style="font-size: 15px; line-height: 1.8;">
+        # Build mobile TOC - same as desktop but mobile-optimized
+        mobile_toc_html = f'''
+            <div style="padding: 0 20px;">
+                <h2 style="margin: 40px 0 30px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
+                    <a name="mobile-toc"></a>
+                    Episode Directory
+                </h2>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 40px;">
         '''
         
         for i, episode in enumerate(episodes):
             mobile_toc_html += f'''
-                    <div style="margin: 8px 0;">
-                        <a href="#mobile-episode-{i}" style="color: #0066cc; text-decoration: none;">
-                            {escape(episode.podcast)}
+                <tr>
+                    <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#mobile-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 15px; display: block;" class="episode-directory-title">
+                            <strong>{self._format_episode_title(episode)}</strong>
                         </a>
-                    </div>
+                        <div style="margin-top: 4px; font-size: 13px; color: #666;" class="episode-directory-meta">
+                            {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
+                        </div>
+                    </td>
+                </tr>
             '''
         
         mobile_toc_html += '''
-                </div>
+                </table>
             </div>
         '''
         
@@ -184,6 +192,7 @@ class EmailDigest:
             mobile_episodes_html += f'''
                 <!-- Episode {i + 1} -->
                 <div id="mobile-episode-{i}" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
+                    <a name="mobile-episode-{i}"></a>
                     <!-- Episode Title (Full Name) -->
                     <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
@@ -206,10 +215,12 @@ class EmailDigest:
                         <!-- Full Summary Content -->
                         <div style="margin-top: 20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
                             {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
-                            
-                            {self._extract_and_format_resources(full_summary)}
                         </div>
                     </details>
+                    
+                    <p style="margin: 20px 0 0 0; text-align: center;">
+                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
+                    </p>
                     
                 </div>
             '''
@@ -231,6 +242,7 @@ class EmailDigest:
             # Build desktop full summaries
             desktop_summaries_html += f'''
                 <div id="desktop-episode-{i}" style="margin-bottom: 60px; padding-bottom: 40px; border-bottom: 2px solid #E0E0E0;">
+                    <a name="desktop-episode-{i}"></a>
                     <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
                     </h2>
@@ -240,12 +252,10 @@ class EmailDigest:
                     
                     <div style="padding: 30px; background-color: #f8f8f8; border-radius: 8px; margin-top: 20px;">
                         {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
-                        
-                        {self._extract_and_format_resources(full_summary)}
                     </div>
                     
                     <p style="margin: 30px 0 0 0; text-align: center;">
-                        <a href="#toc" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episodes</a>
+                        <a href="#top" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episode List</a>
                     </p>
                 </div>
             '''
@@ -325,13 +335,21 @@ class EmailDigest:
                 font-size: 28px !important;
             }}
             h2 {{
-                font-size: 20px !important;
+                font-size: 24px !important;
             }}
             h3 {{
                 font-size: 16px !important;
             }}
             .episode-content {{
                 padding: 15px !important;
+            }}
+            /* Mobile-specific styles for Episode Directory */
+            .episode-directory-title {{
+                font-size: 14px !important;
+                line-height: 1.4 !important;
+            }}
+            .episode-directory-meta {{
+                font-size: 12px !important;
             }}
         }}
         
@@ -340,6 +358,7 @@ class EmailDigest:
 </head>
 <body class="body" style="margin: 0; padding: 0; background-color: #ffffff;">
     <u></u><!-- Gmail detection hack -->
+    <a name="top"></a>
     <div id="top"></div>
     <table border="0" cellpadding="0" cellspacing="0" width="100%">
         <tr>
@@ -366,6 +385,7 @@ class EmailDigest:
                     <tr class="desktop-only">
                         <td style="padding: 0 20px;">
                             <h2 id="toc" style="margin: 40px 0 30px 0; font-size: 32px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
+                                <a name="toc"></a>
                                 Episode Directory
                             </h2>
                             <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 60px;">

@@ -244,10 +244,18 @@ class PodcastDatabase:
                 cursor = conn.cursor()
                 
                 # Convert episode to dict for storage
+                # Handle published date - could be datetime or string
+                if isinstance(episode.published, str):
+                    published_str = episode.published
+                elif hasattr(episode.published, 'isoformat'):
+                    published_str = episode.published.isoformat()
+                else:
+                    published_str = str(episode.published)
+                    
                 episode_data = {
                     'podcast': episode.podcast,
                     'title': episode.title,
-                    'published': episode.published.isoformat(),
+                    'published': published_str,
                     'audio_url': episode.audio_url,
                     'transcript_url': episode.transcript_url,
                     'description': episode.description,
@@ -326,7 +334,22 @@ class PodcastDatabase:
                     ))
                 
                 conn.commit()
-                return cursor.lastrowid
+                row_id = cursor.lastrowid
+                
+                # Verify the save was successful
+                if row_id > 0:
+                    # Immediately verify we can retrieve what we just saved
+                    test_transcript, _ = self.get_transcript(episode, transcription_mode)
+                    if test_transcript != transcript:
+                        logger.error(f"❌ CACHE VERIFICATION FAILED after save!")
+                        logger.error(f"   Saved {len(transcript) if transcript else 0} chars but retrieved {len(test_transcript) if test_transcript else 0} chars")
+                        logger.error(f"   Episode: {episode.podcast} - {episode.title}")
+                        logger.error(f"   GUID: {episode.guid}")
+                        logger.error(f"   Mode: {transcription_mode}")
+                    else:
+                        logger.debug(f"✅ Cache verification passed - transcript retrievable")
+                
+                return row_id
                 
         except sqlite3.Error as e:
             logger.error(f"Database error saving episode: {e}")
@@ -363,6 +386,7 @@ class PodcastDatabase:
                             WHERE guid = ? AND {transcript_column} IS NOT NULL
                         """
                         logger.info(f"🔍 Executing GUID query for column: {transcript_column}")
+                        logger.debug(f"🔍 GUID query: {query} with param: {episode.guid}")
                         cursor.execute(query, (episode.guid,))
                     else:
                         # Backwards compatibility - check both columns
@@ -381,13 +405,22 @@ class PodcastDatabase:
                 
                 # Fall back to matching by podcast, title, and date
                 logger.info("🔍 GUID lookup failed, trying title/date match...")
+                
+                # Handle published date - could be datetime or string
+                if isinstance(episode.published, str):
+                    published_str = episode.published
+                elif hasattr(episode.published, 'isoformat'):
+                    published_str = episode.published.isoformat()
+                else:
+                    published_str = str(episode.published)
+                    
                 if transcript_column:
                     cursor.execute(f"""
                         SELECT {transcript_column}, transcript_source 
                         FROM episodes 
                         WHERE podcast = ? AND title = ? AND date(published) = date(?)
                         AND {transcript_column} IS NOT NULL
-                    """, (episode.podcast, episode.title, episode.published.isoformat()))
+                    """, (episode.podcast, episode.title, published_str))
                 else:
                     # Backwards compatibility
                     cursor.execute("""
@@ -395,7 +428,7 @@ class PodcastDatabase:
                         FROM episodes 
                         WHERE podcast = ? AND title = ? AND date(published) = date(?)
                         AND (transcript IS NOT NULL OR transcript_test IS NOT NULL)
-                    """, (episode.podcast, episode.title, episode.published.isoformat()))
+                    """, (episode.podcast, episode.title, published_str))
                 
                 result = cursor.fetchone()
                 logger.info(f"🔍 Title/date query result: {result is not None}")

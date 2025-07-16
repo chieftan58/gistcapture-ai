@@ -42,10 +42,35 @@ class ResourceAwareConcurrencyManager:
     
     def __init__(self, correlation_id: str):
         self.correlation_id = correlation_id
-        self.base_concurrency = 2  # Match CPU cores for stability
-        self.max_concurrency = 3   # Reduced from 4 for two-summary system
+        # Check for environment variable override
+        import os
+        env_concurrency = os.getenv('EPISODE_CONCURRENCY')
+        if env_concurrency:
+            try:
+                self.base_concurrency = int(env_concurrency)
+                self.max_concurrency = int(env_concurrency)
+                logger.info(f"[{correlation_id}] Using EPISODE_CONCURRENCY={self.base_concurrency} from environment")
+            except ValueError:
+                logger.warning(f"[{correlation_id}] Invalid EPISODE_CONCURRENCY value: {env_concurrency}, using defaults")
+                self.base_concurrency = 4  # Increased from 2 for better performance
+                self.max_concurrency = 4   # Increased from 3 to match base
+        else:
+            self.base_concurrency = 4  # Increased from 2 for better performance
+            self.max_concurrency = 4   # Increased from 3 to match base
+        
+        # Check for memory override
+        env_memory = os.getenv('MEMORY_PER_TASK')
+        if env_memory:
+            try:
+                self.min_memory_per_task_full = int(env_memory)
+                logger.info(f"[{correlation_id}] Using MEMORY_PER_TASK={self.min_memory_per_task_full}MB from environment")
+            except ValueError:
+                logger.warning(f"[{correlation_id}] Invalid MEMORY_PER_TASK value: {env_memory}, using default")
+                self.min_memory_per_task_full = 1200  # MB for full mode (reduced from 1500MB)
+        else:
+            self.min_memory_per_task_full = 1200  # MB for full mode (reduced from 1500MB)
+            
         self.min_memory_per_task = 600  # MB for test mode (increased from 400MB)
-        self.min_memory_per_task_full = 1500  # MB for full mode (increased from 1200MB)
         self.cpu_multiplier = 1.0  # Reduced from 1.5 to match cores exactly
         self.is_full_mode = False
         
@@ -1210,10 +1235,19 @@ class RenaissanceWeekly:
             
             # Save transcript to database with current mode
             try:
-                self.db.save_episode(episode, transcript_text, transcript_source, transcription_mode=current_mode)
-                logger.info(f"[{episode_id}] 💾 Transcript saved to database ({current_mode} mode)")
+                logger.info(f"[{episode_id}] 💾 Attempting to save transcript to database...")
+                logger.info(f"[{episode_id}]    Mode: {current_mode}")
+                logger.info(f"[{episode_id}]    Source: {transcript_source}")
+                logger.info(f"[{episode_id}]    Length: {len(transcript_text) if transcript_text else 0} chars")
+                
+                save_result = self.db.save_episode(episode, transcript_text, transcript_source, transcription_mode=current_mode)
+                
+                if save_result > 0:
+                    logger.info(f"[{episode_id}] ✅ Transcript saved successfully (ID: {save_result})")
+                else:
+                    logger.error(f"[{episode_id}] ❌ Failed to save transcript! Result: {save_result}")
             except Exception as e:
-                logger.warning(f"[{episode_id}] Failed to save transcript to database: {e}")
+                logger.error(f"[{episode_id}] ❌ Exception saving transcript: {e}", exc_info=True)
             
             # Step 3: Generate summaries (paragraph and full)
             logger.info(f"\n[{episode_id}] 📝 Step 3: Generating summaries...")

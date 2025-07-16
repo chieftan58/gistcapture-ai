@@ -142,10 +142,11 @@ python main.py --load-dataset <name>
 - **Transcription Speed**: 15-30 minutes (vs 2 hours with Whisper)
 - **Download Strategies**: 4 independent pathways
 - **Concurrency**: Memory-aware with dynamic scaling
-  - Episode processing: 2 concurrent (CPU/memory limited)
+  - Episode processing: 4 concurrent (increased from 2 on 2025-07-16)
   - AssemblyAI: 32x concurrent transcriptions
-  - GPT-4 summaries: 3 concurrent (reduced from 4 for two-call system)
+  - GPT-4 summaries: 4 concurrent (matches episode processing)
   - YouTube downloads: 2 concurrent (separate semaphore)
+  - Memory per task: 1200MB (reduced from 1500MB)
 
 ### Multi-Strategy Download System
 1. **Direct Download**: Platform-specific headers and validation
@@ -171,6 +172,23 @@ python main.py --load-dataset <name>
 - System prompt defines AI identity; summary prompts define task instructions
 
 ## Common Tasks
+
+### Adjusting Performance Settings
+1. **Concurrency Control** (for slower systems or API issues):
+   ```bash
+   # Reduce concurrency to 2 episodes (original setting)
+   export EPISODE_CONCURRENCY=2
+   python main.py 7
+   
+   # Force specific memory allocation per task (MB)
+   export MEMORY_PER_TASK=1500
+   python main.py 7
+   ```
+
+2. **Dynamic Fallback**: System automatically reduces concurrency if:
+   - Memory drops below safe thresholds
+   - Error rate exceeds 20%
+   - API rate limits are hit
 
 ### Modifying AI Prompts
 1. Edit prompt files in `/prompts/` directory:
@@ -240,43 +258,63 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 
 ## Known Issues
 
-### Critical: Transcript Cache Not Working in Full Mode
-**Discovered**: 2025-07-15
-**Status**: RESOLVED (2025-07-16)
+### CRITICAL: Database Save Operations Completely Broken
+**Discovered**: 2025-07-16 (after believing it was fixed)
+**Status**: CRITICAL - REQUIRES COMPLETE OVERHAUL
 
-**Symptoms**:
-- System re-transcribes episodes with AssemblyAI even when previously run in full mode
-- Audio files ARE cached correctly (system finds and reuses them)
-- Transcripts are NOT found in database despite previous full mode runs
-- This causes unnecessary API costs (~$0.90 per hour of audio)
+**Severe Symptoms**:
+- Database contains 0 episodes despite multiple runs
+- Database file hasn't been modified since July 15
+- Episodes show "💾 Saving episode" in logs but nothing is saved
+- Marc Andreessen episode transcribed 7 times via AssemblyAI (costing ~$5+)
+- Silent failures with no error messages
+
+**Evidence**:
+```bash
+# Database is empty
+sqlite3 renaissance_weekly.db "SELECT COUNT(*) FROM episodes;"
+# Result: 0
+
+# Database file not modified
+stat renaissance_weekly.db | grep Modify
+# Result: 2025-07-15 22:47:45 (before recent runs)
+
+# Repeated expensive transcriptions
+grep "Starting AssemblyAI.*Marc Andreessen" renaissance_weekly.log
+# Result: 7 separate transcriptions of same episode
+```
 
 **Root Cause**:
-SQL queries in `database.py` included restrictive `AND transcription_mode = ?` conditions that prevented finding transcripts when episodes were saved with different modes than the current run.
+The `save_episode()` function is failing completely and silently. While we fixed the READ queries on 2025-07-16, the WRITE operations are broken. The INSERT statements are either:
+1. Malformed (missing columns or wrong order)
+2. Not being committed properly
+3. Failing due to constraint violations
+4. Being rolled back silently
 
-**Resolution** (2025-07-16):
-1. Removed all `transcription_mode` restrictions from SQL WHERE clauses in:
-   - `get_transcript()` - Primary transcript lookup
-   - `get_episode_summary()` - Summary lookups
-   - `get_episodes_with_summaries()` - Bulk summary queries
-2. Added flexible fallback matching in `get_transcript()`:
-   - First tries GUID match (most reliable)
-   - Falls back to podcast + title + date
-   - Final fallback to podcast + title only (handles date inconsistencies)
-3. Enhanced logging throughout database operations for better debugging
+**Impact**:
+- Every run costs full API fees (no caching benefit)
+- ~$0.90 per hour of audio for AssemblyAI
+- System is effectively stateless between runs
 
-The fix ensures transcripts are found based on the appropriate column (`transcript` vs `transcript_test`) regardless of the stored `transcription_mode` value.
+**Previous "Fix" Was Incomplete**:
+On 2025-07-16, we only fixed the READ side by removing `transcription_mode` restrictions. The WRITE side remains completely broken.
 
 ### Latest Improvements (2025-07-16)
+- **Performance Optimization**:
+  - Increased episode processing concurrency from 2 to 4
+  - Reduced memory per task from 1500MB to 1200MB 
+  - Expected 2x speedup for typical 5-10 episode runs
+  - Fallback: Set `EPISODE_CONCURRENCY=2` environment variable to revert
 - **Fixed transcript cache failures**:
   - Removed restrictive `transcription_mode` conditions from all SQL queries
   - Added flexible matching with title-only fallback for date inconsistencies
   - Enhanced database operation logging for debugging
   - Cache now works properly across test and full modes
 - **Enhanced email digest formatting**:
-  - Removed sponsor sections from email footers (kept resources)
-  - Added clickable table of contents to mobile version
-  - Fixed desktop TOC numbering and clickable links
-  - Improved "Back to Episodes" link functionality
+  - Fixed Gmail anchor links with dual `id` and `name` attributes
+  - Added email address input field on approval page
+  - Renamed "Back to Episodes" to "Back to Episode List"
+  - Fixed navigation links to properly jump within email
 
 ### Previous Improvements (2025-07-18)
 - **Fixed aiohttp memory leak**:

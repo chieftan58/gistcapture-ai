@@ -35,7 +35,7 @@ class Episode:
     
     def __post_init__(self):
         """Ensure datetime objects are timezone-naive"""
-        if self.published and self.published.tzinfo:
+        if self.published and hasattr(self.published, 'tzinfo') and self.published.tzinfo:
             self.published = self.published.replace(tzinfo=None)
     
     def to_dict(self) -> dict:

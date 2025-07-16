@@ -415,6 +415,9 @@ class EpisodeSelector:
                     # Actually send the email instead of just setting flags
                     logger.info(f"[{parent._correlation_id}] 📧 Email send requested by user")
                     
+                    # Get email address from request if provided
+                    email_to = data.get('email_to')
+                    
                     # Prepare response variables
                     result = {'success': False}
                     error_message = None
@@ -492,8 +495,11 @@ class EpisodeSelector:
                             from ..email.digest import EmailDigest
                             from ..config import EMAIL_TO, EMAIL_FROM
                             
+                            # Use provided email or fall back to configured default
+                            recipient_email = email_to if email_to else EMAIL_TO
+                            
                             logger.info(f"[{parent._correlation_id}] 📧 Sending email digest...")
-                            logger.info(f"[{parent._correlation_id}]    - Recipients: {EMAIL_TO}")
+                            logger.info(f"[{parent._correlation_id}]    - Recipients: {recipient_email}")
                             logger.info(f"[{parent._correlation_id}]    - From: {EMAIL_FROM}")
                             logger.info(f"[{parent._correlation_id}]    - Summaries: {len(summaries_to_send)}")
                             
@@ -504,9 +510,20 @@ class EpisodeSelector:
                                 reverse=True
                             )
                             
-                            # Send the email
+                            # Send the email with custom recipient if provided
                             email_digest = EmailDigest()
-                            result = email_digest.send_digest(summaries_to_send)
+                            if email_to:
+                                # Temporarily override the EMAIL_TO for this send
+                                import renaissance_weekly.config as config
+                                original_email_to = config.EMAIL_TO
+                                config.EMAIL_TO = email_to
+                                try:
+                                    result = email_digest.send_digest(summaries_to_send)
+                                finally:
+                                    # Restore original
+                                    config.EMAIL_TO = original_email_to
+                            else:
+                                result = email_digest.send_digest(summaries_to_send)
                             
                             if result.get('success'):
                                 logger.info(f"[{parent._correlation_id}] ✅ Email sent successfully!")
@@ -913,6 +930,7 @@ class EpisodeSelector:
                 lookback_days: {self.configuration.get('lookback_days', 7)},
                 transcription_mode: '{self.configuration.get('transcription_mode', 'test')}'
             }},
+            emailTo: '{EMAIL_TO}',
             episodes: [],
             statusInterval: null,
             errorCheckInterval: null,
@@ -2416,6 +2434,23 @@ class EpisodeSelector:
                         </div>
                         
                         <div style="margin-bottom: 32px;">
+                            <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Email Settings</h3>
+                            <div style="background: #F7F7F7; border-radius: 12px; padding: 24px;">
+                                <label for="email-to" style="display: block; font-size: 14px; color: #666; margin-bottom: 8px;">Send to:</label>
+                                <input 
+                                    type="email" 
+                                    id="email-to" 
+                                    value="${{APP_STATE.emailTo}}"
+                                    placeholder="Enter email address"
+                                    style="width: 100%; padding: 12px 16px; border: 1px solid #E0E0E0; border-radius: 8px; font-size: 16px; outline: none; transition: border-color 0.2s;"
+                                    onchange="APP_STATE.emailTo = this.value"
+                                    onfocus="this.style.borderColor = '#666'"
+                                    onblur="this.style.borderColor = '#E0E0E0'"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 32px;">
                             <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Email Preview</h3>
                             <div style="background: #F7F7F7; border-radius: 12px; padding: 24px; min-height: 400px;">
                                 ${{previewContent}}
@@ -2437,8 +2472,8 @@ class EpisodeSelector:
         }}
         
         function renderComplete() {{
-            // Get email from configuration or use default
-            const emailTo = '{EMAIL_TO or "your email"}';
+            // Get email that was sent to
+            const emailTo = APP_STATE.sentToEmail || APP_STATE.emailTo;
             const message = APP_STATE.emailMessage || 'Email sent successfully!';
             const summaryCount = APP_STATE.processingSummaries ? APP_STATE.processingSummaries.length : 0;
             
@@ -4091,13 +4126,21 @@ class EpisodeSelector:
         }}
         
         async function sendEmail() {{
-            if (confirm('Send the email digest?')) {{
+            const emailTo = document.getElementById('email-to')?.value || APP_STATE.emailTo;
+            
+            if (!emailTo || !emailTo.includes('@')) {{
+                alert('Please enter a valid email address');
+                return;
+            }}
+            
+            if (confirm(`Send the email digest to ${{emailTo}}?`)) {{
                 try {{
                     const response = await fetch('/api/send-email', {{
                         method: 'POST',
                         headers: {{'Content-Type': 'application/json'}},
                         body: JSON.stringify({{
-                            send_email: true
+                            send_email: true,
+                            email_to: emailTo
                         }})
                     }});
                     
@@ -4107,6 +4150,7 @@ class EpisodeSelector:
                         APP_STATE.state = 'complete';
                         APP_STATE.emailMessage = result.message || 'Email sent successfully!';
                         APP_STATE.processingSummaries = new Array(result.summaryCount || 0);
+                        APP_STATE.sentToEmail = emailTo;
                         
                         // Stop all polling before we complete
                         if (APP_STATE.globalPollInterval) {{

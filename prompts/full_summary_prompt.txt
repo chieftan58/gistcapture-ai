@@ -48,6 +48,8 @@ STYLE
 - No filler phrases or summary clichés
 - Active voice, specific examples
 - Natural narrative flow (not chronological recap)
+- Write in flowing paragraphs within each theme - DO NOT use numbered lists (1., 2., etc.) or bullet points within sections
+- Connect related ideas with smooth transitions rather than list formatting
 
 LENGTH GUIDANCE
 - Minimum: 500 words (light content)
