@@ -562,12 +562,16 @@ class RenaissanceWeekly:
                 needs_transcript += 1
                 needs_summary += 1
             else:
-                # Check what's missing
-                if not existing.get('audio_url') or not Path(f"audio/{episode.published.strftime('%Y%m%d')}_{slugify(episode.podcast)}_{slugify(episode.title)}.mp3").exists():
+                # Check what's missing based on current mode
+                audio_key = 'audio_file_path_test' if self.current_transcription_mode == 'test' else 'audio_file_path'
+                transcript_key = 'transcript_test' if self.current_transcription_mode == 'test' else 'transcript'
+                summary_key = 'summary_test' if self.current_transcription_mode == 'test' else 'summary'
+                
+                if not existing.get(audio_key):
                     needs_download += 1
-                if not existing.get('transcript'):
+                if not existing.get(transcript_key):
                     needs_transcript += 1
-                if not existing.get('summary'):
+                if not existing.get(summary_key):
                     needs_summary += 1
         
         # Time estimates (minutes) - adjusted for 2-core system and actual performance

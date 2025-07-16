@@ -161,18 +161,10 @@ class EmailDigest:
                 <div style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
                     <!-- Episode Title (Full Name) -->
                     <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
-                        {escape(episode.title)}
+                        {escape(episode.podcast)}: {escape(episode.title)}
                     </h2>
-                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
-                        {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
-                    </p>
-                    
-                    <!-- Link to Full Podcast -->
-                    <p style="margin: 0 0 20px 0;">
-                        <a href="{self._get_apple_podcast_link(episode)}" style="display: inline-flex; align-items: center; padding: 8px 16px; background-color: #f5f5f5; border-radius: 20px; text-decoration: none; color: #333; font-size: 14px; border: 1px solid #ddd;">
-                            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDAuODMzMzMzQzQuOTM3NSAwLjgzMzMzMyAwLjgzMzMzMyA0LjkzNzUgMC44MzMzMzMgMTBDMC44MzMzMzMgMTUuMDYyNSA0LjkzNzUgMTkuMTY2NyAxMCAxOS4xNjY3QzE1LjA2MjUgMTkuMTY2NyAxOS4xNjY3IDE1LjA2MjUgMTkuMTY2NyAxMEMxOS4xNjY3IDQuOTM3NSAxNS4wNjI1IDAuODMzMzMzIDEwIDAuODMzMzMzWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyKSIvPgo8cGF0aCBkPSJNMTAgNi42NjY2N0M4LjE1OTcyIDYuNjY2NjcgNi42NjY2NyA4LjE1OTcyIDYuNjY2NjcgMTBDNi42NjY2NyAxMS44NDAzIDguMTU5NzIgMTMuMzMzMyAxMCAxMy4zMzMzQzExLjg0MDMgMTMuMzMzMyAxMy4zMzMzIDExLjg0MDMgMTMuMzMzMyAxMEMxMy4zMzMzIDguMTU5NzIgMTEuODQwMyA2LjY2NjY3IDEwIDYuNjY2NjdaIiBmaWxsPSJ3aGl0ZSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDBfbGluZWFyIiB4MT0iMTAiIHkxPSIwLjgzMzMzMyIgeDI9IjEwIiB5Mj0iMTkuMTY2NyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNGNDUyRkYiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjODMyQkMxIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+" alt="Apple Podcasts" style="width: 20px; height: 20px; margin-right: 8px;">
-                            <span>Full Episode</span>
-                        </a>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                        {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)} • <a href="{self._get_apple_podcast_link(episode)}" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
                     </p>
                     
                     <!-- Paragraph Summary -->

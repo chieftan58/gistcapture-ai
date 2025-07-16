@@ -286,8 +286,8 @@ class PodcastDatabase:
                             id, podcast, title, published, audio_url, transcript_url,
                             description, link, duration, guid, transcript,
                             transcript_source, summary, transcript_test, summary_test,
-                            transcription_mode, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            transcription_mode, paragraph_summary, paragraph_summary_test, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         existing_id[0],  # Preserve the existing ID
                         episode_data['podcast'], episode_data['title'], episode_data['published'],
@@ -296,7 +296,8 @@ class PodcastDatabase:
                         episode_data['duration'], episode_data['guid'],
                         episode_data.get('transcript'), episode_data['transcript_source'],
                         episode_data.get('summary'), episode_data.get('transcript_test'),
-                        episode_data.get('summary_test'), episode_data['transcription_mode'], 
+                        episode_data.get('summary_test'), episode_data['transcription_mode'],
+                        episode_data.get('paragraph_summary'), episode_data.get('paragraph_summary_test'),
                         episode_data['updated_at']
                     ))
                 else:
@@ -306,8 +307,8 @@ class PodcastDatabase:
                             podcast, title, published, audio_url, transcript_url,
                             description, link, duration, guid, transcript,
                             transcript_source, summary, transcript_test, summary_test,
-                            transcription_mode
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            transcription_mode, paragraph_summary, paragraph_summary_test
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         episode_data['podcast'], episode_data['title'], episode_data['published'],
                         episode_data['audio_url'], episode_data['transcript_url'],
@@ -315,7 +316,8 @@ class PodcastDatabase:
                         episode_data['duration'], episode_data['guid'],
                         episode_data.get('transcript'), episode_data['transcript_source'],
                         episode_data.get('summary'), episode_data.get('transcript_test'),
-                        episode_data.get('summary_test'), episode_data['transcription_mode']
+                        episode_data.get('summary_test'), episode_data['transcription_mode'],
+                        episode_data.get('paragraph_summary'), episode_data.get('paragraph_summary_test')
                     ))
                 
                 conn.commit()

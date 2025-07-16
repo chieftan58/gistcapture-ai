@@ -264,10 +264,15 @@ Created and ran `migrate_db.py` script to add missing columns to database schema
   - Identified issue in `TranscriptAPIAggregator` where client instances were created at init time
   - Fixed by instantiating clients within async context manager to ensure proper cleanup
   - This prevents unclosed session warnings and potential memory leaks during long runs
-- **Resolved transcript cache issue**:
-  - Created `migrate_db.py` to add missing database columns (`transcript_test`, `summary_test`, `transcription_mode`)
-  - This fixed the critical issue where transcripts were being re-generated unnecessarily
-  - Saves ~$0.90 per hour of audio by properly caching transcripts
+- **Resolved transcript cache issue completely**:
+  - Root cause: SQL statements in `save_episode()` were missing `paragraph_summary` and `paragraph_summary_test` columns
+  - This caused episode saves to fail silently, resulting in empty database (0 episodes)
+  - Fixed SQL statements to include all columns - episodes now save properly
+  - Fixed episode checking logic in `app.py` to use mode-specific columns
+  - Transcripts are now properly cached, saving ~$0.90 per hour of audio
+- **Email formatting improvements**:
+  - Added podcast name prefix to episode titles for clarity (e.g., "American Optimist: Ep 118...")
+  - Simplified "Full Episode" link by removing Apple Podcasts logo and integrating into metadata line
 
 ### Previous Improvements (2025-07-17)
 - **Implemented Two-Summary Email System**:
