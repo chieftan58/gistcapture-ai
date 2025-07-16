@@ -358,13 +358,10 @@ class PodcastDatabase:
     def get_transcript(self, episode: Episode, transcription_mode: str = None) -> Tuple[Optional[str], Optional[TranscriptSource]]:
         """Get cached transcript for an episode matching the transcription mode"""
         try:
-            # Enhanced debug logging
-            logger.info(f"\n{'='*60}")
-            logger.info(f"🔍 DATABASE TRANSCRIPT LOOKUP")
-            logger.info(f"   Database: {self.db_path}")
-            logger.info(f"   Mode: {transcription_mode}")
+            # Debug logging
+            logger.info(f"🔍 Database lookup - Mode: {transcription_mode}")
             logger.info(f"   Podcast: {episode.podcast}")
-            logger.info(f"   Title: {episode.title[:80]}...")
+            logger.info(f"   Title: {episode.title}")
             logger.info(f"   GUID: {episode.guid}")
             logger.info(f"   Published: {episode.published} (type: {type(episode.published)})")
             

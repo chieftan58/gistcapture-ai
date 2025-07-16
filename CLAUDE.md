@@ -258,46 +258,36 @@ For detailed update history and version information, see [CHANGELOG.md](./CHANGE
 
 ## Known Issues
 
-### CRITICAL: Database Save Operations Completely Broken
-**Discovered**: 2025-07-16 (after believing it was fixed)
-**Status**: CRITICAL - REQUIRES COMPLETE OVERHAUL
+### Database Location Confusion (Resolved)
+**Discovered**: 2025-07-16
+**Status**: RESOLVED - Database is working correctly
 
-**Severe Symptoms**:
-- Database contains 0 episodes despite multiple runs
-- Database file hasn't been modified since July 15
-- Episodes show "💾 Saving episode" in logs but nothing is saved
-- Marc Andreessen episode transcribed 7 times via AssemblyAI (costing ~$5+)
-- Silent failures with no error messages
+**Initial Confusion**:
+- Was checking wrong database file: `renaissance_weekly.db` (empty, unused)
+- Actual database file: `podcast_data.db` (contains 140+ episodes, actively used)
+- This led to incorrect belief that saves were failing
 
-**Evidence**:
+**Actual Status**:
 ```bash
-# Database is empty
-sqlite3 renaissance_weekly.db "SELECT COUNT(*) FROM episodes;"
-# Result: 0
+# Correct database has episodes
+sqlite3 podcast_data.db "SELECT COUNT(*) FROM episodes;"
+# Result: 140
 
-# Database file not modified
-stat renaissance_weekly.db | grep Modify
-# Result: 2025-07-15 22:47:45 (before recent runs)
-
-# Repeated expensive transcriptions
-grep "Starting AssemblyAI.*Marc Andreessen" renaissance_weekly.log
-# Result: 7 separate transcriptions of same episode
+# Recent saves are working
+sqlite3 podcast_data.db "SELECT podcast, title, datetime(updated_at) FROM episodes ORDER BY updated_at DESC LIMIT 5;"
+# Shows recent episodes from July 16
 ```
 
-**Root Cause**:
-The `save_episode()` function is failing completely and silently. While we fixed the READ queries on 2025-07-16, the WRITE operations are broken. The INSERT statements are either:
-1. Malformed (missing columns or wrong order)
-2. Not being committed properly
-3. Failing due to constraint violations
-4. Being rolled back silently
+**Remaining Issue - Cache Lookup Timing**:
+While the database saves ARE working, there may be cache lookup timing issues:
+1. External transcript sources are checked first (RSS, websites, etc.)
+2. These external lookups show "No transcript found" in logs
+3. Database cache IS checked after external sources fail
+4. Cache lookup works when tested directly
+5. May have edge cases with date/time matching or GUID differences
 
-**Impact**:
-- Every run costs full API fees (no caching benefit)
-- ~$0.90 per hour of audio for AssemblyAI
-- System is effectively stateless between runs
-
-**Previous "Fix" Was Incomplete**:
-On 2025-07-16, we only fixed the READ side by removing `transcription_mode` restrictions. The WRITE side remains completely broken.
+**Previous Fix (2025-07-16) Was Correct**:
+The removal of `transcription_mode` restrictions from SQL queries was the right fix. The database is functioning properly.
 
 ### Latest Improvements (2025-07-16)
 - **Performance Optimization**:
@@ -315,6 +305,64 @@ On 2025-07-16, we only fixed the READ side by removing `transcription_mode` rest
   - Added email address input field on approval page
   - Renamed "Back to Episodes" to "Back to Episode List"
   - Fixed navigation links to properly jump within email
+- **Database Investigation and Verification** (2025-07-16):
+  - Resolved confusion about database files:
+    - Active database: `podcast_data.db` (140+ episodes)
+    - Unused/legacy: `renaissance_weekly.db` (empty)
+  - Created comprehensive verification script `verify_database_comprehensive.py`
+  - Confirmed transcript cache is working correctly with flexible fallback matching
+  - Added enhanced logging to trace cache lookup flow
+
+### Database Verification Tools
+
+**Comprehensive Database Diagnostics**:
+```bash
+python verify_database_comprehensive.py
+```
+Provides:
+- Database file locations and sizes
+- Table structure verification
+- Episode statistics by mode
+- Transcript/summary availability counts
+- Date format analysis
+- Duplicate detection
+- Live transcript lookup testing
+
+**Quick Transcript Cache Test**:
+```bash
+python verify_transcript_cache.py
+```
+
+### Date Handling Best Practices
+
+**Issue**: Date format inconsistencies can cause cache lookup failures when comparing episode dates.
+
+**Current Solution**: The database uses a three-tier fallback system:
+1. **GUID match** (most reliable) - Always prefer GUID-based lookups when available
+2. **Podcast + Title + Date** - Uses `date()` SQL function to ignore time components
+3. **Podcast + Title only** - Handles date mismatches gracefully
+
+**Best Practices for Date Handling**:
+```python
+# 1. Consistent Storage - Always use ISO format
+published_str = episode.published.isoformat()
+
+# 2. Remove Timezones - Strip timezone info before storage
+if episode.published.tzinfo:
+    episode.published = episode.published.replace(tzinfo=None)
+
+# 3. Flexible Queries - Use date() function for comparisons
+cursor.execute("""
+    SELECT * FROM episodes 
+    WHERE podcast = ? AND title = ? AND date(published) = date(?)
+""", (podcast, title, published_str))
+```
+
+**Key Points**:
+- Always generate and use GUIDs when possible (most reliable identifier)
+- The title-only fallback ensures transcripts are found despite date inconsistencies
+- Database stores all dates as timezone-naive ISO format strings
+- Episode fetchers strip timezone info before creating Episode objects
 
 ### Previous Improvements (2025-07-18)
 - **Fixed aiohttp memory leak**:
