@@ -218,12 +218,16 @@ class EmailDigest:
                     
                     <!-- Expandable Section for mobile/modern clients -->
                     <details style="margin-top: 20px;">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 20px; list-style: none;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 15px; list-style: none;">
                             <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
                         </summary>
                         
                         <!-- Full Summary Content -->
-                        <div style="margin-top: 20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
+                        <div style="padding: 20px; background-color: #f8f8f8; border-radius: 8px; position: relative;">
+                            <!-- Visual indicator at top of full summary -->
+                            <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0;">
+                                <span style="font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-family: Georgia, serif;">Full Summary</span>
+                            </div>
                             {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         </div>
                     </details>
