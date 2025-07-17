@@ -222,10 +222,21 @@ class EmailDigest:
                             <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
                         </summary>
                         
-                        <!-- Full Summary with aggressive negative margin to prevent jumping -->
-                        <div style="margin-top: -150px; padding: 150px 20px 20px 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
-                            <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
-                            {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
+                        <!-- Dynamic buffer using invisible paragraph clone -->
+                        <div>
+                            <!-- Invisible buffer - clone of paragraph summary plus extra space -->
+                            <div style="visibility: hidden; height: 0; overflow: hidden;">
+                                <div style="font-size: 16px; line-height: 1.6; padding: 20px;">
+                                    {escape(paragraph)}
+                                </div>
+                                <div style="height: 500px;"></div>
+                            </div>
+                            
+                            <!-- Actual Full Summary content -->
+                            <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                                {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
+                            </div>
                         </div>
                     </details>
                     

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light only">
+    <meta name="supported-color-schemes" content="light only">
+    <title>Investment Pods Weekly</title>
+    <style>
+        /* Basic reset and mobile-friendly styles */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Georgia, serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333333 !important;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+        }
+        
+        h1, h2, h3 {
+            font-weight: normal;
+        }
+        
+        a {
+            color: #0066CC;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Mobile/Desktop visibility controls */
+        .mobile-only {
+            display: block;
+        }
+        
+        .desktop-only {
+            display: none;
+        }
+        
+        /* Desktop styles (min-width: 601px) */
+        @media only screen and (min-width: 601px) {
+            .mobile-only {
+                display: none !important;
+            }
+            
+            .desktop-only {
+                display: block !important;
+            }
+        }
+        
+        /* Mobile-specific fixes */
+        table {
+            border-collapse: collapse;
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            .container {
+                width: 100% !important;
+            }
+            .content-table {
+                width: 100% !important;
+            }
+            h1 {
+                font-size: 28px !important;
+            }
+            h2 {
+                font-size: 24px !important;
+            }
+            h3 {
+                font-size: 16px !important;
+            }
+            .episode-content {
+                padding: 15px !important;
+            }
+            /* Mobile-specific styles for Episode Directory */
+            .episode-directory-title {
+                font-size: 14px !important;
+                line-height: 1.4 !important;
+            }
+            .episode-directory-meta {
+                font-size: 12px !important;
+            }
+        }
+        
+        /* Force light mode on all platforms */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #ffffff !important;
+                background: #ffffff !important;
+                color: #333333 !important;
+            }
+            .body {
+                background-color: #ffffff !important;
+                background: #ffffff !important;
+                color: #333333 !important;
+            }
+            table, td, tr {
+                background-color: transparent !important;
+            }
+            h1, h2, h3, h4, p, span, div {
+                color: #333333 !important;
+            }
+            a {
+                color: #0066CC !important;
+            }
+        }
+        
+        /* Gmail doesn't support advanced CSS selectors, so we'll use a simpler approach */
+    </style>
+</head>
+<body class="body" style="margin: 0; padding: 0; background-color: #ffffff !important; background: #ffffff !important; color: #333333 !important;">
+    <u></u><!-- Gmail detection hack -->
+    <a name="top"></a>
+    <div id="top"></div>
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff !important;">
+        <tr>
+            <td align="center" style="padding: 0; background-color: #ffffff !important;">
+                <table class="container" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; background-color: #ffffff !important;">
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="padding: 20px 20px 10px 20px; background-color: #ffffff !important;">
+                            <h1 style="margin: 0 0 4px 0; font-size: 38px; color: #000000 !important; font-family: Georgia, serif; font-weight: normal; letter-spacing: -0.5px;">Investment Pods Weekly</h1>
+                            <p style="margin: 0 0 4px 0; font-size: 15px; color: #666666 !important; font-family: Georgia, serif;">by Pods Distilled</p>
+                            <p style="margin: 0; font-size: 13px; color: #999999 !important; font-family: Georgia, serif;">July 17, 2025</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Mobile Version: TOC and Episodes -->
+                    <tr class="mobile-only">
+                        <td class="episode-content" style="padding: 0 20px; background-color: #ffffff !important;">
+                            
+            <div style="padding: 0; background-color: #ffffff !important;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 8px; background-color: #ffffff !important;">
+                    <tr>
+                        <td style="padding: 12px 0 10px 0; background-color: #ffffff !important;">
+                            <p style="margin: 0; font-size: 11px; color: #888888 !important; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
+                                <a name="mobile-toc"></a>
+                                Episodes
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 25px; background-color: #ffffff !important;">
+        
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; background-color: #ffffff !important;">
+                        <a href="#mobile-episode-0" style="color: #2c3e50 !important; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
+                            <strong>Test Podcast 1: Episode 1: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 12px; color: #888888 !important;" class="episode-directory-meta">
+                            July 16, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; background-color: #ffffff !important;">
+                        <a href="#mobile-episode-1" style="color: #2c3e50 !important; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
+                            <strong>Test Podcast 2: Episode 2: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 12px; color: #888888 !important;" class="episode-directory-meta">
+                            July 15, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; background-color: #ffffff !important;">
+                        <a href="#mobile-episode-2" style="color: #2c3e50 !important; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
+                            <strong>Test Podcast 3: Episode 3: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 12px; color: #888888 !important;" class="episode-directory-meta">
+                            July 14, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                </table>
+            </div>
+        
+                            
+                <!-- Episode 1 -->
+                <div id="mobile-episode-0" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px; background-color: #ffffff !important;">
+                    <a name="mobile-episode-0"></a>
+                    <!-- Episode Title (Full Name) -->
+                    <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50 !important; font-family: Georgia, serif;">
+                        Test Podcast 1: Episode 1: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666666 !important;">
+                        July 16, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc !important; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <!-- Paragraph Summary -->
+                    <div style="font-size: 16px; line-height: 1.6; color: #333333 !important; margin-bottom: 15px;">
+                        This is a short paragraph summary. It&#x27;s only about 30 words long and tests the minimum buffer scenario. The guest discusses important topics briefly.
+                    </div>
+                    
+                    <!-- Read Full Summary Button at BOTTOM -->
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0 !important; border-radius: 4px; font-size: 14px; color: #666666 !important; display: inline-block; list-style: none; margin-bottom: 20px;">
+                            <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
+                        </summary>
+                        
+                        <!-- Dynamic buffer using invisible paragraph clone -->
+                        <div>
+                            <!-- Invisible buffer - clone of paragraph summary plus extra space -->
+                            <div style="visibility: hidden; height: 0; overflow: hidden;">
+                                <div style="font-size: 16px; line-height: 1.6; padding: 20px;">
+                                    This is a short paragraph summary. It&#x27;s only about 30 words long and tests the minimum buffer scenario. The guest discusses important topics briefly.
+                                </div>
+                                <div style="height: 500px;"></div>
+                            </div>
+                            
+                            <!-- Actual Full Summary content -->
+                            <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                                <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <p style="margin: 20px 0 0 0; text-align: center;">
+                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50 !important; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
+                    </p>
+                    
+                </div>
+            
+                <!-- Episode 2 -->
+                <div id="mobile-episode-1" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px; background-color: #ffffff !important;">
+                    <a name="mobile-episode-1"></a>
+                    <!-- Episode Title (Full Name) -->
+                    <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50 !important; font-family: Georgia, serif;">
+                        Test Podcast 2: Episode 2: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666666 !important;">
+                        July 15, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc !important; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <!-- Paragraph Summary -->
+                    <div style="font-size: 16px; line-height: 1.6; color: #333333 !important; margin-bottom: 15px;">
+                        This is a medium-length paragraph summary that represents a typical episode overview. The conversation covers multiple important topics including market dynamics, investment strategies, and future predictions. The guest shares insights from their extensive experience in the field, discussing both challenges and opportunities. This summary is approximately 150 words which is our target length. The discussion touches on key themes that would interest our investment-focused audience, including technological disruption, market cycles, and portfolio management strategies. The host and guest explore various scenarios and their potential impacts on different asset classes.
+                    </div>
+                    
+                    <!-- Read Full Summary Button at BOTTOM -->
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0 !important; border-radius: 4px; font-size: 14px; color: #666666 !important; display: inline-block; list-style: none; margin-bottom: 20px;">
+                            <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
+                        </summary>
+                        
+                        <!-- Dynamic buffer using invisible paragraph clone -->
+                        <div>
+                            <!-- Invisible buffer - clone of paragraph summary plus extra space -->
+                            <div style="visibility: hidden; height: 0; overflow: hidden;">
+                                <div style="font-size: 16px; line-height: 1.6; padding: 20px;">
+                                    This is a medium-length paragraph summary that represents a typical episode overview. The conversation covers multiple important topics including market dynamics, investment strategies, and future predictions. The guest shares insights from their extensive experience in the field, discussing both challenges and opportunities. This summary is approximately 150 words which is our target length. The discussion touches on key themes that would interest our investment-focused audience, including technological disruption, market cycles, and portfolio management strategies. The host and guest explore various scenarios and their potential impacts on different asset classes.
+                                </div>
+                                <div style="height: 500px;"></div>
+                            </div>
+                            
+                            <!-- Actual Full Summary content -->
+                            <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                                <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <p style="margin: 20px 0 0 0; text-align: center;">
+                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50 !important; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
+                    </p>
+                    
+                </div>
+            
+                <!-- Episode 3 -->
+                <div id="mobile-episode-2" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px; background-color: #ffffff !important;">
+                    <a name="mobile-episode-2"></a>
+                    <!-- Episode Title (Full Name) -->
+                    <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50 !important; font-family: Georgia, serif;">
+                        Test Podcast 3: Episode 3: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666666 !important;">
+                        July 14, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc !important; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <!-- Paragraph Summary -->
+                    <div style="font-size: 16px; line-height: 1.6; color: #333333 !important; margin-bottom: 15px;">
+                        This is a long paragraph summary that tests the dynamic buffer with extended content. The episode features an in-depth conversation with a prominent investor who shares their journey from early career to becoming a successful fund manager. They discuss the evolution of markets over the past two decades, highlighting key turning points and lessons learned. The conversation covers macroeconomic themes, including inflation, monetary policy, and global trade dynamics. The guest provides specific examples of successful investments and explains their analytical framework. They also discuss common mistakes investors make and how to avoid them. The dialogue includes technical analysis of market structures, liquidity conditions, and risk management techniques. Throughout the episode, both host and guest examine current market conditions and provide forward-looking perspectives on various asset classes including equities, fixed income, commodities, and alternative investments. This extended summary ensures we test the buffer behavior with maximum content length to verify the viewport positioning works correctly even with very long paragraph summaries that push the button further down the page.
+                    </div>
+                    
+                    <!-- Read Full Summary Button at BOTTOM -->
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0 !important; border-radius: 4px; font-size: 14px; color: #666666 !important; display: inline-block; list-style: none; margin-bottom: 20px;">
+                            <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
+                        </summary>
+                        
+                        <!-- Dynamic buffer using invisible paragraph clone -->
+                        <div>
+                            <!-- Invisible buffer - clone of paragraph summary plus extra space -->
+                            <div style="visibility: hidden; height: 0; overflow: hidden;">
+                                <div style="font-size: 16px; line-height: 1.6; padding: 20px;">
+                                    This is a long paragraph summary that tests the dynamic buffer with extended content. The episode features an in-depth conversation with a prominent investor who shares their journey from early career to becoming a successful fund manager. They discuss the evolution of markets over the past two decades, highlighting key turning points and lessons learned. The conversation covers macroeconomic themes, including inflation, monetary policy, and global trade dynamics. The guest provides specific examples of successful investments and explains their analytical framework. They also discuss common mistakes investors make and how to avoid them. The dialogue includes technical analysis of market structures, liquidity conditions, and risk management techniques. Throughout the episode, both host and guest examine current market conditions and provide forward-looking perspectives on various asset classes including equities, fixed income, commodities, and alternative investments. This extended summary ensures we test the buffer behavior with maximum content length to verify the viewport positioning works correctly even with very long paragraph summaries that push the button further down the page.
+                                </div>
+                                <div style="height: 500px;"></div>
+                            </div>
+                            
+                            <!-- Actual Full Summary content -->
+                            <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                                <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <p style="margin: 20px 0 0 0; text-align: center;">
+                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50 !important; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
+                    </p>
+                    
+                </div>
+            
+                        </td>
+                    </tr>
+                    
+                    <!-- Desktop Version: Table of Contents -->
+                    <tr class="desktop-only">
+                        <td style="padding: 0 20px;">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 10px;">
+                                <tr>
+                                    <td style="padding: 15px 0 10px 0;">
+                                        <p id="toc" style="margin: 0; font-size: 12px; color: #888; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
+                                            <a name="toc"></a>
+                                            Episodes
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Episode list -->
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 35px;">
+                                
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#desktop-episode-0" style="color: #2c3e50; text-decoration: none; font-size: 16px; line-height: 1.4;">
+                            <strong>Test Podcast 1: Episode 1: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 13px; color: #888;">
+                            July 16, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#desktop-episode-1" style="color: #2c3e50; text-decoration: none; font-size: 16px; line-height: 1.4;">
+                            <strong>Test Podcast 2: Episode 2: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 13px; color: #888;">
+                            July 15, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#desktop-episode-2" style="color: #2c3e50; text-decoration: none; font-size: 16px; line-height: 1.4;">
+                            <strong>Test Podcast 3: Episode 3: Deep Dive into Market Dynamics with Expert Guest</strong>
+                        </a>
+                        <div style="margin-top: 4px; font-size: 13px; color: #888;">
+                            July 14, 2025 • 60 min
+                        </div>
+                    </td>
+                </tr>
+            
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Desktop Version: Full Summaries -->
+                    <tr class="desktop-only">
+                        <td style="padding: 0 20px;">
+                            
+                <div id="desktop-episode-0" style="margin-bottom: 50px; padding-bottom: 30px; border-bottom: 1px solid #E0E0E0;">
+                    <a name="desktop-episode-0"></a>
+                    <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
+                        Test Podcast 1: Episode 1: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                        July 16, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <div style="padding: 30px; background-color: #f8f8f8; border-radius: 8px; margin-top: 20px;">
+                        <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0 0; text-align: center;">
+                        <a href="#top" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episode List</a>
+                    </p>
+                </div>
+            
+                <div id="desktop-episode-1" style="margin-bottom: 50px; padding-bottom: 30px; border-bottom: 1px solid #E0E0E0;">
+                    <a name="desktop-episode-1"></a>
+                    <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
+                        Test Podcast 2: Episode 2: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                        July 15, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <div style="padding: 30px; background-color: #f8f8f8; border-radius: 8px; margin-top: 20px;">
+                        <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0 0; text-align: center;">
+                        <a href="#top" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episode List</a>
+                    </p>
+                </div>
+            
+                <div id="desktop-episode-2" style="margin-bottom: 50px; padding-bottom: 30px; border-bottom: 1px solid #E0E0E0;">
+                    <a name="desktop-episode-2"></a>
+                    <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
+                        Test Podcast 3: Episode 3: Deep Dive into Market Dynamics with Expert Guest
+                    </h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
+                        July 14, 2025 • 60 min • <a href="https://podcasts.apple.com/us/podcast/idtest-id" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
+                    </p>
+                    
+                    <div style="padding: 30px; background-color: #f8f8f8; border-radius: 8px; margin-top: 20px;">
+                        <h3 style="margin: 20px 0 10px 0; font-size: 18px; color: #2c3e50; font-family: Georgia, serif;">Investment Thesis and Market Dynamics</h3>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest begins by outlining their core investment philosophy, which centers on identifying asymmetric opportunities in dislocated markets. They explain how their approach has evolved from traditional value investing to incorporating growth metrics and technological disruption factors.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Key Market Observations</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Liquidity Conditions</strong>: The current market environment presents unique challenges with central bank policies creating artificial liquidity conditions.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">2. <strong>Sector Rotation</strong>: Evidence suggests a significant rotation from growth to value stocks, though the guest argues this is premature.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">3. <strong>Global Macro Factors</strong>: Discussion of how geopolitical tensions and supply chain disruptions create both risks and opportunities.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Portfolio Construction Strategy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The conversation delves into specific portfolio construction techniques:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Risk Parity Approach</strong>: Balancing risk across asset classes rather than capital allocation</li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Dynamic Hedging</strong>: Using options strategies to protect downside while maintaining upside exposure  </li>
+<li style="margin-bottom: 8px; line-height: 1.6;"><strong>Alternative Assets</strong>: Incorporating commodities and real assets as inflation hedges</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Technology and Disruption</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">A significant portion of the discussion focuses on technological disruption:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest explains how artificial intelligence and machine learning are fundamentally changing market dynamics. They provide examples of how algorithmic trading has increased market efficiency while also creating new forms of systemic risk.</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Specific Investment Examples</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest shares several concrete examples from their portfolio:</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">1. <strong>Energy Transition Play</strong>: Long position in lithium miners coupled with shorts in traditional auto manufacturers
+2. <strong>Financial Technology</strong>: Investments in payment processing infrastructure
+3. <strong>Healthcare Innovation</strong>: Biotech companies developing novel therapeutics</p>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Risk Management Philosophy</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The discussion concludes with insights on risk management:</p>
+<ul style="margin: 15px 0; padding-left: 20px;">
+<li style="margin-bottom: 8px; line-height: 1.6;">The importance of position sizing and portfolio diversification</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">How to identify and avoid value traps</li>
+<li style="margin-bottom: 8px; line-height: 1.6;">The role of patience in achieving superior returns</li>
+</ul>
+<h4 style="margin: 20px 0 10px 0; font-size: 16px; color: #34495e; font-family: Georgia, serif;">Forward-Looking Perspectives</h4>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">The guest provides their outlook for the next 12-18 months, highlighting potential catalysts and warning signs investors should monitor. They emphasize the importance of remaining flexible and adapting to changing market conditions while maintaining disciplined investment processes.</p>
+<p style="margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #333;">This comprehensive discussion provides valuable insights for both professional investors and those seeking to improve their investment approach.</p>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0 0; text-align: center;">
+                        <a href="#top" style="display: inline-block; padding: 10px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">↑ Back to Episode List</a>
+                    </p>
+                </div>
+            
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td align="center" style="padding: 25px 20px; border-top: 1px solid #E0E0E0;">
+                            <p style="margin: 0; font-size: 13px; color: #888; font-family: Georgia, serif;">© 2025 Pods Distilled™ · All rights reserved · Not investment advice</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

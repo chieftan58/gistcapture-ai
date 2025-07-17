@@ -335,11 +335,14 @@ python test_partial_cache.py
 The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of audio.
 
 ### Latest Improvements (2025-07-18)
-- **Fixed iPhone 'Read Full Summary' viewport positioning**:
-  - Moved button to BOTTOM of paragraph summary (key fix!)
-  - Full summary appears exactly where button was clicked
-  - No more jumping to middle of content - user sees beginning immediately
-  - Seamless visual flow with negative margin alignment
+- **Enhanced 'Read Full Summary' viewport positioning with dynamic buffer**:
+  - Implemented intelligent buffer system using invisible paragraph clone
+  - Buffer size automatically scales with paragraph length for optimal positioning
+  - Added 500px additional padding to ensure content always starts at top
+  - Solution works regardless of button position on screen when clicked
+  - Fixes issue where clicking button after scrolling past it would show middle of content
+  - Test scenarios created for short, medium, and long paragraph summaries
+  - More reliable than fixed negative margin approach
 
 ### Latest Improvements (2025-07-17)
 - **Fixed email recipient override**:
