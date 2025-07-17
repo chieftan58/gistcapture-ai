@@ -334,6 +334,13 @@ python test_partial_cache.py
 
 The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of audio.
 
+### Latest Improvements (2025-07-18)
+- **Fixed iPhone 'Read Full Summary' viewport positioning**:
+  - Eliminated gap between button and expanded content
+  - Content now starts immediately in viewport without scrolling
+  - Removed top padding and margins that pushed content off-screen
+  - Simplified visual indicators for better mobile UX
+
 ### Latest Improvements (2025-07-17)
 - **Fixed email recipient override**:
   - Modified `EmailDigest.send_digest()` to accept optional `email_to` parameter
