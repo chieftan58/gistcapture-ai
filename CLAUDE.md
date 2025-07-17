@@ -353,7 +353,7 @@ The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of a
   - System now properly detects when cached summaries contain errors fixed in transcripts
   - `filter_episodes_needing_processing` enhanced to validate cache quality
   - Ensures corrected names appear in emails without manual intervention
-- **Refined full summary prompt for deeper topic exploration** (in progress):
+- **Refined full summary prompt for deeper topic exploration**:
   - Shifting from "actionable insights" to "topic-centric deep exploration"
   - New framework: Identify 3-6 main topics → explore each in depth (300-600 words per topic)
   - Captures discussion arcs, participant viewpoints, facts/data, areas of agreement/disagreement
