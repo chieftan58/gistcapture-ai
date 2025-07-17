@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Renaissance Weekly is a Python-based podcast intelligence system that automatically fetches, transcribes, and summarizes episodes from 19 curated podcasts, then sends email digests via SendGrid.
+Investment Pods Weekly (formerly Renaissance Weekly) is a Python-based podcast intelligence system that automatically fetches, transcribes, and summarizes episodes from 19 curated podcasts, then sends email digests via SendGrid. The system is published by Pods Distilled.
 
 ### Key Features
 - **95%+ Success Rate**: Multi-strategy download system with fallbacks
@@ -164,6 +164,7 @@ python main.py --load-dataset <name>
 ## Important Notes
 
 - The project directory (`gistcapture-ai`) differs from package name (`renaissance-weekly`)
+- Internal package name remains `renaissance_weekly` for stability (cosmetic rebrand only)
 - Summaries are cached separately by mode - test mode (15 min) vs full mode (complete episodes)
 - Minimum 1 episode required for email sending (previously 20)
 - Browser cookies automatically used for YouTube authentication
@@ -256,6 +257,36 @@ The UI now displays automatic alerts when YouTube authentication expires:
 
 For detailed update history and version information, see [CHANGELOG.md](./CHANGELOG.md).
 
+## Transcript Quality & AI Post-Processing
+
+### Automatic AI-Powered Correction (NEW)
+The system now uses GPT-4 to automatically fix transcription errors:
+- **Runs automatically** after every transcription
+- **Context-aware** - knows podcast hosts, common guests, tech terms
+- **Self-improving** - no manual configuration needed
+- **Smart caching** - only processes transcripts with likely errors
+
+### How It Works
+1. After transcription, GPT-4 analyzes the transcript
+2. Identifies and fixes errors based on context (e.g., "Heath Raboy" → "Keith Rabois")
+3. Logs all corrections made
+4. Updates database automatically
+
+### Fixing Existing Transcripts
+To fix errors in existing transcripts:
+```bash
+# Fix transcripts from last 30 days
+python fix_all_transcripts.py 30
+
+# Fix all transcripts
+python fix_all_transcripts.py 365
+```
+
+### Monitoring
+- Look for "🤖 Running AI post-processing" in logs
+- Check for "✅ Fixed N transcription errors" messages
+- Errors are fixed before summaries are generated
+
 ## Known Issues
 
 ### Transcript Cache Issue (RESOLVED)
@@ -302,6 +333,26 @@ python test_partial_cache.py
 ```
 
 The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of audio.
+
+### Latest Improvements (2025-07-17)
+- **Fixed email recipient override**:
+  - Modified `EmailDigest.send_digest()` to accept optional `email_to` parameter
+  - UI-entered email addresses now properly override the default recipient
+  - System correctly sends to custom emails instead of hardcoded default
+- **Implemented AI-powered transcript error correction**:
+  - Built `TranscriptPostProcessor` using GPT-4 to automatically fix phonetic errors
+  - Fixes names (e.g., "Heath Raboy" → "Keith Rabois"), companies, technical terms
+  - Runs automatically after every transcription and on cached transcripts with errors
+  - Context-aware corrections based on podcast and guest knowledge
+- **Added cache validation system**:
+  - Created `CacheValidator` to detect stale summaries with outdated errors
+  - Automatically regenerates summaries when transcript has been corrected
+  - Prevents serving cached content with transcription errors
+  - Integrated into main processing pipeline for automatic detection
+- **Fixed critical cache invalidation bug**:
+  - System now properly detects when cached summaries contain errors fixed in transcripts
+  - `filter_episodes_needing_processing` enhanced to validate cache quality
+  - Ensures corrected names appear in emails without manual intervention
 
 ### Latest Improvements (2025-07-16)
 - **Performance Optimization**:

@@ -58,5 +58,14 @@ LENGTH GUIDANCE
 
 Let insight density, not episode duration, drive your summary length.
 
+ENTITY VALIDATION
+Before writing, verify proper names and entities. Common corrections:
+- Keith Rabois (not Heath Raboy)
+- Chamath Palihapitiya (not Shamath or Chamat)
+- David Sacks (not Sachs)
+- Founders Fund (not Founder's Fund)
+- NVIDIA (not Nvidia or nVidia)
+Use your knowledge to correct obvious transcription errors in names, companies, and technical terms.
+
 TRANSCRIPT
 {transcript}

@@ -1,0 +1,131 @@
+# Known entities for each podcast to fix common transcription errors
+# Format: podcast_name -> entity_type -> corrections
+
+All-In:
+  hosts:
+    # Regular hosts
+    - correct: "Jason Calacanis"
+      variants: ["Jason Kalkanis", "Jason Kalakanis", "Jason Calicanis", "Jason Kalacanis"]
+    - correct: "Chamath Palihapitiya"
+      variants: ["Chamath Palihapatiya", "Shamath", "Chamat", "Chamoth", "Chamath Palihapitia"]
+    - correct: "David Sacks"
+      variants: ["David Sachs", "David Sax", "Davids Sacks"]
+    - correct: "David Friedberg"
+      variants: ["David Friedburg", "Friedburg", "David Freedberg", "Friedberg"]
+    
+  frequent_guests:
+    - correct: "Keith Rabois"
+      variants: ["Heath Raboy", "Heath Rabois", "Keith Raboy", "Heath Raboys", "Keith Raboys"]
+    - correct: "Brad Gerstner"
+      variants: ["Brad Gerstener", "Brad Girstner", "Brad Gurstner"]
+    - correct: "Gavin Baker"
+      variants: ["Gavin Backer", "Gavin Bakker"]
+    - correct: "Bill Gurley"
+      variants: ["Bill Girley", "Bill Gurly"]
+      
+  companies:
+    - correct: "Founders Fund"
+      variants: ["Founder's Fund", "Founders' Fund"]
+    - correct: "OpenAI"
+      variants: ["Open AI", "Open A.I."]
+    - correct: "PayPal"
+      variants: ["Pay Pal", "Paypal"]
+
+MacroVoices:
+  hosts:
+    - correct: "Erik Townsend"
+      variants: ["Eric Townsend", "Erik Townsand", "Eric Townsand"]
+    - correct: "Patrick Ceresna"
+      variants: ["Patrick Cerezna", "Patrick Seresna"]
+      
+  frequent_guests:
+    - correct: "Jeff Snider"
+      variants: ["Jeff Schneider", "Jeffrey Snider"]
+    - correct: "Luke Gromen"
+      variants: ["Luke Groman", "Luke Growmen"]
+    - correct: "Brent Johnson"
+      variants: ["Brent Jonson", "Brett Johnson"]
+
+The Megyn Kelly Show:
+  hosts:
+    - correct: "Megyn Kelly"
+      variants: ["Megan Kelly", "Meghan Kelly", "Megin Kelly", "Megan Kelley"]
+      
+Lex Fridman Podcast:
+  hosts:
+    - correct: "Lex Fridman"
+      variants: ["Lex Friedman", "Lex Freedman", "Lex Friedmann", "Lex Fridmann"]
+
+The Tim Ferriss Show:
+  hosts:
+    - correct: "Tim Ferriss"
+      variants: ["Tim Ferris", "Tim Feriss", "Tim Farris"]
+
+Acquired:
+  hosts:
+    - correct: "Ben Gilbert"
+      variants: ["Ben Guilbert", "Ben Gilber"]
+    - correct: "David Rosenthal"
+      variants: ["David Rosental", "David Rosenthall"]
+
+# Common tech/investment terms across all podcasts
+common:
+  companies:
+    - correct: "Tesla"
+      variants: ["Tessla"]
+    - correct: "SpaceX"
+      variants: ["Space X", "Space-X"]
+    - correct: "NVIDIA"
+      variants: ["Nvidia", "nVidia", "NVidia", "N Vidia"]
+    - correct: "Anthropic"
+      variants: ["Anthropik", "Anthropic"]
+    - correct: "Microsoft"
+      variants: ["Micro Soft", "Microsodt"]
+    - correct: "Google"
+      variants: ["Googl", "Goole"]
+    - correct: "DeepMind"
+      variants: ["Deep Mind", "Deepmind"]
+    - correct: "Y Combinator"
+      variants: ["YCombinator", "Y-Combinator", "YC"]
+    - correct: "a16z"
+      variants: ["A16Z", "a 16 z"]
+    - correct: "Sequoia Capital"
+      variants: ["Sequoia", "Sequoya Capital"]
+    - correct: "Benchmark"
+      variants: ["Benchmark Capital", "Bench Mark"]
+      
+  technical_terms:
+    - correct: "LLM"
+      variants: ["L.L.M.", "llm", "L L M"]
+    - correct: "API"
+      variants: ["A.P.I.", "A P I"]
+    - correct: "IPO"
+      variants: ["I.P.O.", "I P O"]
+    - correct: "GPU"
+      variants: ["G.P.U.", "G P U"]
+    - correct: "CPU"
+      variants: ["C.P.U.", "C P U"]
+    - correct: "AI"
+      variants: ["A.I.", "A I"]
+    - correct: "ML"
+      variants: ["M.L.", "M L"]
+    - correct: "SaaS"
+      variants: ["SAAS", "S.A.A.S."]
+    - correct: "B2B"
+      variants: ["B2 B", "B-to-B"]
+    - correct: "B2C"
+      variants: ["B2 C", "B-to-C"]
+      
+  financial_terms:
+    - correct: "PE ratio"
+      variants: ["P/E ratio", "P.E. ratio", "PE Ratio"]
+    - correct: "S&P 500"
+      variants: ["S&P500", "SNP 500", "S and P 500"]
+    - correct: "NASDAQ"
+      variants: ["Nasdaq", "NASDAC"]
+    - correct: "NYSE"
+      variants: ["N.Y.S.E.", "New York Stock Exchange"]
+    - correct: "Fed"
+      variants: ["FED", "F.E.D."]
+    - correct: "FOMC"
+      variants: ["F.O.M.C.", "FOM C"]

@@ -24,5 +24,13 @@ CONSTRAINTS
 - No bullet points
 - Present tense
 
+ENTITY VALIDATION
+Before writing, verify proper names and entities. Common corrections:
+- Keith Rabois (not Heath Raboy)
+- Chamath Palihapitiya (not Shamath or Chamat)
+- David Sacks (not Sachs)
+- Founders Fund (not Founder's Fund)
+Use your knowledge to correct obvious transcription errors.
+
 TRANSCRIPT
 {transcript}

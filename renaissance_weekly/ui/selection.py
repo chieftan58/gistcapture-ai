@@ -520,18 +520,7 @@ class EpisodeSelector:
                             
                             # Send the email with custom recipient if provided
                             email_digest = EmailDigest()
-                            if email_to:
-                                # Temporarily override the EMAIL_TO for this send
-                                import renaissance_weekly.config as config
-                                original_email_to = config.EMAIL_TO
-                                config.EMAIL_TO = email_to
-                                try:
-                                    result = email_digest.send_digest(summaries_to_send)
-                                finally:
-                                    # Restore original
-                                    config.EMAIL_TO = original_email_to
-                            else:
-                                result = email_digest.send_digest(summaries_to_send)
+                            result = email_digest.send_digest(summaries_to_send, email_to=email_to)
                             
                             if result.get('success'):
                                 logger.info(f"[{parent._correlation_id}] ✅ Email sent successfully!")
@@ -919,7 +908,7 @@ class EpisodeSelector:
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renaissance Weekly</title>
+    <title>Investment Pods Weekly</title>
     <style>{self._get_css()}</style>
 </head>
 <body>
@@ -972,7 +961,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Choose podcasts to monitor</div>
                 </div>
                 
@@ -1057,7 +1046,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Please wait</div>
                 </div>
                 
@@ -1095,7 +1084,7 @@ class EpisodeSelector:
         function renderError() {{
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Error</div>
                 </div>
                 
@@ -1115,7 +1104,7 @@ class EpisodeSelector:
             if (!APP_STATE.episodes || APP_STATE.episodes.length === 0) {{
                 return `
                     <div class="header">
-                        <div class="logo">RW</div>
+                        <div class="logo">IPW</div>
                         <div class="header-text">Loading episodes...</div>
                     </div>
                     
@@ -1168,7 +1157,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Choose episodes to process</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -1326,7 +1315,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Cost & Time Estimate</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -1444,7 +1433,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Downloading Audio Files</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -1912,7 +1901,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Transcribing & Summarizing Episodes</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -2203,7 +2192,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Processing Results</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -2284,7 +2273,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Review & Retry</div>
                 </div>
                 
@@ -2411,7 +2400,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Email Approval</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -2483,7 +2472,7 @@ class EpisodeSelector:
             
             return `
                 <div class="header">
-                    <div class="logo">RW</div>
+                    <div class="logo">IPW</div>
                     <div class="header-text">Process Complete</div>
                     ${{renderModeIndicator()}}
                 </div>
@@ -6086,7 +6075,7 @@ class EpisodeSelector:
             }
         else:
             # Fallback text preview if no summaries yet
-            preview_text = f"""Subject: Renaissance Weekly - Your AI Podcast Digest
+            preview_text = f"""Subject: Investment Pods Weekly - Your AI Podcast Digest
 
 Hello,
 
@@ -6097,7 +6086,7 @@ Your weekly podcast digest is ready with {completed} episodes successfully proce
 Processing is still in progress...
 
 Best regards,
-Renaissance Weekly
+Investment Pods Weekly by Pods Distilled
 """
             return {
                 'type': 'text',

@@ -20,19 +20,23 @@ logger = get_logger(__name__)
 class EmailDigest:
     """Handle email digest creation and sending with expandable sections"""
     
-    def send_digest(self, summaries: List[Dict]) -> Dict[str, Any]:
-        """Send Renaissance Weekly digest with paragraph summaries
+    def send_digest(self, summaries: List[Dict], email_to: str = None) -> Dict[str, Any]:
+        """Send Investment Pods Weekly digest with paragraph summaries
         
         Args:
             summaries: List of dicts with 'episode', 'summary', and 'paragraph_summary'
+            email_to: Optional email address to override default recipient
         
         Returns:
             Dict with 'success' bool and optional 'error' message
         """
         try:
-            logger.info("📧 Preparing Renaissance Weekly digest...")
+            # Use provided email_to or fall back to default
+            recipient_email = email_to if email_to else EMAIL_TO
+            
+            logger.info("📧 Preparing Investment Pods Weekly digest...")
             logger.info(f"   Email From: {EMAIL_FROM}")
-            logger.info(f"   Email To: {EMAIL_TO}")
+            logger.info(f"   Email To: {recipient_email}")
             logger.info(f"   Number of summaries: {len(summaries)}")
             
             # Validate inputs
@@ -41,8 +45,8 @@ class EmailDigest:
                 logger.error(error_msg)
                 return {"success": False, "error": error_msg}
                 
-            if not EMAIL_TO:
-                error_msg = "EMAIL_TO is not configured"
+            if not recipient_email:
+                error_msg = "No recipient email configured"
                 logger.error(error_msg)
                 return {"success": False, "error": error_msg}
                 
@@ -68,8 +72,8 @@ class EmailDigest:
             
             # Create message
             message = Mail(
-                from_email=(EMAIL_FROM, "Renaissance Weekly"),
-                to_emails=EMAIL_TO,
+                from_email=(EMAIL_FROM, "Investment Pods Weekly"),
+                to_emails=recipient_email,
                 subject=subject,
                 plain_text_content=plain_content,
                 html_content=html_content
@@ -79,7 +83,7 @@ class EmailDigest:
             if os.getenv('DRY_RUN') == 'true':
                 logger.info("🧪 DRY RUN: Skipping SendGrid email send")
                 logger.info(f"  Subject: {subject}")
-                logger.info(f"  To: {EMAIL_TO}")
+                logger.info(f"  To: {recipient_email}")
                 logger.info(f"  Episodes: {len(sorted_summaries)}")
                 logger.info("  Email would be sent in normal operation")
                 return {"success": True}
@@ -157,22 +161,28 @@ class EmailDigest:
         
         # Build mobile TOC - same as desktop but mobile-optimized
         mobile_toc_html = f'''
-            <div style="padding: 0 20px;">
-                <h2 style="margin: 40px 0 30px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
-                    <a name="mobile-toc"></a>
-                    Episode Directory
-                </h2>
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 40px;">
+            <div style="padding: 0;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 8px;">
+                    <tr>
+                        <td style="padding: 12px 0 10px 0;">
+                            <p style="margin: 0; font-size: 11px; color: #888; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
+                                <a name="mobile-toc"></a>
+                                Episodes
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 25px;">
         '''
         
         for i, episode in enumerate(episodes):
             mobile_toc_html += f'''
                 <tr>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0;">
-                        <a href="#mobile-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 15px; display: block;" class="episode-directory-title">
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#mobile-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
                             <strong>{self._format_episode_title(episode)}</strong>
                         </a>
-                        <div style="margin-top: 4px; font-size: 13px; color: #666;" class="episode-directory-meta">
+                        <div style="margin-top: 4px; font-size: 12px; color: #888;" class="episode-directory-meta">
                             {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
                         </div>
                     </td>
@@ -228,11 +238,11 @@ class EmailDigest:
             # Build desktop TOC entry
             desktop_toc_html += f'''
                 <tr>
-                    <td style="padding: 12px 20px; border-bottom: 1px solid #f0f0f0;">
-                        <a href="#desktop-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 16px;">
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
+                        <a href="#desktop-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 16px; line-height: 1.4;">
                             <strong>{self._format_episode_title(episode)}</strong>
                         </a>
-                        <div style="margin-top: 4px; font-size: 14px; color: #666;">
+                        <div style="margin-top: 4px; font-size: 13px; color: #888;">
                             {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
                         </div>
                     </td>
@@ -241,7 +251,7 @@ class EmailDigest:
             
             # Build desktop full summaries
             desktop_summaries_html += f'''
-                <div id="desktop-episode-{i}" style="margin-bottom: 60px; padding-bottom: 40px; border-bottom: 2px solid #E0E0E0;">
+                <div id="desktop-episode-{i}" style="margin-bottom: 50px; padding-bottom: 30px; border-bottom: 1px solid #E0E0E0;">
                     <a name="desktop-episode-{i}"></a>
                     <h2 style="margin: 0 0 10px 0; font-size: 28px; color: #2c3e50; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
@@ -366,10 +376,10 @@ class EmailDigest:
                 <table class="container" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px;">
                     <!-- Header -->
                     <tr>
-                        <td align="center" style="padding: 40px 20px;">
-                            <h1 style="margin: 0 0 10px 0; font-size: 36px; color: #000; font-family: Georgia, serif;">Renaissance Weekly</h1>
-                            <p style="margin: 0 0 20px 0; font-size: 16px; color: #666; font-style: italic; font-family: Georgia, serif;">Investment Intelligence from the Podcast Universe</p>
-                            <p style="margin: 0; font-size: 14px; color: #999; font-family: Georgia, serif;">{datetime.now().strftime('%B %d, %Y')}</p>
+                        <td align="center" style="padding: 25px 20px 20px 20px;">
+                            <h1 style="margin: 0 0 8px 0; font-size: 38px; color: #000; font-family: Georgia, serif; font-weight: normal; letter-spacing: -0.5px;">Investment Pods Weekly</h1>
+                            <p style="margin: 0 0 10px 0; font-size: 15px; color: #666; font-family: Georgia, serif;">by Pods Distilled</p>
+                            <p style="margin: 0; font-size: 13px; color: #999; font-family: Georgia, serif;">{datetime.now().strftime('%B %d, %Y')}</p>
                         </td>
                     </tr>
                     
@@ -384,11 +394,19 @@ class EmailDigest:
                     <!-- Desktop Version: Table of Contents -->
                     <tr class="desktop-only">
                         <td style="padding: 0 20px;">
-                            <h2 id="toc" style="margin: 40px 0 30px 0; font-size: 32px; color: #2c3e50; font-family: Georgia, serif; text-align: center;">
-                                <a name="toc"></a>
-                                Episode Directory
-                            </h2>
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 60px;">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 10px;">
+                                <tr>
+                                    <td style="padding: 15px 0 10px 0;">
+                                        <p id="toc" style="margin: 0; font-size: 12px; color: #888; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
+                                            <a name="toc"></a>
+                                            Episodes
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Episode list -->
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 35px;">
                                 {desktop_toc_html}
                             </table>
                         </td>
@@ -403,8 +421,8 @@ class EmailDigest:
                     
                     <!-- Footer -->
                     <tr>
-                        <td align="center" style="padding: 40px 20px; border-top: 1px solid #E0E0E0;">
-                            <p style="margin: 0; font-size: 14px; color: #666; font-family: Georgia, serif;">Renaissance Weekly - For the intellectually ambitious</p>
+                        <td align="center" style="padding: 25px 20px; border-top: 1px solid #E0E0E0;">
+                            <p style="margin: 0; font-size: 13px; color: #888; font-family: Georgia, serif;">© 2025 Pods Distilled™ · All rights reserved · Not investment advice</p>
                         </td>
                     </tr>
                 </table>
@@ -435,9 +453,9 @@ class EmailDigest:
             unique_podcasts = list(set(ep.podcast for ep in episodes))
             if len(unique_podcasts) <= 3:
                 podcast_list = ", ".join(unique_podcasts[:-1]) + f" & {unique_podcasts[-1]}" if len(unique_podcasts) > 1 else unique_podcasts[0]
-                return f"This Week: {podcast_list}"
+                return f"Investment Pods Weekly: {podcast_list}"
             else:
-                return f"This Week: {unique_podcasts[0]}, {unique_podcasts[1]} & {len(unique_podcasts)-2} more podcasts"
+                return f"Investment Pods Weekly: {unique_podcasts[0]}, {unique_podcasts[1]} & {len(unique_podcasts)-2} more podcasts"
     
     def _extract_guest_name(self, title: str, description: str = "") -> str:
         """Extract guest name from episode title or description"""

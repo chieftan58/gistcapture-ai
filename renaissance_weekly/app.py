@@ -24,6 +24,9 @@ from .fetchers.episode_fetcher import ReliableEpisodeFetcher
 from .transcripts.finder import TranscriptFinder
 from .transcripts.transcriber import AudioTranscriber
 from .processing.summarizer import Summarizer
+from .processing.transcript_cleaner import transcript_cleaner
+from .processing.transcript_postprocessor import transcript_postprocessor
+from .processing.cache_validator import cache_validator
 from .ui.selection import EpisodeSelector
 from .email.digest import EmailDigest
 from .utils.logging import get_logger
@@ -203,10 +206,10 @@ class RenaissanceWeekly:
                 f"{usage['current_requests']}/{usage['max_requests']} requests"
             )
             
-            logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly initialized successfully")
+            logger.info(f"[{self.correlation_id}] ✅ Investment Pods Weekly initialized successfully")
             
         except Exception as e:
-            logger.error(f"[{self.correlation_id}] ❌ Failed to initialize Renaissance Weekly: {e}")
+            logger.error(f"[{self.correlation_id}] ❌ Failed to initialize Investment Pods Weekly: {e}")
             raise
     
     async def pre_flight_check(self, podcast_names: List[str], days_back: int = 7) -> Dict:
@@ -278,7 +281,7 @@ class RenaissanceWeekly:
         if force_fresh:
             logger.info(f"[{self.correlation_id}] 🔄 Force fresh summaries enabled - bypassing all caches")
         start_time = time.time()
-        logger.info(f"[{self.correlation_id}] 🚀 Starting Renaissance Weekly System...")
+        logger.info(f"[{self.correlation_id}] 🚀 Starting Investment Pods Weekly System...")
         logger.info(f"[{self.correlation_id}] 📧 Email delivery: {EMAIL_FROM} → {EMAIL_TO}")
         
         # Note: Transcription mode will be set based on user selection in UI
@@ -338,7 +341,7 @@ class RenaissanceWeekly:
                 # Send email digest
                 await pipeline_progress.start_item("Email Delivery")
                 if self.email_digest.send_digest(summaries):
-                    logger.info(f"[{self.correlation_id}] ✅ Renaissance Weekly digest sent successfully!")
+                    logger.info(f"[{self.correlation_id}] ✅ Investment Pods Weekly digest sent successfully!")
                     await pipeline_progress.complete_item(True)
                 else:
                     logger.error(f"[{self.correlation_id}] ❌ Failed to send email digest")
@@ -438,7 +441,7 @@ class RenaissanceWeekly:
             total_time = time.time() - start_time
             summary = pipeline_progress.get_summary()
             
-            logger.info(f"\n[{self.correlation_id}] ✨ Renaissance Weekly pipeline completed!")
+            logger.info(f"\n[{self.correlation_id}] ✨ Investment Pods Weekly pipeline completed!")
             logger.info(f"[{self.correlation_id}] ⏱️  Total time: {total_time/60:.1f} minutes")
             logger.info(f"[{self.correlation_id}] 📈 Pipeline success rate: {summary['success_rate']:.0f}%")
             
@@ -695,21 +698,41 @@ class RenaissanceWeekly:
         return checks
     
     def filter_episodes_needing_processing(self, episodes: List[Episode]) -> List[Episode]:
-        """Filter out episodes that already have summaries"""
+        """Filter out episodes that already have valid summaries"""
         episodes_to_process = []
         
         for episode in episodes:
-            existing_summary = self.db.get_episode_summary(
+            # Get full episode data to check both transcript and summaries
+            episode_data = self.db.get_episode(
                 episode.podcast,
                 episode.title, 
-                episode.published,
-                transcription_mode=self.current_transcription_mode
+                episode.published
             )
             
-            if existing_summary:
-                logger.info(f"[{self.correlation_id}] 💾 CACHED: {episode.podcast} - {episode.title[:50]}... ({len(existing_summary)} chars)")
+            if episode_data:
+                # Get the appropriate columns based on mode
+                if self.current_transcription_mode == 'test':
+                    transcript = episode_data.get('transcript_test', '')
+                    summary = episode_data.get('summary_test', '')
+                    paragraph = episode_data.get('paragraph_summary_test', '')
+                else:
+                    transcript = episode_data.get('transcript', '')
+                    summary = episode_data.get('summary', '')
+                    paragraph = episode_data.get('paragraph_summary', '')
+                
+                # Check if we have summaries
+                if summary and paragraph:
+                    # Validate cache quality
+                    if transcript and cache_validator.should_regenerate_summaries(transcript, summary, paragraph)[0]:
+                        logger.info(f"[{self.correlation_id}] 🔄 STALE CACHE: {episode.podcast} - {episode.title[:50]}... (needs regeneration)")
+                        episodes_to_process.append(episode)
+                    else:
+                        logger.info(f"[{self.correlation_id}] 💾 VALID CACHE: {episode.podcast} - {episode.title[:50]}... ({len(summary)} chars)")
+                else:
+                    logger.info(f"[{self.correlation_id}] 🔄 NEEDS PROCESSING: {episode.podcast} - {episode.title[:50]}...")
+                    episodes_to_process.append(episode)
             else:
-                logger.info(f"[{self.correlation_id}] 🔄 NEEDS PROCESSING: {episode.podcast} - {episode.title[:50]}...")
+                logger.info(f"[{self.correlation_id}] 🔄 NEW EPISODE: {episode.podcast} - {episode.title[:50]}...")
                 episodes_to_process.append(episode)
         
         logger.info(f"[{self.correlation_id}] 📊 Processing needed for {len(episodes_to_process)}/{len(episodes)} episodes")
@@ -1266,14 +1289,35 @@ class RenaissanceWeekly:
                         logger.info(f"[{episode_id}]    Full Summary: {len(cached_summary) if cached_summary else 0} chars")
                         logger.info(f"[{episode_id}]    Paragraph: {len(cached_paragraph) if cached_paragraph else 0} chars")
                         
-                        # If we have both summaries, we're done!
+                        # If we have both summaries, check if they need regeneration
                         if cached_summary and cached_paragraph:
-                            logger.info(f"[{episode_id}] 🎉 CACHE HIT! Episode fully processed - skipping all processing")
-                            logger.info(f"[{episode_id}] {'='*60}\n")
-                            return {
-                                'full_summary': cached_summary,
-                                'paragraph_summary': cached_paragraph
-                            }
+                            # Validate cache quality
+                            if cached_transcript:
+                                needs_regen = cache_validator.should_regenerate_summaries(
+                                    cached_transcript, cached_summary, cached_paragraph
+                                )
+                                
+                                if needs_regen[0]:  # needs_regen is (bool, reason)
+                                    logger.info(f"[{episode_id}] ⚠️  STALE CACHE! {needs_regen[1]}")
+                                    logger.info(f"[{episode_id}] 🔄 Will regenerate summaries with corrected transcript")
+                                    # Store transcript for later use and continue processing
+                                    self._cached_transcript = cached_transcript
+                                    self._cached_transcript_source = TranscriptSource.CACHED
+                                else:
+                                    logger.info(f"[{episode_id}] 🎉 CACHE HIT! Episode fully processed - skipping all processing")
+                                    logger.info(f"[{episode_id}] {'='*60}\n")
+                                    return {
+                                        'full_summary': cached_summary,
+                                        'paragraph_summary': cached_paragraph
+                                    }
+                            else:
+                                # No transcript to validate against, use cache as-is
+                                logger.info(f"[{episode_id}] 🎉 CACHE HIT! Episode fully processed - skipping all processing")
+                                logger.info(f"[{episode_id}] {'='*60}\n")
+                                return {
+                                    'full_summary': cached_summary,
+                                    'paragraph_summary': cached_paragraph
+                                }
                         
                         # If we have transcript but missing summaries, we can regenerate just the summaries
                         elif cached_transcript and (not cached_summary or not cached_paragraph):
@@ -1301,6 +1345,22 @@ class RenaissanceWeekly:
                 transcript_text = self._cached_transcript
                 transcript_source = self._cached_transcript_source
                 logger.info(f"[{episode_id}] ✅ Using cached transcript from direct lookup")
+                
+                # Post-process cached transcript if it contains known errors
+                # Quick check for common errors before running expensive AI processing
+                needs_processing = transcript_postprocessor.needs_processing(transcript_text)
+                
+                if needs_processing:
+                    logger.info(f"[{episode_id}] 🤖 Cached transcript may contain errors, running AI post-processing...")
+                    processed_transcript, corrections = await transcript_postprocessor.process_transcript(
+                        transcript_text, episode.podcast, episode.title
+                    )
+                    
+                    if corrections > 0:
+                        transcript_text = processed_transcript
+                        logger.info(f"[{episode_id}] ✅ Fixed {corrections} errors in cached transcript")
+                        # Update the database with the cleaned transcript
+                        self.db.save_episode(episode, transcript_text, transcript_source, transcription_mode=self.current_transcription_mode)
                 logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
                 # Clear the cached values
                 self._cached_transcript = None
@@ -1314,6 +1374,18 @@ class RenaissanceWeekly:
                 if self.summarizer._validate_transcript_content(transcript_text, transcript_source):
                     logger.info(f"[{episode_id}] ✅ Found valid transcript (source: {transcript_source.value})")
                     logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                    
+                    # Post-process found transcripts (not cached ones)
+                    if transcript_source != TranscriptSource.CACHED:
+                        logger.info(f"[{episode_id}] 🤖 Running AI post-processing on found transcript...")
+                        processed_transcript, corrections = await transcript_postprocessor.process_transcript(
+                            transcript_text, episode.podcast, episode.title
+                        )
+                        
+                        if corrections > 0:
+                            transcript_text = processed_transcript
+                            logger.info(f"[{episode_id}] ✅ Fixed {corrections} transcription errors")
+                    
                     monitor.record_success('transcript_fetch', episode.podcast, mode=current_mode)
                 else:
                     logger.warning(f"[{episode_id}] ⚠️ Found transcript but validation failed - falling back to audio")
@@ -1343,12 +1415,27 @@ class RenaissanceWeekly:
                     transcript_source = TranscriptSource.GENERATED
                     logger.info(f"[{episode_id}] ✅ Audio transcribed successfully")
                     logger.info(f"[{episode_id}] 📏 Transcript length: {len(transcript_text)} characters")
+                    
+                    # Post-process transcript to fix errors automatically
+                    logger.info(f"[{episode_id}] 🤖 Running AI post-processing to fix transcription errors...")
+                    processed_transcript, corrections = await transcript_postprocessor.process_transcript(
+                        transcript_text, episode.podcast, episode.title
+                    )
+                    
+                    if corrections > 0:
+                        transcript_text = processed_transcript
+                        logger.info(f"[{episode_id}] ✅ Fixed {corrections} transcription errors automatically")
+                    else:
+                        logger.info(f"[{episode_id}] ✓ No transcription errors detected")
+                    
                     monitor.record_success('audio_transcription', episode.podcast, mode=current_mode)
                 else:
                     logger.error(f"[{episode_id}] ❌ Failed to transcribe audio")
                     monitor.record_failure('audio_transcription', episode.podcast, episode.title,
                                          'TranscriptionFailed', 'Failed to transcribe audio', mode=current_mode)
                     return None
+            
+            # Note: Transcript cleaning now happens via AI post-processing earlier in the pipeline
             
             # Save transcript to database with current mode
             try:
