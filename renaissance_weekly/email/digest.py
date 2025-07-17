@@ -212,23 +212,20 @@ class EmailDigest:
                     </p>
                     
                     <!-- Paragraph Summary -->
-                    <div style="font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 20px;">
+                    <div style="font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 15px;">
                         {escape(paragraph)}
                     </div>
                     
-                    <!-- Expandable Section for mobile/modern clients -->
-                    <details style="margin-top: 20px;">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; list-style: none;">
+                    <!-- Read Full Summary Button at BOTTOM -->
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; list-style: none; margin-bottom: 20px;">
                             <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
                         </summary>
                         
-                        <!-- Full Summary Content - starts immediately below button -->
-                        <div style="padding: 0 20px 20px 20px; background-color: #f8f8f8; border-radius: 0 0 8px 8px; margin-top: -4px;">
-                            <!-- Small visual indicator inline with first paragraph -->
-                            <div style="padding-top: 15px;">
-                                <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; display: block; margin-bottom: 10px;">FULL SUMMARY</span>
-                                {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
-                            </div>
+                        <!-- Full Summary starts IMMEDIATELY where button was -->
+                        <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                            {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         </div>
                     </details>
                     
