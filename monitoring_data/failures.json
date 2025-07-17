@@ -1,71 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T01:43:25.026429",
-    "component": "transcript_fetch",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:43:28.747454",
-    "component": "summarization",
-    "podcast": "We Study Billionaires",
-    "episode_title": "BTC241: Bitcoin Treasury Companies w/ James Check (Checkmate) Bitcoin Podcast",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:43:29.008522",
-    "component": "transcript_fetch",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:43:32.958612",
-    "component": "summarization",
-    "podcast": "The Doctor's Farmacy",
-    "episode_title": "The Supplement That Reversed Aging in Human Trials, with Dr. Anurag Singh",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:43:40.573639",
-    "component": "summarization",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP733: How Warren Buffett Became Warren Buffett",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
-    "timestamp": "2025-07-02T01:43:43.822743",
-    "component": "summarization",
-    "podcast": "We Study Billionaires",
-    "episode_title": "TIP732: The Mindset and Skills That Build Investing Legends w/ Ian Cassel",
-    "error_type": "SummarizationFailed",
-    "error_message": "Failed to generate summary",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
     "timestamp": "2025-07-02T03:39:28.240358",
     "component": "transcript_fetch",
     "podcast": "A16Z",
@@ -10998,5 +10932,71 @@
     "retry_count": 0,
     "resolved": false,
     "mode": "test"
+  },
+  {
+    "timestamp": "2025-07-16T19:47:22.177000",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "IPOs and SPACs are Back, Mag 7 Showdown, Zuck on Tilt, Apple's Fumble, GENIUS Act passes Senate",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-16T19:47:26.985736",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 118: Marc Andreessen on AI, Robotics & America's Industrial Renaissance",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-16T19:52:30.802865",
+    "component": "transcript_fetch",
+    "podcast": "Cognitive Revolution",
+    "episode_title": "The Data Factory: Inside the $100B Race for Post-Training Supremacy, with Labelbox CEO Manu Sharma",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-16T19:59:33.969350",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Grok 4 Wows, The Bitter Lesson, Elon\u2019s Third Party, AI Browsers, SCOTUS backs POTUS on RIFs",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-16T20:11:05.254977",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Grok 4 Wows, The Bitter Lesson, Elon\u2019s Third Party, AI Browsers, SCOTUS backs POTUS on RIFs",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-16T20:16:14.673527",
+    "component": "transcript_fetch",
+    "podcast": "All-In",
+    "episode_title": "Grok 4 Wows, The Bitter Lesson, Elon\u2019s Third Party, AI Browsers, SCOTUS backs POTUS on RIFs",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
   }
 ]

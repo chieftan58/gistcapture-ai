@@ -185,7 +185,7 @@ class RenaissanceWeekly:
             self.exception_aggregator = ExceptionAggregator(self.correlation_id)
             
             # Default transcription mode (will be updated from UI selection)
-            self.current_transcription_mode = 'test'
+            self.current_transcription_mode = 'full'
             
             # Cancellation support
             self._processing_cancelled = False
@@ -362,7 +362,7 @@ class RenaissanceWeekly:
                 await asyncio.sleep(3)  # Give user time to see the warning
             
             # Store configuration for use during processing
-            self.current_transcription_mode = configuration.get('transcription_mode', 'test')
+            self.current_transcription_mode = configuration.get('transcription_mode', 'full')
             self.concurrency_manager.is_full_mode = (self.current_transcription_mode == 'full')
             
             await pipeline_progress.complete_item(True)
@@ -515,7 +515,7 @@ class RenaissanceWeekly:
                     # Save to database
                     for episode in episodes:
                         try:
-                            self.db.save_episode(episode)
+                            self.db.save_episode(episode, transcription_mode=self.current_transcription_mode)
                         except Exception as e:
                             logger.debug(f"[{self.correlation_id}]   Failed to cache episode: {e}")
                     
@@ -755,9 +755,26 @@ class RenaissanceWeekly:
         if cached_count > 0:
             logger.info(f"[{self.correlation_id}] 💾 Found {cached_count} episodes with cached summaries")
         
-        # If all episodes already have summaries, return them directly
+        # If all episodes already have summaries, update status and return them directly
         if not episodes_to_process:
             logger.info(f"[{self.correlation_id}] 🎉 All episodes already have summaries! Skipping processing.")
+            
+            # Initialize processing status for UI even when all cached
+            with self._status_lock:
+                self._processing_status = {
+                    'total': len(selected_episodes),
+                    'completed': len(selected_episodes),  # All are already complete
+                    'failed': 0,
+                    'currently_processing': set(),
+                    'completed_episodes': set(f"{ep.podcast}:{ep.title}" for ep in selected_episodes),  # Mark all as completed
+                    'errors': []
+                }
+            
+            # Call progress callback for each cached episode to update UI
+            if hasattr(self, '_progress_callback') and self._progress_callback:
+                for episode in selected_episodes:
+                    self._progress_callback(episode, 'completed')
+            
             return await self._prepare_summaries_for_email(selected_episodes)
         
         # If some episodes need processing, process only those
@@ -774,14 +791,23 @@ class RenaissanceWeekly:
         summaries = []
         
         # Initialize processing status for UI (thread-safe)
+        # Note: We track ALL selected episodes, not just those needing processing
+        cached_episodes = [ep for ep in selected_episodes if ep not in episodes_to_process]
+        
         with self._status_lock:
             self._processing_status = {
-                'total': len(episodes_to_process),
-                'completed': 0,
+                'total': len(selected_episodes),  # Total includes cached episodes
+                'completed': len(cached_episodes),  # Start with cached episodes count
                 'failed': 0,
                 'currently_processing': set(),  # Track multiple episodes being processed
+                'completed_episodes': set(f"{ep.podcast}:{ep.title}" for ep in cached_episodes),  # Pre-mark cached episodes
                 'errors': []
             }
+        
+        # Call progress callback for cached episodes to update UI
+        if hasattr(self, '_progress_callback') and self._progress_callback and cached_episodes:
+            for episode in cached_episodes:
+                self._progress_callback(episode, 'completed')
         
         # Get optimal concurrency with separate limits for different services
         whisper_concurrency_limit = 3  # Whisper API: 3 requests per minute
@@ -1024,6 +1050,7 @@ class RenaissanceWeekly:
                                 with self._status_lock:
                                     self._processing_status['completed'] += 1
                                     self._processing_status['currently_processing'].discard(episode_key)
+                                    self._processing_status['completed_episodes'].add(episode_key)
                         
                             # Call progress callback if available
                             if hasattr(self, '_progress_callback') and self._progress_callback:

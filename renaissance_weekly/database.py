@@ -232,7 +232,7 @@ class PodcastDatabase:
     def save_episode(self, episode: Episode, transcript: Optional[str] = None, 
                      transcript_source: Optional[TranscriptSource] = None,
                      summary: Optional[str] = None, paragraph_summary: Optional[str] = None,
-                     transcription_mode: str = 'test') -> int:
+                     transcription_mode: str = 'full') -> int:
         """Save or update an episode in the database"""
         logger.info(f"💾 Saving episode: {episode.podcast} - {episode.title[:50]}...")
         logger.info(f"   GUID: {episode.guid}")
@@ -267,21 +267,25 @@ class PodcastDatabase:
                     'updated_at': datetime.now().isoformat()
                 }
                 
-                # Set transcript and summary in mode-specific columns
-                if transcription_mode == 'test':
-                    episode_data['transcript_test'] = transcript
-                    episode_data['summary_test'] = summary
-                    episode_data['paragraph_summary_test'] = paragraph_summary
-                    episode_data['transcript'] = None  # Clear full mode data
-                    episode_data['summary'] = None
-                    episode_data['paragraph_summary'] = None
-                else:  # full mode
-                    episode_data['transcript'] = transcript
-                    episode_data['summary'] = summary
-                    episode_data['paragraph_summary'] = paragraph_summary
-                    episode_data['transcript_test'] = None  # Clear test mode data
-                    episode_data['summary_test'] = None
-                    episode_data['paragraph_summary_test'] = None
+                # CRITICAL FIX: Only update transcript/summary fields when explicitly provided
+                # This prevents overwriting existing data during episode fetching
+                if transcript is not None or summary is not None or paragraph_summary is not None:
+                    # We have actual content to save
+                    if transcription_mode == 'test':
+                        episode_data['transcript_test'] = transcript
+                        episode_data['summary_test'] = summary
+                        episode_data['paragraph_summary_test'] = paragraph_summary
+                        # Don't touch full mode columns - preserve existing data
+                    else:  # full mode
+                        episode_data['transcript'] = transcript
+                        episode_data['summary'] = summary
+                        episode_data['paragraph_summary'] = paragraph_summary
+                        # Don't touch test mode columns - preserve existing data
+                else:
+                    # No transcript/summary provided - this is just an episode metadata update
+                    # Preserve ALL existing transcript/summary data by not setting these fields
+                    # They will be excluded from the UPDATE/INSERT queries below
+                    pass
                 
                 # Use INSERT OR REPLACE for atomic operation
                 # First check if record exists to preserve the ID
@@ -293,26 +297,54 @@ class PodcastDatabase:
                 existing_id = cursor.fetchone()
                 
                 if existing_id:
-                    # Update existing record using REPLACE
-                    cursor.execute("""
-                        REPLACE INTO episodes (
-                            id, podcast, title, published, audio_url, transcript_url,
-                            description, link, duration, guid, transcript,
-                            transcript_source, summary, transcript_test, summary_test,
-                            transcription_mode, paragraph_summary, paragraph_summary_test, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        existing_id[0],  # Preserve the existing ID
+                    # Build dynamic UPDATE query based on what fields we have
+                    update_fields = ['podcast = ?', 'title = ?', 'published = ?', 
+                                   'audio_url = ?', 'transcript_url = ?', 'description = ?',
+                                   'link = ?', 'duration = ?', 'guid = ?', 
+                                   'transcription_mode = ?', 'updated_at = ?']
+                    
+                    update_values = [
                         episode_data['podcast'], episode_data['title'], episode_data['published'],
                         episode_data['audio_url'], episode_data['transcript_url'],
                         episode_data['description'], episode_data['link'],
                         episode_data['duration'], episode_data['guid'],
-                        episode_data.get('transcript'), episode_data['transcript_source'],
-                        episode_data.get('summary'), episode_data.get('transcript_test'),
-                        episode_data.get('summary_test'), episode_data['transcription_mode'],
-                        episode_data.get('paragraph_summary'), episode_data.get('paragraph_summary_test'),
-                        episode_data['updated_at']
-                    ))
+                        episode_data['transcription_mode'], episode_data['updated_at']
+                    ]
+                    
+                    # Only update transcript/summary fields if they're present in episode_data
+                    if 'transcript' in episode_data:
+                        update_fields.append('transcript = ?')
+                        update_values.append(episode_data['transcript'])
+                        update_fields.append('transcript_source = ?')
+                        update_values.append(episode_data['transcript_source'])
+                    
+                    if 'summary' in episode_data:
+                        update_fields.append('summary = ?')
+                        update_values.append(episode_data['summary'])
+                    
+                    if 'paragraph_summary' in episode_data:
+                        update_fields.append('paragraph_summary = ?')
+                        update_values.append(episode_data['paragraph_summary'])
+                    
+                    if 'transcript_test' in episode_data:
+                        update_fields.append('transcript_test = ?')
+                        update_values.append(episode_data['transcript_test'])
+                    
+                    if 'summary_test' in episode_data:
+                        update_fields.append('summary_test = ?')
+                        update_values.append(episode_data['summary_test'])
+                    
+                    if 'paragraph_summary_test' in episode_data:
+                        update_fields.append('paragraph_summary_test = ?')
+                        update_values.append(episode_data['paragraph_summary_test'])
+                    
+                    # Add the WHERE clause value
+                    update_values.append(existing_id[0])
+                    
+                    cursor.execute(f"""
+                        UPDATE episodes SET {', '.join(update_fields)}
+                        WHERE id = ?
+                    """, update_values)
                 else:
                     # Insert new record
                     cursor.execute("""
@@ -334,7 +366,8 @@ class PodcastDatabase:
                     ))
                 
                 conn.commit()
-                row_id = cursor.lastrowid
+                # For UPDATE operations, lastrowid is 0, so use existing_id
+                row_id = existing_id[0] if existing_id else cursor.lastrowid
                 
                 # Verify the save was successful
                 if row_id > 0:

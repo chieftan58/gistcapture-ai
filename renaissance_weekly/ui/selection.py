@@ -67,7 +67,7 @@ class EpisodeSelector:
         self._fetch_callback = fetch_callback
         self.configuration = {
             'lookback_days': days_back,
-            'transcription_mode': 'test',  # Always start with test, user can select Full
+            'transcription_mode': 'full',  # Default to full mode for proper caching
             'session_id': self.session_id
         }
         
@@ -222,11 +222,17 @@ class EpisodeSelector:
                         if isinstance(currently_processing, set):
                             currently_processing = list(currently_processing)
                         
+                        # Convert completed_episodes set to list if needed
+                        completed_episodes = status.get('completed_episodes', [])
+                        if isinstance(completed_episodes, set):
+                            completed_episodes = list(completed_episodes)
+                        
                         status_copy = {
                             'total': status.get('total', 0),
                             'completed': status.get('completed', 0),
                             'failed': status.get('failed', 0),
                             'currently_processing': currently_processing,
+                            'completed_episodes': completed_episodes,
                             'errors': list(status.get('errors', []))
                         }
                     self._send_json(status_copy)
@@ -284,7 +290,7 @@ class EpisodeSelector:
                     # Handle podcast selection
                     parent.selected_podcasts = data.get('selected_podcasts', [])
                     parent.configuration['lookback_days'] = data.get('lookback_days', 7)
-                    parent.configuration['transcription_mode'] = data.get('transcription_mode', 'test')
+                    parent.configuration['transcription_mode'] = data.get('transcription_mode', 'full')
                     
                     parent.state = "loading"
                     parent.loading_status = {
@@ -325,6 +331,7 @@ class EpisodeSelector:
                             'completed': 0,
                             'failed': 0,
                             'currently_processing': [],
+                            'completed_episodes': [],
                             'errors': []
                         }
                     parent._processing_episodes = data.get('episodes', [])
@@ -397,6 +404,7 @@ class EpisodeSelector:
                         'completed': 0,
                         'failed': 0,
                         'currently_processing': [],
+                        'completed_episodes': [],
                         'errors': []
                     }
                     
@@ -439,7 +447,7 @@ class EpisodeSelector:
                         
                         # Get recent episodes with summaries
                         lookback_days = parent.configuration.get('lookback_days', 7)
-                        transcription_mode = parent.configuration.get('transcription_mode', 'test')
+                        transcription_mode = parent.configuration.get('transcription_mode', 'full')
                         logger.info(f"[{parent._correlation_id}] Looking for episodes from last {lookback_days} days")
                         episodes_with_summaries = db.get_episodes_with_summaries(
                             days_back=lookback_days,
@@ -558,7 +566,7 @@ class EpisodeSelector:
                 elif self.path == '/api/start-download':
                     # Start downloading episodes
                     episode_ids = data.get('episode_ids', [])
-                    transcription_mode = data.get('mode', parent.configuration.get('transcription_mode', 'test'))
+                    transcription_mode = data.get('mode', parent.configuration.get('transcription_mode', 'full'))
                     episode_details = data.get('episode_details', {})
                     
                     # Set the processing mode for downloads
@@ -1878,7 +1886,7 @@ class EpisodeSelector:
         }}
         
         function renderProcessing() {{
-            const {{ total, completed, failed, currently_processing = [], errors }} = APP_STATE.processingStatus || {{}};
+            const {{ total, completed, failed, currently_processing = [], completed_episodes = [], errors }} = APP_STATE.processingStatus || {{}};
             const progress = total > 0 ? ((completed + failed) / total * 100) : 0;
             const remaining = total - completed - failed;
             const estimatedMinutesRemaining = remaining * (APP_STATE.configuration.transcription_mode === 'test' ? 0.5 : 5);
@@ -1995,15 +2003,11 @@ class EpisodeSelector:
                                 statusClass = 'failed';
                                 const error = errors.find(err => err.episode && err.episode.includes(ep.title));
                                 errorMessage = error ? error.message : 'Unknown error';
-                            }} else if (completed > 0) {{
-                                // Simple heuristic - mark as complete if we've processed enough
-                                const processedCount = completed + failed;
-                                const episodeIndex = selectedEpisodesArray.indexOf(ep);
-                                if (episodeIndex < processedCount && !errors.find(err => err.episode && err.episode.includes(ep.title))) {{
-                                    status = 'completed';
-                                    statusIcon = '✓';
-                                    statusClass = 'completed';
-                                }}
+                            }} else if (completed_episodes.includes(episodeKey)) {{
+                                // Episode is in the completed list
+                                status = 'completed';
+                                statusIcon = '✓';
+                                statusClass = 'completed';
                             }}
                             
                             return `
@@ -3598,11 +3602,15 @@ class EpisodeSelector:
             
             APP_STATE.state = 'processing';
             APP_STATE.processingStatus.startTime = Date.now();
-            APP_STATE.processingStatus.total = APP_STATE.selectedEpisodes.size;
+            // Don't override total - let the backend tell us how many actually need processing
+            // APP_STATE.processingStatus.total = APP_STATE.selectedEpisodes.size;
             render();
             
             // Start polling for status updates
             APP_STATE.statusInterval = setInterval(updateProcessingStatus, 2000);
+            
+            // Do an immediate status check in case all episodes are cached
+            setTimeout(updateProcessingStatus, 100);
             
             // Send start request with selected episodes
             try {{
@@ -3638,6 +3646,12 @@ class EpisodeSelector:
                     ...APP_STATE.processingStatus,
                     ...status
                 }};
+                
+                // On first update, if backend reports different total than selected, show that
+                if (status.total !== undefined && !APP_STATE.processingStatus.backendTotalSet) {{
+                    APP_STATE.processingStatus.total = status.total;
+                    APP_STATE.processingStatus.backendTotalSet = true;
+                }}
                 
                 // Update the display
                 if (APP_STATE.state === 'processing') {{
@@ -5694,6 +5708,11 @@ class EpisodeSelector:
                             episode_key = f"{episode.podcast}:{episode.title}"
                             if episode_key in self._processing_status['currently_processing']:
                                 self._processing_status['currently_processing'].remove(episode_key)
+                            # Add to completed episodes list
+                            if 'completed_episodes' not in self._processing_status:
+                                self._processing_status['completed_episodes'] = []
+                            if episode_key not in self._processing_status['completed_episodes']:
+                                self._processing_status['completed_episodes'].append(episode_key)
                         elif status == 'failed':
                             self._processing_status['failed'] += 1
                             self._processing_status['errors'].append({

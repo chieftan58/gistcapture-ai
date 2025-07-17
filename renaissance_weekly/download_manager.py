@@ -206,7 +206,7 @@ class EpisodeDownloadStatus:
 class DownloadManager:
     """Manage concurrent episode downloads with retry strategies"""
     
-    def __init__(self, concurrency: int = 10, progress_callback: Optional[Callable] = None, transcription_mode: str = 'test'):
+    def __init__(self, concurrency: int = 10, progress_callback: Optional[Callable] = None, transcription_mode: str = 'full'):
         self.concurrency = concurrency
         self.progress_callback = progress_callback
         self.transcriber = AudioTranscriber()

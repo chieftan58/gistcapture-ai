@@ -379,6 +379,15 @@ cursor.execute("""
 - Episode fetchers strip timezone info before creating Episode objects
 
 ### Previous Improvements (2025-07-18)
+- **Fixed UI hanging issue with cached episodes**:
+  - Problem: UI would hang on "Transcribing & Summarizing" page when episodes had cached transcripts/summaries
+  - Root cause: UI was using a flawed heuristic based on array indices to guess which episodes were completed
+  - Solution implemented:
+    - Added `completed_episodes` tracking to explicitly track which episodes are done (app.py)
+    - Updated progress callbacks to fire for cached episodes (app.py:774-776, 808-810)
+    - Modified UI to use direct `completed_episodes.includes(episodeKey)` check instead of heuristic (selection.py:2005-2010)
+    - Handle both all-cached and mixed cached/uncached scenarios properly
+  - Result: UI now correctly shows cached episodes as "Complete" and allows progression without hanging
 - **Fixed aiohttp memory leak**:
   - Identified issue in `TranscriptAPIAggregator` where client instances were created at init time
   - Fixed by instantiating clients within async context manager to ensure proper cleanup
