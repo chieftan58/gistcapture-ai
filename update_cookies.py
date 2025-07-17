@@ -1,0 +1,1 @@
+/home/codespace/.config/renaissance-weekly/cookies/scripts/update_cookies.py

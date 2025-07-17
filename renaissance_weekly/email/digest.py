@@ -161,28 +161,28 @@ class EmailDigest:
         
         # Build mobile TOC - same as desktop but mobile-optimized
         mobile_toc_html = f'''
-            <div style="padding: 0;">
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 8px;">
+            <div style="padding: 0; background-color: #ffffff !important;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e0e0e0; margin-top: 8px; background-color: #ffffff !important;">
                     <tr>
-                        <td style="padding: 12px 0 10px 0;">
-                            <p style="margin: 0; font-size: 11px; color: #888; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
+                        <td style="padding: 12px 0 10px 0; background-color: #ffffff !important;">
+                            <p style="margin: 0; font-size: 11px; color: #888888 !important; font-family: Georgia, serif; text-transform: uppercase; letter-spacing: 1.5px;">
                                 <a name="mobile-toc"></a>
                                 Episodes
                             </p>
                         </td>
                     </tr>
                 </table>
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 25px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 25px; background-color: #ffffff !important;">
         '''
         
         for i, episode in enumerate(episodes):
             mobile_toc_html += f'''
                 <tr>
-                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
-                        <a href="#mobile-episode-{i}" style="color: #2c3e50; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
+                    <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; background-color: #ffffff !important;">
+                        <a href="#mobile-episode-{i}" style="color: #2c3e50 !important; text-decoration: none; font-size: 15px; display: block; line-height: 1.4;" class="episode-directory-title">
                             <strong>{self._format_episode_title(episode)}</strong>
                         </a>
-                        <div style="margin-top: 4px; font-size: 12px; color: #888;" class="episode-directory-meta">
+                        <div style="margin-top: 4px; font-size: 12px; color: #888888 !important;" class="episode-directory-meta">
                             {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)}
                         </div>
                     </td>
@@ -198,39 +198,39 @@ class EmailDigest:
             # Extract guest name for better formatting
             guest_name = self._extract_guest_name(episode.title, episode.description)
             
-            # Build mobile version (current layout preserved exactly)
+            # Build mobile version with improved viewport handling
             mobile_episodes_html += f'''
                 <!-- Episode {i + 1} -->
-                <div id="mobile-episode-{i}" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px;">
+                <div id="mobile-episode-{i}" style="margin-bottom: 40px; border-bottom: 1px solid #E0E0E0; padding-bottom: 40px; background-color: #ffffff !important;">
                     <a name="mobile-episode-{i}"></a>
                     <!-- Episode Title (Full Name) -->
-                    <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50; font-family: Georgia, serif;">
+                    <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #2c3e50 !important; font-family: Georgia, serif;">
                         {self._format_episode_title(episode)}
                     </h2>
-                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666;">
-                        {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)} • <a href="{self._get_apple_podcast_link(episode)}" style="color: #0066cc; text-decoration: none;">Link to Full Episode</a>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #666666 !important;">
+                        {episode.published.strftime('%B %d, %Y')} • {format_duration(episode.duration)} • <a href="{self._get_apple_podcast_link(episode)}" style="color: #0066cc !important; text-decoration: none;">Link to Full Episode</a>
                     </p>
                     
                     <!-- Paragraph Summary -->
-                    <div style="font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 15px;">
+                    <div style="font-size: 16px; line-height: 1.6; color: #333333 !important; margin-bottom: 15px;">
                         {escape(paragraph)}
                     </div>
                     
                     <!-- Read Full Summary Button at BOTTOM -->
                     <details style="margin: 0;">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; list-style: none; margin-bottom: 20px;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0 !important; border-radius: 4px; font-size: 14px; color: #666666 !important; display: inline-block; list-style: none; margin-bottom: 20px;">
                             <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
                         </summary>
                         
-                        <!-- Full Summary starts IMMEDIATELY where button was -->
-                        <div style="margin-top: -20px; padding: 20px; background-color: #f8f8f8; border-radius: 8px;">
-                            <div style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
+                        <!-- Full Summary with aggressive negative margin to prevent jumping -->
+                        <div style="margin-top: -150px; padding: 150px 20px 20px 20px; background-color: #f8f8f8 !important; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #999999 !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; margin-bottom: 15px;">FULL SUMMARY</div>
                             {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         </div>
                     </details>
                     
                     <p style="margin: 20px 0 0 0; text-align: center;">
-                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
+                        <a href="#mobile-toc" style="display: inline-block; padding: 8px 16px; background: #2c3e50 !important; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-size: 13px;">↑ Back to Episode List</a>
                     </p>
                     
                 </div>
@@ -280,7 +280,9 @@ class EmailDigest:
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renaissance Weekly</title>
+    <meta name="color-scheme" content="light only">
+    <meta name="supported-color-schemes" content="light only">
+    <title>Investment Pods Weekly</title>
     <style>
         /* Basic reset and mobile-friendly styles */
         body {{
@@ -289,10 +291,11 @@ class EmailDigest:
             font-family: Georgia, serif;
             font-size: 16px;
             line-height: 1.6;
-            color: #333;
+            color: #333333 !important;
             -webkit-text-size-adjust: 100%;
             -ms-text-size-adjust: 100%;
-            background-color: #ffffff;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
         }}
         
         h1, h2, h3 {{
@@ -364,29 +367,52 @@ class EmailDigest:
             }}
         }}
         
+        /* Force light mode on all platforms */
+        @media (prefers-color-scheme: dark) {{
+            body {{
+                background-color: #ffffff !important;
+                background: #ffffff !important;
+                color: #333333 !important;
+            }}
+            .body {{
+                background-color: #ffffff !important;
+                background: #ffffff !important;
+                color: #333333 !important;
+            }}
+            table, td, tr {{
+                background-color: transparent !important;
+            }}
+            h1, h2, h3, h4, p, span, div {{
+                color: #333333 !important;
+            }}
+            a {{
+                color: #0066CC !important;
+            }}
+        }}
+        
         /* Gmail doesn't support advanced CSS selectors, so we'll use a simpler approach */
     </style>
 </head>
-<body class="body" style="margin: 0; padding: 0; background-color: #ffffff;">
+<body class="body" style="margin: 0; padding: 0; background-color: #ffffff !important; background: #ffffff !important; color: #333333 !important;">
     <u></u><!-- Gmail detection hack -->
     <a name="top"></a>
     <div id="top"></div>
-    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff !important;">
         <tr>
-            <td align="center" style="padding: 0;">
-                <table class="container" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px;">
+            <td align="center" style="padding: 0; background-color: #ffffff !important;">
+                <table class="container" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; background-color: #ffffff !important;">
                     <!-- Header -->
                     <tr>
-                        <td align="center" style="padding: 25px 20px 20px 20px;">
-                            <h1 style="margin: 0 0 8px 0; font-size: 38px; color: #000; font-family: Georgia, serif; font-weight: normal; letter-spacing: -0.5px;">Investment Pods Weekly</h1>
-                            <p style="margin: 0 0 10px 0; font-size: 15px; color: #666; font-family: Georgia, serif;">by Pods Distilled</p>
-                            <p style="margin: 0; font-size: 13px; color: #999; font-family: Georgia, serif;">{datetime.now().strftime('%B %d, %Y')}</p>
+                        <td align="center" style="padding: 20px 20px 10px 20px; background-color: #ffffff !important;">
+                            <h1 style="margin: 0 0 4px 0; font-size: 38px; color: #000000 !important; font-family: Georgia, serif; font-weight: normal; letter-spacing: -0.5px;">Investment Pods Weekly</h1>
+                            <p style="margin: 0 0 4px 0; font-size: 15px; color: #666666 !important; font-family: Georgia, serif;">by Pods Distilled</p>
+                            <p style="margin: 0; font-size: 13px; color: #999999 !important; font-family: Georgia, serif;">{datetime.now().strftime('%B %d, %Y')}</p>
                         </td>
                     </tr>
                     
                     <!-- Mobile Version: TOC and Episodes -->
                     <tr class="mobile-only">
-                        <td class="episode-content" style="padding: 0 20px;">
+                        <td class="episode-content" style="padding: 0 20px; background-color: #ffffff !important;">
                             {mobile_toc_html}
                             {mobile_episodes_html}
                         </td>

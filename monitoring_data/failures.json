@@ -1,16 +1,5 @@
 [
   {
-    "timestamp": "2025-07-02T03:39:28.240358",
-    "component": "transcript_fetch",
-    "podcast": "A16Z",
-    "episode_title": "Building Cluely: The Viral AI Startup that raised $15M in 10 Weeks",
-    "error_type": "NotFound",
-    "error_message": "No transcript found from any source",
-    "retry_count": 0,
-    "resolved": false,
-    "mode": "test"
-  },
-  {
     "timestamp": "2025-07-02T03:39:28.272440",
     "component": "transcript_fetch",
     "podcast": "A16Z",
@@ -10993,6 +10982,17 @@
     "component": "transcript_fetch",
     "podcast": "All-In",
     "episode_title": "Grok 4 Wows, The Bitter Lesson, Elon\u2019s Third Party, AI Browsers, SCOTUS backs POTUS on RIFs",
+    "error_type": "NotFound",
+    "error_message": "No transcript found from any source",
+    "retry_count": 0,
+    "resolved": false,
+    "mode": "full"
+  },
+  {
+    "timestamp": "2025-07-17T20:19:06.238054",
+    "component": "transcript_fetch",
+    "podcast": "American Optimist",
+    "episode_title": "Ep 119: Former Waymo Leader Boris Sofman on Autonomous Construction & Bringing AI into the Physical World",
     "error_type": "NotFound",
     "error_message": "No transcript found from any source",
     "retry_count": 0,

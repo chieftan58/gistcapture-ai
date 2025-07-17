@@ -17,60 +17,38 @@ class CookieManager:
         self.cookie_dir = Path.home() / '.config' / 'renaissance-weekly' / 'cookies'
         self.cookie_dir.mkdir(parents=True, exist_ok=True)
         
-        # Protected cookie files that won't be overwritten
-        self.protected_cookies = {
-            'youtube': self.cookie_dir / 'youtube_manual_do_not_overwrite.txt',
-            'spotify': self.cookie_dir / 'spotify_manual_do_not_overwrite.txt',
-            'apple': self.cookie_dir / 'apple_manual_do_not_overwrite.txt'
-        }
-        
-        # Regular cookie files (may be overwritten by tools)
-        self.regular_cookies = {
+        # Simplified: Use only one set of cookie files
+        self.cookie_files = {
             'youtube': self.cookie_dir / 'youtube_cookies.txt',
             'spotify': self.cookie_dir / 'spotify_cookies.txt',
             'apple': self.cookie_dir / 'apple_cookies.txt'
         }
     
     def get_cookie_file(self, platform: str) -> Optional[Path]:
-        """Get the best available cookie file for a platform"""
+        """Get the cookie file for a platform"""
         platform = platform.lower()
         
-        # First check for protected manual cookie file
-        if platform in self.protected_cookies:
-            protected_file = self.protected_cookies[platform]
-            if protected_file.exists():
+        if platform in self.cookie_files:
+            cookie_file = self.cookie_files[platform]
+            if cookie_file.exists():
                 # Check if cookies are still valid
-                is_valid, days_remaining = self.check_cookie_validity(protected_file)
+                is_valid, days_remaining = self.check_cookie_validity(cookie_file)
                 if is_valid:
                     if days_remaining is not None and days_remaining < 7:
                         logger.warning(f"⚠️ {platform} cookies expire in {days_remaining} days!")
-                    logger.info(f"🔒 Using protected manual {platform} cookie file")
-                    return protected_file
+                    logger.info(f"🍪 Using {platform} cookie file")
+                    return cookie_file
                 else:
-                    logger.error(f"❌ Protected {platform} cookies have expired!")
-        
-        # Fall back to regular cookie file
-        if platform in self.regular_cookies:
-            regular_file = self.regular_cookies[platform]
-            if regular_file.exists():
-                # Check if cookies are still valid
-                is_valid, days_remaining = self.check_cookie_validity(regular_file)
-                if is_valid:
-                    if days_remaining is not None and days_remaining < 7:
-                        logger.warning(f"⚠️ {platform} cookies expire in {days_remaining} days!")
-                    logger.info(f"📄 Using regular {platform} cookie file")
-                    return regular_file
-                else:
-                    logger.error(f"❌ Regular {platform} cookies have expired!")
+                    logger.error(f"❌ {platform} cookies have expired! Please run: python update_cookies.py")
         
         logger.debug(f"No valid cookie file found for {platform}")
         return None
     
-    def protect_cookie_file(self, platform: str, source_file: Path) -> bool:
-        """Copy a cookie file to the protected location"""
+    def update_cookie_file(self, platform: str, source_file: Path) -> bool:
+        """Update the cookie file for a platform"""
         platform = platform.lower()
         
-        if platform not in self.protected_cookies:
+        if platform not in self.cookie_files:
             logger.error(f"Unknown platform: {platform}")
             return False
         
@@ -79,28 +57,23 @@ class CookieManager:
             return False
         
         try:
-            protected_file = self.protected_cookies[platform]
-            shutil.copy2(source_file, protected_file)
+            cookie_file = self.cookie_files[platform]
+            shutil.copy2(source_file, cookie_file)
             
-            # Make it read-only to prevent overwriting
-            protected_file.chmod(0o444)
-            
-            logger.info(f"✅ Protected {platform} cookie file created at: {protected_file}")
+            logger.info(f"✅ Updated {platform} cookie file at: {cookie_file}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to protect cookie file: {e}")
+            logger.error(f"Failed to update cookie file: {e}")
             return False
     
-    def list_cookies(self) -> Dict[str, Dict[str, Optional[Path]]]:
+    def list_cookies(self) -> Dict[str, Optional[Path]]:
         """List all available cookie files"""
         status = {}
         
         for platform in ['youtube', 'spotify', 'apple']:
-            status[platform] = {
-                'protected': self.protected_cookies[platform] if self.protected_cookies[platform].exists() else None,
-                'regular': self.regular_cookies[platform] if self.regular_cookies[platform].exists() else None
-            }
+            cookie_file = self.cookie_files[platform]
+            status[platform] = cookie_file if cookie_file.exists() else None
         
         return status
     
@@ -172,48 +145,27 @@ class CookieManager:
             'is_valid': False,
             'is_expired': False,
             'days_remaining': None,
-            'warning': None,
-            'file_type': None  # 'protected' or 'regular'
+            'warning': None
         }
         
-        # Check protected file first
-        if platform in self.protected_cookies:
-            protected_file = self.protected_cookies[platform]
-            if protected_file.exists():
-                is_valid, days_remaining = self.check_cookie_validity(protected_file)
+        if platform in self.cookie_files:
+            cookie_file = self.cookie_files[platform]
+            if cookie_file.exists():
+                is_valid, days_remaining = self.check_cookie_validity(cookie_file)
                 status['has_cookies'] = True
                 status['is_valid'] = is_valid
                 status['is_expired'] = not is_valid
                 status['days_remaining'] = days_remaining
-                status['file_type'] = 'protected'
                 
                 if not is_valid:
-                    status['warning'] = f'{platform.capitalize()} cookies have expired! Please update them.'
-                elif days_remaining is not None and days_remaining < 7:
-                    status['warning'] = f'{platform.capitalize()} cookies expire in {days_remaining} days.'
-                
-                return status
-        
-        # Check regular file
-        if platform in self.regular_cookies:
-            regular_file = self.regular_cookies[platform]
-            if regular_file.exists():
-                is_valid, days_remaining = self.check_cookie_validity(regular_file)
-                status['has_cookies'] = True
-                status['is_valid'] = is_valid
-                status['is_expired'] = not is_valid
-                status['days_remaining'] = days_remaining
-                status['file_type'] = 'regular'
-                
-                if not is_valid:
-                    status['warning'] = f'{platform.capitalize()} cookies have expired! Please update them.'
+                    status['warning'] = f'{platform.capitalize()} cookies have expired! Please run: python update_cookies.py'
                 elif days_remaining is not None and days_remaining < 7:
                     status['warning'] = f'{platform.capitalize()} cookies expire in {days_remaining} days.'
                 
                 return status
         
         # No cookies found
-        status['warning'] = f'No {platform} cookies found.'
+        status['warning'] = f'No {platform} cookies found. Please run: python update_cookies.py'
         return status
     
     def setup_all_cookies(self):
@@ -224,38 +176,50 @@ class CookieManager:
         print("1. YouTube (for American Optimist, Dwarkesh, etc.)")
         print("2. Spotify (backup for some podcasts)")
         print("3. Apple Podcasts (additional fallback)")
-        print("\nProtected files won't be overwritten by tools.")
         print("\nCurrent status:")
         
         status = self.list_cookies()
-        for platform, files in status.items():
+        for platform, cookie_file in status.items():
             print(f"\n{platform.upper()}:")
-            if files['protected']:
-                print(f"  ✅ Protected: {files['protected'].name}")
+            if cookie_file:
+                print(f"  ✅ Cookie file: {cookie_file.name}")
+                is_valid, days_remaining = self.check_cookie_validity(cookie_file)
+                if is_valid:
+                    if days_remaining:
+                        print(f"     Valid (expires in {days_remaining} days)")
+                    else:
+                        print(f"     Valid (no expiry found)")
+                else:
+                    print(f"     ❌ Expired")
             else:
-                print(f"  ❌ Protected: Not found")
-            
-            if files['regular']:
-                print(f"  📄 Regular: {files['regular'].name}")
-            else:
-                print(f"  ❌ Regular: Not found")
+                print(f"  ❌ Not found")
         
         print("\n" + "-" * 50)
-        print("\nTo set up cookies:")
-        print("1. Export cookies from your browser using 'cookies.txt' extension")
-        print("2. Save them in: ~/.config/renaissance-weekly/cookies/")
-        print("3. Name them: youtube_cookies.txt, spotify_cookies.txt, apple_cookies.txt")
-        print("4. Run this script again to protect them")
+        print("\nTo update cookies:")
+        print("1. Run: python update_cookies.py")
+        print("2. Follow the interactive prompts")
+        print("3. The script will validate and test your cookies")
+
+
+    def get_youtube_auth_error_info(self, error_msg: str) -> Optional[Dict[str, str]]:
+        """Check if error is YouTube authentication related"""
+        auth_error_patterns = [
+            ("Sign in to confirm you're not a bot", "YouTube requires authentication"),
+            ("This video is unavailable", "Video unavailable (may need auth)"),
+            ("Please sign in", "YouTube sign-in required"),
+            ("bot detection", "YouTube bot detection triggered"),
+            ("403", "Access forbidden (authentication may be required)")
+        ]
         
-        # Offer to protect existing files
-        for platform in ['youtube', 'spotify', 'apple']:
-            regular_file = self.regular_cookies[platform]
-            protected_file = self.protected_cookies[platform]
-            
-            if regular_file.exists() and not protected_file.exists():
-                response = input(f"\nProtect existing {platform} cookies? (y/n): ")
-                if response.lower() == 'y':
-                    self.protect_cookie_file(platform, regular_file)
+        for pattern, description in auth_error_patterns:
+            if pattern.lower() in error_msg.lower():
+                return {
+                    'error_type': 'youtube_auth',
+                    'description': description,
+                    'cookie_status': self.get_cookie_status('youtube')
+                }
+        
+        return None
 
 
 # Global instance

@@ -88,6 +88,11 @@ class SmartDownloadRouter:
     
     def _get_strategy_order(self, podcast_name: str, audio_url: str) -> List[str]:
         """Get ordered list of strategies to try"""
+        # If it's a YouTube URL, prioritize YouTube strategy
+        if "youtube.com" in audio_url or "youtu.be" in audio_url:
+            logger.info(f"🎥 Detected YouTube URL - prioritizing YouTube strategy")
+            return ["youtube", "browser"]  # YouTube first, browser as fallback
+        
         # Start with successful strategies from history
         historical_strategies = self.success_history.get(podcast_name, [])
         

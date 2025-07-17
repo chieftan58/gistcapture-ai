@@ -448,11 +448,12 @@ class PlatformAudioDownloader:
                 'ignoreerrors': False,
             }
             
-            # Check for manual cookie file first
-            manual_cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_manual_do_not_overwrite.txt'
-            if manual_cookie_file.exists():
-                logger.info("🔒 Using protected manual cookie file for YouTube download")
-                ydl_opts['cookiefile'] = str(manual_cookie_file)
+            # Use cookie manager to get cookie file
+            from ..utils.cookie_manager import cookie_manager
+            cookie_file = cookie_manager.get_cookie_file('youtube')
+            if cookie_file:
+                logger.info("🍪 Using YouTube cookie file")
+                ydl_opts['cookiefile'] = str(cookie_file)
                 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
@@ -882,16 +883,11 @@ async def download_audio_with_ytdlp(url: str, output_path: Path) -> bool:
             'ignoreerrors': False,
         }
         
-        # Try manual cookie file first (protected from yt-dlp overwriting)
-        manual_cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_manual_do_not_overwrite.txt'
-        cookie_file = Path.home() / '.config' / 'renaissance-weekly' / 'cookies' / 'youtube_cookies.txt'
+        # Use cookie manager to get cookie file
+        from ..utils.cookie_manager import cookie_manager
+        cookie_file = cookie_manager.get_cookie_file('youtube')
         
-        # Prioritize manual cookie file
-        if manual_cookie_file.exists():
-            cookie_file = manual_cookie_file
-            logger.info("🔒 Using protected manual cookie file")
-        
-        if cookie_file.exists():
+        if cookie_file:
             try:
                 logger.info(f"📂 Trying YouTube download with cookie file: {cookie_file}")
                 ydl_opts_with_cookies = ydl_opts.copy()
