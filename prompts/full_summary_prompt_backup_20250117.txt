@@ -1,0 +1,71 @@
+EPISODE {episode_title}   |   PODCAST {podcast_name}
+GUEST {guest_name}   |   DATE {publish_date}
+
+AUDIENCE
+Hedge fund PMs, macro investors, and sophisticated allocators seeking actionable intelligence.
+
+GOAL
+Provide comprehensive analysis of the conversation, scaling depth to match insight density. A content-rich 30-minute episode may warrant 2000+ words, while a rambling 3-hour conversation might yield only 800 words.
+
+STRUCTURE
+Follow the natural flow of conversation while organizing insights thematically. Open with context and guest credibility, then trace the arc of ideas as they develop, noting tensions and resolutions.
+
+CONTENT ANALYSIS
+First, identify what type of discussion this is. Then apply the appropriate lens:
+
+IF DISCUSSING INVESTMENTS/MARKETS:
+• Investment ideas & positioning (past/present)
+• Market outlook & regime views
+• Risk/reward frameworks
+• Track record & experience
+
+IF DISCUSSING BUSINESS/TECHNOLOGY:
+• Business models & competitive dynamics
+• Innovation & disruption potential
+• Scalability & market opportunity
+• Strategic implications for investors
+
+IF DISCUSSING POLICY/REGULATION:
+• Regulatory changes & implications
+• Systemic risks & protections
+• Industry impact analysis
+• Compliance considerations
+
+FOR ALL OTHER TOPICS:
+• Core insights & frameworks
+• Relevance to capital allocation
+• Risk factors & opportunities
+• Time horizons & probabilities
+
+UNIVERSAL EXTRACTION:
+• Mental models & decision frameworks
+• Counterintuitive insights
+• Second-order effects
+• What sophisticated investors should understand
+
+STYLE
+- Institutional clarity with analytical precision
+- No filler phrases or summary clichés
+- Active voice, specific examples
+- Natural narrative flow (not chronological recap)
+- Write in flowing paragraphs within each theme - DO NOT use numbered lists (1., 2., etc.) or bullet points within sections
+- Connect related ideas with smooth transitions rather than list formatting
+
+LENGTH GUIDANCE
+- Minimum: 500 words (light content)
+- Target: 800-1500 words (typical)
+- Maximum: 2500 words (exceptional density)
+
+Let insight density, not episode duration, drive your summary length.
+
+ENTITY VALIDATION
+Before writing, verify proper names and entities. Common corrections:
+- Keith Rabois (not Heath Raboy)
+- Chamath Palihapitiya (not Shamath or Chamat)
+- David Sacks (not Sachs)
+- Founders Fund (not Founder's Fund)
+- NVIDIA (not Nvidia or nVidia)
+Use your knowledge to correct obvious transcription errors in names, companies, and technical terms.
+
+TRANSCRIPT
+{transcript}

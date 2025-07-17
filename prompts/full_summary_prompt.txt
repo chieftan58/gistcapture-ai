@@ -2,61 +2,82 @@ EPISODE {episode_title}   |   PODCAST {podcast_name}
 GUEST {guest_name}   |   DATE {publish_date}
 
 AUDIENCE
-Hedge fund PMs, macro investors, and sophisticated allocators seeking actionable intelligence.
+Hedge fund PMs, macro investors, and sophisticated allocators seeking to understand how experts think about complex topics.
 
 GOAL
-Provide comprehensive analysis of the conversation, scaling depth to match insight density. A content-rich 30-minute episode may warrant 2000+ words, while a rambling 3-hour conversation might yield only 800 words.
+Provide deep exploration of the topics discussed, capturing the nuances of how participants think about each subject. Scale depth to match the richness of discussion, not just episode length.
 
-STRUCTURE
-Follow the natural flow of conversation while organizing insights thematically. Open with context and guest credibility, then trace the arc of ideas as they develop, noting tensions and resolutions.
+TOPIC MAPPING
+Before writing, identify the 3-6 main topics explored in the episode. Topics might include:
+• A specific company, investment opportunity, or market dynamic
+• A technology trend, business model, or industry analysis  
+• An economic theme, policy development, or regulatory change
+• A framework, mental model, or analytical approach
+• Historical parallels, case studies, or lessons learned
 
-CONTENT ANALYSIS
-First, identify what type of discussion this is. Then apply the appropriate lens:
+Note which topics received the most time and generated the richest discussion.
 
-IF DISCUSSING INVESTMENTS/MARKETS:
-• Investment ideas & positioning (past/present)
-• Market outlook & regime views
-• Risk/reward frameworks
-• Track record & experience
+TOPIC EXPLORATION FRAMEWORK
+For each major topic, capture:
 
-IF DISCUSSING BUSINESS/TECHNOLOGY:
-• Business models & competitive dynamics
-• Innovation & disruption potential
-• Scalability & market opportunity
-• Strategic implications for investors
+The Discussion Arc:
+- How was the topic introduced and why?
+- What facts, data points, or evidence were cited?
+- How did different participants approach the topic?
+- What questions were raised and how were they addressed?
+- Where did the discussion lead? Any conclusions or open questions?
 
-IF DISCUSSING POLICY/REGULATION:
-• Regulatory changes & implications
-• Systemic risks & protections
-• Industry impact analysis
-• Compliance considerations
+The Granular Details:
+- Specific numbers, dates, names, and examples mentioned
+- Analogies or frameworks used to explain concepts
+- Areas where participants agreed or disagreed
+- Moments of uncertainty or speculation ("I think...", "Maybe...")
+- How ideas built upon each other through the conversation
 
-FOR ALL OTHER TOPICS:
-• Core insights & frameworks
-• Relevance to capital allocation
-• Risk factors & opportunities
-• Time horizons & probabilities
+DEPTH TRIGGERS
+When participants engage in these ways, expand your coverage:
+• Explaining their reasoning → Capture the complete logical chain
+• Providing specific examples → Include them and what they illustrate
+• Building on each other's ideas → Show the intellectual progression
+• Expressing disagreement → Present both positions with supporting logic
+• Going technical → Explain enough for an intelligent non-specialist
+• Citing research or data → Include the specifics and implications
 
-UNIVERSAL EXTRACTION:
-• Mental models & decision frameworks
-• Counterintuitive insights
-• Second-order effects
-• What sophisticated investors should understand
+WRITING APPROACH
+- Follow the natural flow of how topics emerged and evolved
+- Show the back-and-forth when participants build on ideas
+- Include "thinking out loud" moments that reveal thought processes
+- Note when views are refined or minds changed during discussion
+- Let the conversation's energy guide emphasis - spend more words on topics that sparked engagement
 
 STYLE
-- Institutional clarity with analytical precision
-- No filler phrases or summary clichés
-- Active voice, specific examples
-- Natural narrative flow (not chronological recap)
-- Write in flowing paragraphs within each theme - DO NOT use numbered lists (1., 2., etc.) or bullet points within sections
-- Connect related ideas with smooth transitions rather than list formatting
+- Write in flowing paragraphs that follow the discussion's natural rhythm
+- Avoid bullet points or numbered lists within topic sections
+- Use clear topic headers to organize major themes
+- Connect related ideas with smooth transitions
+- Include enough context so readers can follow complex arguments
+- Don't force investment implications - let them emerge naturally from the discussion
 
-LENGTH GUIDANCE
-- Minimum: 500 words (light content)
-- Target: 800-1500 words (typical)
-- Maximum: 2500 words (exceptional density)
+LENGTH GUIDANCE - TOPIC DRIVEN
+Let the number and richness of topics drive length:
+- 2-3 light topics: 1000-1500 words
+- 3-4 substantive topics: 1500-2500 words  
+- 5+ topics with rich discussion: 2500-4000 words
 
-Let insight density, not episode duration, drive your summary length.
+Each major topic typically warrants 300-600 words depending on:
+- How much time participants spent on it
+- The depth of analysis provided
+- The number of perspectives shared
+- The complexity of the subject matter
+
+Remember: A 30-minute episode with deep exploration of 2 topics deserves more words than a 3-hour surface-level conversation.
+
+STRUCTURE
+1. Opening Context (100-200 words): Guest background, why this conversation matters now
+2. Topic Sections (300-600 words each): Deep exploration of each major theme
+3. Synthesis (optional, 100-200 words): Only if participants explicitly connected themes
+
+Focus on helping readers understand not just what was discussed, but how sophisticated thinkers approach and explore these subjects.
 
 ENTITY VALIDATION
 Before writing, verify proper names and entities. Common corrections:
