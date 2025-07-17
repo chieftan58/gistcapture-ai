@@ -336,10 +336,10 @@ The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of a
 
 ### Latest Improvements (2025-07-18)
 - **Fixed iPhone 'Read Full Summary' viewport positioning**:
-  - Eliminated gap between button and expanded content
-  - Content now starts immediately in viewport without scrolling
-  - Removed top padding and margins that pushed content off-screen
-  - Simplified visual indicators for better mobile UX
+  - Moved button to BOTTOM of paragraph summary (key fix!)
+  - Full summary appears exactly where button was clicked
+  - No more jumping to middle of content - user sees beginning immediately
+  - Seamless visual flow with negative margin alignment
 
 ### Latest Improvements (2025-07-17)
 - **Fixed email recipient override**:
