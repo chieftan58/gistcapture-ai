@@ -353,13 +353,14 @@ The cache now reliably finds and reuses transcripts, saving ~$0.90 per hour of a
   - System now properly detects when cached summaries contain errors fixed in transcripts
   - `filter_episodes_needing_processing` enhanced to validate cache quality
   - Ensures corrected names appear in emails without manual intervention
-- **Refined full summary prompt for deeper topic exploration**:
-  - Shifting from "actionable insights" to "topic-centric deep exploration"
-  - New framework: Identify 3-6 main topics → explore each in depth (300-600 words per topic)
-  - Captures discussion arcs, participant viewpoints, facts/data, areas of agreement/disagreement
-  - Increased target length: 1500-2500 words (was 800-1500), max 4000 words
-  - Focus on helping readers understand how sophisticated thinkers explore complex topics
-  - No forced actionability - value is in understanding the intellectual exploration
+- **Refined full summary prompt for complete reader satisfaction**:
+  - Major shift: From "describing conversations" to "conveying their full substance"
+  - Goal: Readers feel completely satisfied without needing to listen
+  - Smart attribution: Natural flow with attribution where it matters (opinions, disagreements, key insights)
+  - Complete arguments: All reasoning steps, data, examples included
+  - Length philosophy: Satisfaction over word counts (could be 2500-6000+ words)
+  - Substance over description: Actual content not topic summaries
+  - Test: Could reader explain guest's positions as if they heard it themselves?
   - Maintains existing system_prompt.txt and paragraph_prompt.txt unchanged
 
 ### Latest Improvements (2025-07-16)

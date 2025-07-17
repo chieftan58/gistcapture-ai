@@ -2,82 +2,73 @@ EPISODE {episode_title}   |   PODCAST {podcast_name}
 GUEST {guest_name}   |   DATE {publish_date}
 
 AUDIENCE
-Hedge fund PMs, macro investors, and sophisticated allocators seeking to understand how experts think about complex topics.
+Hedge fund PMs, macro investors, and sophisticated allocators who need to extract full value from conversations without listening.
 
 GOAL
-Provide deep exploration of the topics discussed, capturing the nuances of how participants think about each subject. Scale depth to match the richness of discussion, not just episode length.
+Convey the conversation so thoroughly that readers feel completely satisfied and have no need to listen to the actual podcast. They should understand not just what was discussed, but the actual substance, reasoning, and conclusions reached.
 
-TOPIC MAPPING
-Before writing, identify the 3-6 main topics explored in the episode. Topics might include:
-• A specific company, investment opportunity, or market dynamic
-• A technology trend, business model, or industry analysis  
-• An economic theme, policy development, or regulatory change
-• A framework, mental model, or analytical approach
-• Historical parallels, case studies, or lessons learned
+FUNDAMENTAL APPROACH
+Write as if you're helping a colleague who missed an important meeting. Don't tell them what topics came up - give them the actual content, arguments, data, and insights so they can engage as if they were there.
 
-Note which topics received the most time and generated the richest discussion.
+SATISFACTION TEST
+After reading your summary, the reader should be able to:
+- Explain the guest's key positions and reasoning to someone else
+- Understand the data and examples that support each argument
+- Know which views were controversial or debated
+- Feel they got the full value without listening
 
-TOPIC EXPLORATION FRAMEWORK
-For each major topic, capture:
+CONVEYANCE PRINCIPLES
 
-The Discussion Arc:
-- How was the topic introduced and why?
-- What facts, data points, or evidence were cited?
-- How did different participants approach the topic?
-- What questions were raised and how were they addressed?
-- Where did the discussion lead? Any conclusions or open questions?
+Substance Over Description:
+- Don't write: "They discussed NVIDIA's supply constraints"
+- Do write: "NVIDIA's real bottleneck isn't chip production but CoWoS packaging capacity - they can manufacture 2 million H100s annually but only package 600,000"
 
-The Granular Details:
-- Specific numbers, dates, names, and examples mentioned
-- Analogies or frameworks used to explain concepts
-- Areas where participants agreed or disagreed
-- Moments of uncertainty or speculation ("I think...", "Maybe...")
-- How ideas built upon each other through the conversation
+Complete Arguments:
+- When someone explains reasoning, include ALL the steps
+- If they cite "three factors," provide all three with detail
+- When examples are given, include the specific details
+- If data is mentioned, include the actual numbers
 
-DEPTH TRIGGERS
-When participants engage in these ways, expand your coverage:
-• Explaining their reasoning → Capture the complete logical chain
-• Providing specific examples → Include them and what they illustrate
-• Building on each other's ideas → Show the intellectual progression
-• Expressing disagreement → Present both positions with supporting logic
-• Going technical → Explain enough for an intelligent non-specialist
-• Citing research or data → Include the specifics and implications
+Smart Attribution:
+- Attribute when it matters: opinions, predictions, disagreements, key insights
+- Use natural flow: Not every sentence needs "he said"
+- Examples of when to attribute:
+  * "Druckenmiller sees three scenarios for 2025..."
+  * "The host challenged this view, pointing out..."
+  * "Contrary to consensus, Marks believes..."
+- Examples of when attribution isn't needed:
+  * Background facts or context
+  * Undisputed data points
+  * Natural conversation flow
 
-WRITING APPROACH
-- Follow the natural flow of how topics emerged and evolved
-- Show the back-and-forth when participants build on ideas
-- Include "thinking out loud" moments that reveal thought processes
-- Note when views are refined or minds changed during discussion
-- Let the conversation's energy guide emphasis - spend more words on topics that sparked engagement
+Depth Requirements:
+- When a framework is introduced → Explain it fully with examples
+- When a trade/investment is discussed → Include thesis, sizing, timeframe, risks
+- When disagreement occurs → Present both positions completely
+- When technical concepts arise → Explain enough for intelligent non-specialists
+- When predictions are made → Include reasoning, probability, and time horizons
 
-STYLE
-- Write in flowing paragraphs that follow the discussion's natural rhythm
-- Avoid bullet points or numbered lists within topic sections
-- Use clear topic headers to organize major themes
-- Connect related ideas with smooth transitions
-- Include enough context so readers can follow complex arguments
-- Don't force investment implications - let them emerge naturally from the discussion
+WRITING STYLE
+- Use flowing prose that reads naturally
+- Vary paragraph lengths for readability
+- Include specific quotes or close paraphrases for powerful statements
+- Connect ideas smoothly without bullet points or lists
+- Let critical insights breathe with proper explanation
 
-LENGTH GUIDANCE - TOPIC DRIVEN
-Let the number and richness of topics drive length:
-- 2-3 light topics: 1000-1500 words
-- 3-4 substantive topics: 1500-2500 words  
-- 5+ topics with rich discussion: 2500-4000 words
-
-Each major topic typically warrants 300-600 words depending on:
-- How much time participants spent on it
-- The depth of analysis provided
-- The number of perspectives shared
-- The complexity of the subject matter
-
-Remember: A 30-minute episode with deep exploration of 2 topics deserves more words than a 3-hour surface-level conversation.
+LENGTH PHILOSOPHY
+Forget word counts. The only measure is reader satisfaction. A dense 45-minute episode might require 5000+ words to convey properly. A rambling 2-hour podcast might satisfy in 2500 words. Let the substance drive length.
 
 STRUCTURE
-1. Opening Context (100-200 words): Guest background, why this conversation matters now
-2. Topic Sections (300-600 words each): Deep exploration of each major theme
-3. Synthesis (optional, 100-200 words): Only if participants explicitly connected themes
+1. Opening (200-300 words): Guest credibility, why this conversation matters now, central tension or question explored
+2. Conversation Flow: Follow the natural arc but organize for clarity
+3. Key Insights: Ensure the most valuable points get full treatment
+4. Implications: What sophisticated investors should take away
 
-Focus on helping readers understand not just what was discussed, but how sophisticated thinkers approach and explore these subjects.
+CRITICAL REQUIREMENTS
+- Readers should feel they saved time AND got full value
+- Include enough detail that listening would add little
+- Make contrarian or surprising views especially clear
+- Ensure investment-relevant insights are fully developed
 
 ENTITY VALIDATION
 Before writing, verify proper names and entities. Common corrections:
