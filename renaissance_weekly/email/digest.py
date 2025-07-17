@@ -218,17 +218,17 @@ class EmailDigest:
                     
                     <!-- Expandable Section for mobile/modern clients -->
                     <details style="margin-top: 20px;">
-                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; margin-bottom: 15px; list-style: none;">
+                        <summary style="cursor: pointer; padding: 10px 20px; background: #f0f0f0; border-radius: 4px; font-size: 14px; color: #666; display: inline-block; list-style: none;">
                             <span style="font-family: Georgia, serif;">Read Full Summary ▼</span>
                         </summary>
                         
-                        <!-- Full Summary Content -->
-                        <div style="padding: 20px; background-color: #f8f8f8; border-radius: 8px; position: relative;">
-                            <!-- Visual indicator at top of full summary -->
-                            <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0;">
-                                <span style="font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-family: Georgia, serif;">Full Summary</span>
+                        <!-- Full Summary Content - starts immediately below button -->
+                        <div style="padding: 0 20px 20px 20px; background-color: #f8f8f8; border-radius: 0 0 8px 8px; margin-top: -4px;">
+                            <!-- Small visual indicator inline with first paragraph -->
+                            <div style="padding-top: 15px;">
+                                <span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; display: block; margin-bottom: 10px;">FULL SUMMARY</span>
+                                {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                             </div>
-                            {self._convert_markdown_to_html_enhanced(self._strip_duplicate_title(full_summary, episode))}
                         </div>
                     </details>
                     
